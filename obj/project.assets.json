@@ -778,6 +778,22 @@
           }
         }
       },
+      "Microsoft.Graph.Beta/6.1.0-preview": {
+        "type": "package",
+        "dependencies": {
+          "Microsoft.Graph.Core": "4.0.1"
+        },
+        "compile": {
+          "lib/net10.0/Microsoft.Graph.Beta.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.Graph.Beta.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "Microsoft.Graph.Core/4.0.1": {
         "type": "package",
         "dependencies": {
@@ -3319,6 +3335,27 @@
         "microsoft.graph.nuspec"
       ]
     },
+    "Microsoft.Graph.Beta/6.1.0-preview": {
+      "sha512": "EMuIMtcQJMfu5MzgMCwQGwxzk3jfMp8V/5rrTCZu4KdrZhZkv4KmSkzcMJ8RRx0DNm2MQdGPYwqrUdhb8+x38w==",
+      "type": "package",
+      "path": "microsoft.graph.beta/6.1.0-preview",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.txt",
+        "README.md",
+        "lib/net10.0/Microsoft.Graph.Beta.dll",
+        "lib/net10.0/Microsoft.Graph.Beta.xml",
+        "lib/net8.0/Microsoft.Graph.Beta.dll",
+        "lib/net8.0/Microsoft.Graph.Beta.xml",
+        "lib/netstandard2.0/Microsoft.Graph.Beta.dll",
+        "lib/netstandard2.0/Microsoft.Graph.Beta.xml",
+        "lib/netstandard2.1/Microsoft.Graph.Beta.dll",
+        "lib/netstandard2.1/Microsoft.Graph.Beta.xml",
+        "microsoft.graph.beta.6.1.0-preview.nupkg.sha512",
+        "microsoft.graph.beta.nuspec"
+      ]
+    },
     "Microsoft.Graph.Core/4.0.1": {
       "sha512": "hWfGglaCLUZsOs0VHA2vkwBCRy0WOEfH4Wh1Y7yb1Q5nSbiyiPJWtHOuEfuEa2jqU0tPKOQ7eN8HRTSOMMQNfw==",
       "type": "package",
@@ -4508,6 +4545,7 @@
       "Microsoft.EntityFrameworkCore.SqlServer >= 10.0.8",
       "Microsoft.EntityFrameworkCore.Sqlite >= 10.0.8",
       "Microsoft.Graph >= 6.1.0",
+      "Microsoft.Graph.Beta >= 6.1.0-preview",
       "Microsoft.Identity.Web >= 4.10.0",
       "MudBlazor >= 9.5.0"
     ]
@@ -4594,6 +4632,10 @@
           "Microsoft.Graph": {
             "target": "Package",
             "version": "[6.1.0, )"
+          },
+          "Microsoft.Graph.Beta": {
+            "target": "Package",
+            "version": "[6.1.0-preview, )"
           },
           "Microsoft.Identity.Web": {
             "target": "Package",

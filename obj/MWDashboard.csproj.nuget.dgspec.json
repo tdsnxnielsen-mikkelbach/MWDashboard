@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Dev\\MWDashboard\\MWDashboard.csproj": {}
+    "c:\\Dev\\MWDashboard\\MWDashboard.csproj": {}
   },
   "projects": {
-    "C:\\Dev\\MWDashboard\\MWDashboard.csproj": {
+    "c:\\Dev\\MWDashboard\\MWDashboard.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Dev\\MWDashboard\\MWDashboard.csproj",
+        "projectUniqueName": "c:\\Dev\\MWDashboard\\MWDashboard.csproj",
         "projectName": "MWDashboard",
-        "projectPath": "C:\\Dev\\MWDashboard\\MWDashboard.csproj",
+        "projectPath": "c:\\Dev\\MWDashboard\\MWDashboard.csproj",
         "packagesPath": "C:\\Users\\sadmin\\.nuget\\packages\\",
-        "outputPath": "C:\\Dev\\MWDashboard\\obj\\",
+        "outputPath": "c:\\Dev\\MWDashboard\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -82,6 +82,10 @@
             "Microsoft.Graph": {
               "target": "Package",
               "version": "[6.1.0, )"
+            },
+            "Microsoft.Graph.Beta": {
+              "target": "Package",
+              "version": "[6.1.0-preview, )"
             },
             "Microsoft.Identity.Web": {
               "target": "Package",

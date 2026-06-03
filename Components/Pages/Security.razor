@@ -1,0 +1,338 @@
+@page "/security"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@using MWDashboard.Models
+@using MWDashboard.Services
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Security Services</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Security Services</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Sign-in activity and MFA metrics from Entra audit logs. Requires <code>AuditLog.Read.All</code> permission.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+
+@* Tenant Entra ID License Tier Overview *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-3">
+        <MudIcon Icon="@Icons.Material.Filled.Shield" Class="mr-2" />
+        Tenant Entra ID License Levels
+    </MudText>
+    @if (_tenantTiers.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No tenant license data available. Collect data from the Tenants page first.</MudText>
+    }
+    else
+    {
+        <MudTable Items="_tenantTiers" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                <MudTh>Tenant</MudTh>
+                <MudTh>Entra ID Tier</MudTh>
+                <MudTh>Sign-in Logs</MudTh>
+                <MudTh>MFA Details</MudTh>
+                <MudTh>Data Available</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Tenant">@context.TenantName</MudTd>
+                <MudTd DataLabel="Tier">
+                    <MudChip T="string" Size="Size.Small" Color="@GetTierColor(context.Tier)">
+                        @($"Entra ID {context.Tier}")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Sign-in Logs">
+                    @if (context.HasSignInAccess)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" />
+                    }
+                </MudTd>
+                <MudTd DataLabel="MFA Details">
+                    @if (context.HasMfaDetails)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" />
+                    }
+                </MudTd>
+                <MudTd DataLabel="Data Available">
+                    @if (context.HasSignInAccess)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Success">Sign-ins, failures, MFA</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Warning">No sign-in data (requires P1/P2)</MudText>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+            <strong>Sign-in logs</strong> and <strong>MFA authentication details</strong> require Entra ID P1 or P2 on the target tenant.
+            Tenants on the Free tier cannot expose audit log data via Microsoft Graph.
+            MFA metrics are derived from the Beta API's <code>AuthenticationDetails</code> — a non-password authentication method must succeed for it to count as MFA.
+        </MudAlert>
+    }
+</MudPaper>
+
+@if (_summaries.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        No security sign-in data available yet. This requires:
+        <ul class="mt-2">
+            <li>Entra ID P1 or P2 in the target tenant (Free tier does not expose sign-in logs)</li>
+            <li><code>AuditLog.Read.All</code> application permission on the app registration</li>
+            <li>Background service to have collected at least one cycle of data</li>
+        </ul>
+    </MudAlert>
+}
+else
+{
+    @* KPI Cards *@
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Primary">Total Sign-ins (30d)</MudText>
+                <MudText Typo="Typo.h4">@_summaries.Sum(s => s.ActiveUserCount).ToString("N0")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Success">Successful</MudText>
+                <MudText Typo="Typo.h4">@_summaries.Sum(s => s.SuccessCount).ToString("N0")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Error">Failed</MudText>
+                <MudText Typo="Typo.h4">@_summaries.Sum(s => s.FailureCount).ToString("N0")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Color="Color.Info">MFA Used</MudText>
+                <MudText Typo="Typo.h4">@_summaries.Sum(s => s.MfaCount).ToString("N0")</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">via Beta API AuthenticationDetails</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* Sign-in Trend Chart *@
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">Sign-in Activity (30 days)</MudText>
+        <ApexChart TItem="DailySignIn" Options="_signInChartOptions" Height="350">
+            <ApexPointSeries TItem="DailySignIn"
+                             Items="_dailySignIns"
+                             Name="Successful"
+                             SeriesType="SeriesType.Area"
+                             XValue="@(e => e.Date)"
+                             YValue="@(e => (decimal?)e.SuccessCount)" />
+            <ApexPointSeries TItem="DailySignIn"
+                             Items="_dailySignIns"
+                             Name="Failed"
+                             SeriesType="SeriesType.Area"
+                             XValue="@(e => e.Date)"
+                             YValue="@(e => (decimal?)e.FailureCount)" />
+        </ApexChart>
+    </MudPaper>
+
+    @* Per-Service Breakdown *@
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">Usage by Security Service</MudText>
+        <MudGrid>
+            @foreach (var service in _byService)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="1">
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6">@service.Key</MudText>
+                            <MudGrid>
+                                <MudItem xs="6">
+                                    <MudText Typo="Typo.caption">Sign-ins</MudText>
+                                    <MudText Typo="Typo.h5">@service.Value.Sum(s => s.ActiveUserCount).ToString("N0")</MudText>
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudText Typo="Typo.caption">Failure Rate</MudText>
+                                    <MudText Typo="Typo.h5" Color="@GetFailureColor(service.Value)">
+                                        @GetFailureRate(service.Value).ToString("F1")%
+                                    </MudText>
+                                </MudItem>
+                            </MudGrid>
+                            <MudProgressLinear Color="@GetFailureColor(service.Value)" 
+                                               Value="@GetFailureRate(service.Value)" Class="mt-2" />
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+
+    @* MFA Adoption *@
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">MFA Adoption Rate</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+            MFA is detected via the Graph Beta API's <code>AuthenticationDetails</code> collection.
+            A sign-in counts as MFA when a non-password authentication method succeeds (e.g., FIDO2, Authenticator, phone).
+            This data is only available from tenants with Entra ID P1/P2.
+        </MudText>
+        @{
+            var totalSignIns = _summaries.Sum(s => s.ActiveUserCount);
+            var totalMfa = _summaries.Sum(s => s.MfaCount);
+            var mfaRate = totalSignIns > 0 ? (double)totalMfa / totalSignIns * 100 : 0;
+        }
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.h3" Color="@(mfaRate > 80 ? Color.Success : mfaRate > 50 ? Color.Warning : Color.Error)">
+                    @mfaRate.ToString("F1")%
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">of sign-ins used MFA</MudText>
+                <MudProgressLinear Color="@(mfaRate > 80 ? Color.Success : mfaRate > 50 ? Color.Warning : Color.Error)"
+                                   Value="@mfaRate" Class="mt-3" Style="height: 10px;" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                @if (mfaRate < 50)
+                {
+                    <MudAlert Severity="Severity.Error">
+                        MFA adoption is critically low. Strongly recommend enforcing Conditional Access policies.
+                    </MudAlert>
+                }
+                else if (mfaRate < 80)
+                {
+                    <MudAlert Severity="Severity.Warning">
+                        MFA adoption could be improved. Consider Conditional Access with MFA requirement for all users.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Success">
+                        Good MFA adoption rate. Continue monitoring for compliance.
+                    </MudAlert>
+                }
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+}
+
+@code {
+    private List<SecuritySignInSummary> _summaries = [];
+    private List<DailySignIn> _dailySignIns = [];
+    private Dictionary<string, List<SecuritySignInSummary>> _byService = [];
+    private List<TenantEntraTier> _tenantTiers = [];
+    private bool _loading = true;
+
+    private ApexChartOptions<DailySignIn> _signInChartOptions = new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Sign-in Count" } }],
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Date" } },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        _tenantTiers = await MauDataService.GetTenantEntraIdTiersAsync();
+        _summaries = await MauDataService.GetSecuritySummaryAsync(tenantIds, days: 30);
+
+        _dailySignIns = _summaries
+            .GroupBy(s => s.ReportDate.ToString("MM-dd"))
+            .Select(g => new DailySignIn
+            {
+                Date = g.Key,
+                SuccessCount = g.Sum(s => s.SuccessCount),
+                FailureCount = g.Sum(s => s.FailureCount)
+            })
+            .OrderBy(d => d.Date)
+            .ToList();
+
+        // When multi-tenant, group by "Service (Tenant)" for clarity
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _byService = _summaries
+                .GroupBy(s => $"{s.ServiceName} ({TenantFilter.GetTenantName(s.TenantId)})")
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+        else
+        {
+            _byService = _summaries
+                .GroupBy(s => s.ServiceName)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+
+        _loading = false;
+    }
+
+    private Color GetTierColor(string tier)
+    {
+        return tier switch
+        {
+            "P2" => Color.Success,
+            "P1" => Color.Info,
+            _ => Color.Warning
+        };
+    }
+
+    private double GetFailureRate(List<SecuritySignInSummary> items)
+    {
+        var total = items.Sum(s => s.ActiveUserCount);
+        if (total == 0) return 0;
+        return (double)items.Sum(s => s.FailureCount) / total * 100;
+    }
+
+    private Color GetFailureColor(List<SecuritySignInSummary> items)
+    {
+        var rate = GetFailureRate(items);
+        return rate switch
+        {
+            > 20 => Color.Error,
+            > 10 => Color.Warning,
+            _ => Color.Success
+        };
+    }
+
+    public class DailySignIn
+    {
+        public string Date { get; set; } = string.Empty;
+        public int SuccessCount { get; set; }
+        public int FailureCount { get; set; }
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+}

@@ -20,9 +20,12 @@ builder.Services.AddDbContextFactory<MauDbContext>(options =>
 // Application services
 builder.Services.AddScoped<IGraphReportService, GraphReportService>();
 builder.Services.AddScoped<IMauDataService, MauDataService>();
+builder.Services.AddScoped<TenantFilterService>();
 
 // Background data collection
-builder.Services.AddHostedService<MauSnapshotBackgroundService>();
+builder.Services.AddSingleton<MauSnapshotBackgroundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MauSnapshotBackgroundService>());
+builder.Services.AddSingleton<IDataCollectionService>(sp => sp.GetRequiredService<MauSnapshotBackgroundService>());
 
 var app = builder.Build();
 

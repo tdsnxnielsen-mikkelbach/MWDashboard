@@ -2,6 +2,54 @@ html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
+/* ApexCharts tooltip fix for dark mode */
+.apexcharts-tooltip {
+    background: #1e1e2e !important;
+    color: #ffffff !important;
+    border: 1px solid #333 !important;
+}
+
+.apexcharts-tooltip-title {
+    background: #2d2d3d !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid #444 !important;
+}
+
+.apexcharts-tooltip-text {
+    color: #ffffff !important;
+}
+
+.apexcharts-xaxistooltip,
+.apexcharts-yaxistooltip {
+    background: #1e1e2e !important;
+    color: #ffffff !important;
+    border: 1px solid #333 !important;
+}
+
+/* Legend text visible in dark mode */
+.mud-theme-dark .apexcharts-legend-text,
+.mud-theme-provider-dark .apexcharts-legend-text {
+    color: #ffffff !important;
+}
+
+.mud-theme-dark .apexcharts-text,
+.mud-theme-dark .apexcharts-xaxis-label,
+.mud-theme-dark .apexcharts-yaxis-label,
+.mud-theme-provider-dark .apexcharts-text,
+.mud-theme-provider-dark .apexcharts-xaxis-label,
+.mud-theme-provider-dark .apexcharts-yaxis-label {
+    fill: #ffffff !important;
+}
+
+.mud-theme-dark .apexcharts-title-text,
+.mud-theme-dark .apexcharts-xaxis-title-text,
+.mud-theme-dark .apexcharts-yaxis-title-text,
+.mud-theme-provider-dark .apexcharts-title-text,
+.mud-theme-provider-dark .apexcharts-xaxis-title-text,
+.mud-theme-provider-dark .apexcharts-yaxis-title-text {
+    fill: #cccccc !important;
+}
+
 a, .btn-link {
     color: #006bb7;
 }

@@ -1,0 +1,564 @@
+@page "/licenses"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@using MWDashboard.Models
+@using MWDashboard.Services
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Licenses &amp; Adoption</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Licenses &amp; Adoption</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+
+@* Date Range Picker *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudGrid>
+        <MudItem xs="12" sm="4" md="3">
+            <MudDatePicker Label="From" @bind-Date="_fromDate" DateFormat="yyyy-MM-dd" />
+        </MudItem>
+        <MudItem xs="12" sm="4" md="3">
+            <MudDatePicker Label="To" @bind-Date="_toDate" DateFormat="yyyy-MM-dd" />
+        </MudItem>
+        <MudItem xs="12" sm="4" md="3" Class="d-flex align-end gap-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadDataForRange">
+                Load Data
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="ResetDateRange">
+                Reset
+            </MudButton>
+        </MudItem>
+        <MudItem xs="12">
+            @if (_dataRangeEarliest.HasValue)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" Class="mr-1" />
+                    Stored data available from <strong>@_dataRangeEarliest.Value.ToString("yyyy-MM-dd")</strong>
+                    to <strong>@_dataRangeLatest!.Value.ToString("yyyy-MM-dd")</strong>
+                    (@((int)(_dataRangeLatest.Value - _dataRangeEarliest.Value).TotalDays) days).
+                    Data accumulates beyond the 180-day Graph API limit with each collection cycle.
+                </MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    No stored data yet. Use "Collect Now" on the Tenants page to start collecting license history.
+                </MudText>
+            }
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@* KPI Cards *@
+<MudGrid>
+    <MudItem xs="12" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Total SKUs</MudText>
+            <MudText Typo="Typo.h4">@_latestLicenses.Count</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Total Licenses</MudText>
+            <MudText Typo="Typo.h4">@_latestLicenses.Sum(l => l.TotalLicenses).ToString("N0")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Assigned</MudText>
+            <MudText Typo="Typo.h4">@_latestLicenses.Sum(l => l.ConsumedLicenses).ToString("N0")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Avg. Utilization</MudText>
+            <MudText Typo="Typo.h4">@GetAverageUtilization().ToString("F0")%</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@* Recommendations *@
+@if (_recommendations.Count > 0)
+{
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">
+            <MudIcon Icon="@Icons.Material.Filled.Lightbulb" Color="Color.Warning" Class="mr-2" />
+            License Recommendations
+        </MudText>
+        @foreach (var rec in _recommendations)
+        {
+            <MudAlert Severity="@rec.Severity" Class="mb-2" Dense="true">
+                @if (TenantFilter.IsMultiTenantView && !string.IsNullOrEmpty(rec.TenantId))
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="mr-2">@TenantFilter.GetTenantName(rec.TenantId)</MudChip>
+                }
+                <strong>@rec.SkuPartNumber</strong> — @rec.Message
+            </MudAlert>
+        }
+    </MudPaper>
+}
+
+@* Month-over-Month Adoption Chart *@
+@if (_adoptionData.Count > 0)
+{
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">Adoption Trend (Month over Month)</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+            Monthly active users per M365 service over time. Based on historical MAU report data.
+        </MudText>
+        <ApexChart @key="_chartKey" TItem="AdoptionPoint" Options="_adoptionChartOptions" Height="300">
+            @foreach (var sku in _adoptionData.Keys)
+            {
+                <ApexPointSeries TItem="AdoptionPoint"
+                                 Items="_adoptionData[sku]"
+                                 Name="@sku"
+                                 SeriesType="SeriesType.Line"
+                                 XValue="@(e => e.Month)"
+                                 YValue="@(e => (decimal)e.UsagePercent)" />
+            }
+        </ApexChart>
+    </MudPaper>
+}
+
+@* License Detail Table *@
+<MudPaper Class="pa-4 mt-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-3">License Details</MudText>
+    <MudTable Items="_latestLicenses" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm"
+              Filter="new Func<LicenseSnapshot, bool>(FilterFunc)">
+        <ToolBarContent>
+            <MudTextField @bind-Value="_searchString" Placeholder="Search SKU..." Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
+        </ToolBarContent>
+        <HeaderContent>
+            @if (TenantFilter.IsMultiTenantView)
+            {
+                <MudTh><MudTableSortLabel SortBy="new Func<LicenseSnapshot, object>(x => TenantFilter.GetTenantName(x.TenantId))">Tenant</MudTableSortLabel></MudTh>
+            }
+            <MudTh><MudTableSortLabel SortBy="new Func<LicenseSnapshot, object>(x => x.SkuPartNumber)">SKU</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<LicenseSnapshot, object>(x => x.ConsumedLicenses)">Assigned</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<LicenseSnapshot, object>(x => x.TotalLicenses)">Total</MudTableSortLabel></MudTh>
+            <MudTh>Utilization</MudTh>
+            <MudTh>Recommendation</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            @if (TenantFilter.IsMultiTenantView)
+            {
+                <MudTd DataLabel="Tenant">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default">@TenantFilter.GetTenantName(context.TenantId)</MudChip>
+                </MudTd>
+            }
+            <MudTd DataLabel="SKU">@context.SkuPartNumber</MudTd>
+            <MudTd DataLabel="Assigned">@context.ConsumedLicenses.ToString("N0")</MudTd>
+            <MudTd DataLabel="Total">@context.TotalLicenses.ToString("N0")</MudTd>
+            <MudTd DataLabel="Utilization">
+                <MudProgressLinear Color="@GetUtilColor(context)" Value="@GetUsagePercent(context)" Class="my-1" Style="min-width: 100px;" />
+                <MudText Typo="Typo.caption">@GetUsagePercent(context).ToString("F0")%</MudText>
+            </MudTd>
+            <MudTd DataLabel="Recommendation">
+                <MudChip T="string" Color="@GetRecommendationColor(context)" Size="Size.Small">@GetRecommendationText(context)</MudChip>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@* Message Center *@
+<MudPaper Class="pa-4 mt-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-3">
+        <MudIcon Icon="@Icons.Material.Filled.Announcement" Class="mr-2" />
+        M365 Message Center Recommendations
+    </MudText>
+    @if (_messageCenterPosts.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">No Message Center posts available. Data is collected by the background service.</MudAlert>
+    }
+    else
+    {
+        @* Filter Chips *@
+        <MudStack Row="true" Class="mb-3 flex-wrap" Spacing="2">
+            <MudText Typo="Typo.subtitle2" Class="align-self-center mr-2">Filter:</MudText>
+            @foreach (var cat in _availableCategories)
+            {
+                <MudChip T="string" Color="@(_selectedCategories.Contains(cat) ? Color.Primary : Color.Default)"
+                         Size="Size.Small" OnClick="@(() => ToggleCategory(cat))">
+                    @cat
+                </MudChip>
+            }
+            <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+            @foreach (var sev in _availableSeverities)
+            {
+                <MudChip T="string" Color="@(_selectedSeverities.Contains(sev) ? GetSeverityColor(sev) : Color.Default)"
+                         Size="Size.Small" OnClick="@(() => ToggleSeverity(sev))">
+                    @sev
+                </MudChip>
+            }
+        </MudStack>
+
+        @* Grouped by Month — Collapsible *@
+        <MudExpansionPanels MultiExpansion="true">
+            @foreach (var group in GetFilteredPostsGrouped())
+            {
+                <MudExpansionPanel Text="@($"{group.Key} ({group.Value.Count})")" Expanded="true">
+                    <MudTable Items="group.Value" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+                        <HeaderContent>
+                            @if (TenantFilter.IsMultiTenantView)
+                            {
+                                <MudTh>Tenant</MudTh>
+                            }
+                            <MudTh>Date</MudTh>
+                            <MudTh>Category</MudTh>
+                            <MudTh>Title</MudTh>
+                            <MudTh>Severity</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            @if (TenantFilter.IsMultiTenantView)
+                            {
+                                <MudTd DataLabel="Tenant">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default">@TenantFilter.GetTenantName(context.TenantId)</MudChip>
+                                </MudTd>
+                            }
+                            <MudTd DataLabel="Date">@(context.StartDateTime?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+                            <MudTd DataLabel="Category">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.Category</MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Title">@context.Title</MudTd>
+                            <MudTd DataLabel="Severity">
+                                <MudChip T="string" Size="Size.Small" Color="@GetSeverityColor(context.Severity)">@context.Severity</MudChip>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
+
+        @if (!GetFilteredPostsGrouped().Any())
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-2">No posts match the selected filters.</MudAlert>
+        }
+    }
+</MudPaper>
+
+@code {
+    private List<LicenseSnapshot> _latestLicenses = [];
+    private List<LicenseSnapshot> _rangeLicenses = [];
+    private List<MessageCenterPost> _messageCenterPosts = [];
+    private List<LicenseRecommendation> _recommendations = [];
+    private Dictionary<string, List<AdoptionPoint>> _adoptionData = [];
+    private string _searchString = string.Empty;
+    private DateTime? _fromDate = DateTime.UtcNow.AddMonths(-6);
+    private DateTime? _toDate = DateTime.UtcNow;
+    private DateTime? _dataRangeEarliest;
+    private DateTime? _dataRangeLatest;
+    private Guid _chartKey = Guid.NewGuid();
+
+    // Message Center filter state
+    private HashSet<string> _selectedCategories = [];
+    private HashSet<string> _selectedSeverities = [];
+    private List<string> _availableCategories = [];
+    private List<string> _availableSeverities = [];
+    private bool _loading = true;
+
+    private ApexChartOptions<AdoptionPoint> _adoptionChartOptions = new()
+    {
+        Yaxis = [new YAxis
+        {
+            Title = new AxisTitle { Text = "Active Users" },
+            DecimalsInFloat = 0
+        }],
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Month" } },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadAllData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadAllData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadAllData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        _latestLicenses = await MauDataService.GetLatestLicensesAsync(tenantIds);
+        _messageCenterPosts = await MauDataService.GetMessageCenterPostsAsync(tenantIds);
+        var (earliest, latest) = await MauDataService.GetLicenseDataRangeAsync();
+        _dataRangeEarliest = earliest;
+        _dataRangeLatest = latest;
+        _mauHistory = await MauDataService.GetMauHistoryAsync(tenantIds, months: 12);
+
+        // Populate Message Center filter options
+        _availableCategories = _messageCenterPosts.Select(p => p.Category).Where(c => !string.IsNullOrEmpty(c)).Distinct().OrderBy(c => c).ToList();
+        _availableSeverities = _messageCenterPosts.Select(p => p.Severity).Where(s => !string.IsNullOrEmpty(s)).Distinct().OrderBy(s => s).ToList();
+
+        await LoadDataForRange();
+        _loading = false;
+    }
+
+    private List<MauSnapshot> _mauHistory = [];
+
+    private async Task LoadDataForRange()
+    {
+        var from = _fromDate?.Date ?? DateTime.UtcNow.AddMonths(-6).Date;
+        var to = _toDate?.Date.AddDays(1).AddTicks(-1) ?? DateTime.UtcNow;
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+
+        _rangeLicenses = await MauDataService.GetLicensesByDateRangeAsync(from, to, tenantIds);
+        BuildAdoptionData(from, to);
+        BuildRecommendations();
+        _chartKey = Guid.NewGuid(); // Force chart re-render
+    }
+
+    private async Task ResetDateRange()
+    {
+        _fromDate = _dataRangeEarliest ?? DateTime.UtcNow.AddMonths(-6);
+        _toDate = _dataRangeLatest ?? DateTime.UtcNow;
+        await LoadDataForRange();
+    }
+
+    private void BuildAdoptionData(DateTime from, DateTime to)
+    {
+        // Use MAU snapshot data (which has actual historical dates) for the adoption trend
+        var filtered = _mauHistory.Where(s => s.ReportDate >= from && s.ReportDate <= to);
+
+        // When multi-tenant, show per-tenant series
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _adoptionData = filtered
+                .GroupBy(s => $"{s.ServiceName} ({TenantFilter.GetTenantName(s.TenantId)})")
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.GroupBy(s => s.ReportDate.ToString("yyyy-MM"))
+                          .Select(mg => new AdoptionPoint
+                          {
+                              Month = mg.Key,
+                              UsagePercent = mg.Max(s => s.ActiveUserCount)
+                          })
+                          .OrderBy(p => p.Month)
+                          .ToList());
+        }
+        else
+        {
+            _adoptionData = filtered
+                .GroupBy(s => s.ServiceName)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.GroupBy(s => s.ReportDate.ToString("yyyy-MM"))
+                          .Select(mg => new AdoptionPoint
+                          {
+                              Month = mg.Key,
+                              UsagePercent = mg.Max(s => s.ActiveUserCount)
+                          })
+                          .OrderBy(p => p.Month)
+                          .ToList());
+        }
+    }
+
+    private void BuildRecommendations()
+    {
+        _recommendations.Clear();
+
+        foreach (var license in _latestLicenses)
+        {
+            var pct = GetUsagePercent(license);
+            var unused = license.TotalLicenses - license.ConsumedLicenses;
+
+            if (pct < 30 && unused > 5)
+            {
+                _recommendations.Add(new LicenseRecommendation
+                {
+                    TenantId = license.TenantId,
+                    SkuPartNumber = license.SkuPartNumber,
+                    Message = $"Only {pct:F0}% utilized ({unused} unused). Consider reducing licenses to save costs.",
+                    Severity = Severity.Warning
+                });
+            }
+            else if (pct > 95)
+            {
+                _recommendations.Add(new LicenseRecommendation
+                {
+                    TenantId = license.TenantId,
+                    SkuPartNumber = license.SkuPartNumber,
+                    Message = $"At {pct:F0}% capacity. Consider adding licenses to avoid hitting the limit.",
+                    Severity = Severity.Error
+                });
+            }
+            else if (pct > 85)
+            {
+                _recommendations.Add(new LicenseRecommendation
+                {
+                    TenantId = license.TenantId,
+                    SkuPartNumber = license.SkuPartNumber,
+                    Message = $"At {pct:F0}% utilization. Approaching capacity — monitor closely.",
+                    Severity = Severity.Info
+                });
+            }
+        }
+
+        // Check adoption trends
+        foreach (var (sku, points) in _adoptionData)
+        {
+            if (points.Count >= 2)
+            {
+                var recent = points[^1].UsagePercent;
+                var previous = points[^2].UsagePercent;
+                var delta = recent - previous;
+
+                if (delta < -10)
+                {
+                    _recommendations.Add(new LicenseRecommendation
+                    {
+                        SkuPartNumber = sku,
+                        Message = $"Usage dropped {Math.Abs(delta):F0}% month-over-month. Adoption may be declining — investigate.",
+                        Severity = Severity.Warning
+                    });
+                }
+                else if (delta > 15)
+                {
+                    _recommendations.Add(new LicenseRecommendation
+                    {
+                        SkuPartNumber = sku,
+                        Message = $"Usage grew {delta:F0}% month-over-month. Adoption is accelerating!",
+                        Severity = Severity.Success
+                    });
+                }
+            }
+        }
+    }
+
+    private double GetAverageUtilization()
+    {
+        if (_latestLicenses.Count == 0) return 0;
+        var totalAssigned = _latestLicenses.Sum(l => l.ConsumedLicenses);
+        var totalLicenses = _latestLicenses.Sum(l => l.TotalLicenses);
+        if (totalLicenses == 0) return 0;
+        return (double)totalAssigned / totalLicenses * 100;
+    }
+
+    private double GetUsagePercent(LicenseSnapshot license)
+    {
+        if (license.TotalLicenses == 0) return 0;
+        return (double)license.ConsumedLicenses / license.TotalLicenses * 100;
+    }
+
+    private Color GetUtilColor(LicenseSnapshot license)
+    {
+        var pct = GetUsagePercent(license);
+        return pct switch
+        {
+            > 90 => Color.Error,
+            > 70 => Color.Warning,
+            _ => Color.Success
+        };
+    }
+
+    private string GetRecommendationText(LicenseSnapshot license)
+    {
+        var pct = GetUsagePercent(license);
+        return pct switch
+        {
+            < 30 => "Scale Down",
+            > 95 => "Scale Up",
+            > 85 => "Monitor",
+            _ => "OK"
+        };
+    }
+
+    private Color GetRecommendationColor(LicenseSnapshot license)
+    {
+        var pct = GetUsagePercent(license);
+        return pct switch
+        {
+            < 30 => Color.Warning,
+            > 95 => Color.Error,
+            > 85 => Color.Info,
+            _ => Color.Success
+        };
+    }
+
+    private Color GetSeverityColor(string severity)
+    {
+        return severity.ToLowerInvariant() switch
+        {
+            "high" => Color.Error,
+            "normal" => Color.Warning,
+            _ => Color.Info
+        };
+    }
+
+    private bool FilterFunc(LicenseSnapshot license)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return license.SkuPartNumber.Contains(_searchString, StringComparison.OrdinalIgnoreCase)
+            || license.TenantId.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public class AdoptionPoint
+    {
+        public string Month { get; set; } = string.Empty;
+        public double UsagePercent { get; set; }
+    }
+
+    public class LicenseRecommendation
+    {
+        public string TenantId { get; set; } = string.Empty;
+        public string SkuPartNumber { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public Severity Severity { get; set; }
+    }
+
+    // Message Center filter methods
+    private void ToggleCategory(string category)
+    {
+        if (!_selectedCategories.Remove(category))
+            _selectedCategories.Add(category);
+    }
+
+    private void ToggleSeverity(string severity)
+    {
+        if (!_selectedSeverities.Remove(severity))
+            _selectedSeverities.Add(severity);
+    }
+
+    private List<KeyValuePair<string, List<MessageCenterPost>>> GetFilteredPostsGrouped()
+    {
+        var filtered = _messageCenterPosts.AsEnumerable();
+
+        if (_selectedCategories.Count > 0)
+            filtered = filtered.Where(p => _selectedCategories.Contains(p.Category));
+
+        if (_selectedSeverities.Count > 0)
+            filtered = filtered.Where(p => _selectedSeverities.Contains(p.Severity));
+
+        return filtered
+            .OrderByDescending(p => p.StartDateTime)
+            .GroupBy(p => p.StartDateTime?.ToString("yyyy-MM") ?? "Unknown")
+            .Select(g => new KeyValuePair<string, List<MessageCenterPost>>(g.Key, g.ToList()))
+            .ToList();
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+}

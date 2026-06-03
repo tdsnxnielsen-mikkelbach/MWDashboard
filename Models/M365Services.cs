@@ -17,3 +17,21 @@ public static class M365Services
         OneDrive
     ];
 }
+
+public static class SecurityServices
+{
+    public const string Defender = "Defender";
+    public const string EntraId = "Entra ID";
+    public const string Intune = "Intune";
+    public const string Sentinel = "Sentinel";
+    public const string Other = "Other";
+
+    public static readonly string[] All =
+    [
+        Defender,
+        EntraId,
+        Intune,
+        Sentinel,
+        Other
+    ];
+}

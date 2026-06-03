@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "J1rNG2mwIcE=",
+  "dgSpecHash": "kikElFADUUo=",
   "success": true,
-  "projectFilePath": "C:\\Dev\\MWDashboard\\MWDashboard.csproj",
+  "projectFilePath": "c:\\Dev\\MWDashboard\\MWDashboard.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\sadmin\\.nuget\\packages\\azure.core\\1.53.0\\azure.core.1.53.0.nupkg.sha512",
     "C:\\Users\\sadmin\\.nuget\\packages\\azure.identity\\1.21.0\\azure.identity.1.21.0.nupkg.sha512",
@@ -35,6 +35,7 @@
     "C:\\Users\\sadmin\\.nuget\\packages\\microsoft.entityframeworkcore.sqlserver\\10.0.8\\microsoft.entityframeworkcore.sqlserver.10.0.8.nupkg.sha512",
     "C:\\Users\\sadmin\\.nuget\\packages\\microsoft.extensions.dependencymodel\\10.0.8\\microsoft.extensions.dependencymodel.10.0.8.nupkg.sha512",
     "C:\\Users\\sadmin\\.nuget\\packages\\microsoft.graph\\6.1.0\\microsoft.graph.6.1.0.nupkg.sha512",
+    "C:\\Users\\sadmin\\.nuget\\packages\\microsoft.graph.beta\\6.1.0-preview\\microsoft.graph.beta.6.1.0-preview.nupkg.sha512",
     "C:\\Users\\sadmin\\.nuget\\packages\\microsoft.graph.core\\4.0.1\\microsoft.graph.core.4.0.1.nupkg.sha512",
     "C:\\Users\\sadmin\\.nuget\\packages\\microsoft.identity.abstractions\\12.0.0\\microsoft.identity.abstractions.12.0.0.nupkg.sha512",
     "C:\\Users\\sadmin\\.nuget\\packages\\microsoft.identity.client\\4.84.1\\microsoft.identity.client.4.84.1.nupkg.sha512",

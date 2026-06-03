@@ -14,6 +14,7 @@
           "Microsoft.EntityFrameworkCore.SqlServer": "10.0.8",
           "Microsoft.EntityFrameworkCore.Sqlite": "10.0.8",
           "Microsoft.Graph": "6.1.0",
+          "Microsoft.Graph.Beta": "6.1.0-preview",
           "Microsoft.Identity.Web": "4.10.0",
           "MudBlazor": "9.5.0"
         },
@@ -604,6 +605,17 @@
         },
         "runtime": {
           "lib/net10.0/Microsoft.Graph.dll": {
+            "assemblyVersion": "6.1.0.0",
+            "fileVersion": "6.1.0.0"
+          }
+        }
+      },
+      "Microsoft.Graph.Beta/6.1.0-preview": {
+        "dependencies": {
+          "Microsoft.Graph.Core": "4.0.1"
+        },
+        "runtime": {
+          "lib/net10.0/Microsoft.Graph.Beta.dll": {
             "assemblyVersion": "6.1.0.0",
             "fileVersion": "6.1.0.0"
           }
@@ -1462,6 +1474,13 @@
       "sha512": "sha512-dWdbc0/sSq48hRNeActuHPXUO3Z+d/8ZZYzjeZjblja6S7NlQ7n3JAtE1kf4Uvi07sz/V4LgS9cbkXg44Z+DZg==",
       "path": "microsoft.graph/6.1.0",
       "hashPath": "microsoft.graph.6.1.0.nupkg.sha512"
+    },
+    "Microsoft.Graph.Beta/6.1.0-preview": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-EMuIMtcQJMfu5MzgMCwQGwxzk3jfMp8V/5rrTCZu4KdrZhZkv4KmSkzcMJ8RRx0DNm2MQdGPYwqrUdhb8+x38w==",
+      "path": "microsoft.graph.beta/6.1.0-preview",
+      "hashPath": "microsoft.graph.beta.6.1.0-preview.nupkg.sha512"
     },
     "Microsoft.Graph.Core/4.0.1": {
       "type": "package",

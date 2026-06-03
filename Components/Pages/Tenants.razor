@@ -1,11 +1,13 @@
 @page "/tenants"
 @using MWDashboard.Models
 @using MWDashboard.Data
+@using MWDashboard.Services
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<MauDbContext> DbFactory
 @inject IConfiguration Configuration
 @inject IJSRuntime JS
-@rendermode InteractiveServer
+@inject IDataCollectionService DataCollectionService
+@inject TenantFilterService TenantFilter
 
 <PageTitle>Tenant Management</PageTitle>
 
@@ -73,6 +75,11 @@
                     </MudTd>
                     <MudTd DataLabel="Onboarded">@context.OnboardedAt.ToString("yyyy-MM-dd")</MudTd>
                     <MudTd>
+                        <MudTooltip Text="Collect data now">
+                            <MudIconButton Icon="@Icons.Material.Filled.CloudSync" Color="Color.Success" Size="Size.Small"
+                                           Disabled="@(_collectingTenantId == context.TenantId)"
+                                           OnClick="@(() => CollectNow(context))" />
+                        </MudTooltip>
                         <MudTooltip Text="Open admin consent URL">
                             <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Info" Size="Size.Small" 
                                            Href="@GetConsentUrlForTenant(context.TenantId)" Target="_blank" />
@@ -139,6 +146,18 @@
         _newTenant = new TenantInfo();
 
         await LoadTenants();
+        await TenantFilter.LoadTenantsAsync();
+
+        // Auto-clear the success message after showing it
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3000);
+            await InvokeAsync(() =>
+            {
+                _message = string.Empty;
+                StateHasChanged();
+            });
+        });
     }
 
     private async Task ToggleActive(TenantInfo tenant)
@@ -151,6 +170,7 @@
             await db.SaveChangesAsync();
         }
         await LoadTenants();
+        await TenantFilter.LoadTenantsAsync();
     }
 
     private async Task DeleteTenant(TenantInfo tenant)
@@ -163,6 +183,7 @@
             await db.SaveChangesAsync();
         }
         await LoadTenants();
+        await TenantFilter.LoadTenantsAsync();
     }
 
     private string GetConsentUrlForTenant(string tenantId)
@@ -183,5 +204,29 @@
     {
         // JS interop for clipboard copy
         await JS.InvokeVoidAsync("navigator.clipboard.writeText", _consentUrl);
+    }
+
+    private string? _collectingTenantId;
+
+    private async Task CollectNow(TenantInfo tenant)
+    {
+        _collectingTenantId = tenant.TenantId;
+        StateHasChanged();
+
+        try
+        {
+            await DataCollectionService.CollectForTenantAsync(tenant.TenantId, tenant.TenantName);
+            _message = $"Data collection completed for '{tenant.TenantName}'.";
+            _severity = Severity.Success;
+        }
+        catch (Exception ex)
+        {
+            _message = $"Collection failed: {ex.Message}";
+            _severity = Severity.Error;
+        }
+        finally
+        {
+            _collectingTenantId = null;
+        }
     }
 }
