@@ -1,0 +1,160 @@
+﻿@page "/"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using MWDashboard.Models
+@using MWDashboard.Services
+@inject IMauDataService MauDataService
+@rendermode InteractiveServer
+
+<PageTitle>MAU Dashboard</PageTitle>
+
+<MudGrid>
+    @* KPI Cards *@
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Total MAU (M365)</MudText>
+            <MudText Typo="Typo.h4">@_totalMau.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Latest period</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Teams MAU</MudText>
+            <MudText Typo="Typo.h4">@_teamsMau.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Latest period</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Exchange MAU</MudText>
+            <MudText Typo="Typo.h4">@_exchangeMau.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Latest period</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">SharePoint MAU</MudText>
+            <MudText Typo="Typo.h4">@_sharePointMau.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Latest period</MudText>
+        </MudPaper>
+    </MudItem>
+
+    @* 12-Month Trend Chart *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">MAU Trend (up to 12 months)</MudText>
+            @if (_chartData.Count > 0)
+            {
+                <ApexChart TItem="MauChartPoint"
+                           Title=""
+                           Height="350">
+                    @foreach (var service in _chartData.Keys)
+                    {
+                        <ApexPointSeries TItem="MauChartPoint"
+                                         Items="_chartData[service]"
+                                         Name="@service"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.Month)"
+                                         YValue="@(e => (decimal?)e.Count)" />
+                    }
+                </ApexChart>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No data available. Configure a tenant and wait for the first data collection.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Per-Service Breakdown *@
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Active Users by Service</MudText>
+            @if (_latestByService.Count > 0)
+            {
+                <ApexChart TItem="MauSnapshot"
+                           Title=""
+                           Height="300">
+                    <ApexPointSeries TItem="MauSnapshot"
+                                     Items="_latestByService"
+                                     Name="Active Users"
+                                     SeriesType="SeriesType.Bar"
+                                     XValue="@(e => e.ServiceName)"
+                                     YValue="@(e => (decimal?)e.ActiveUserCount)" />
+                </ApexChart>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* License Overview *@
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">License Utilization</MudText>
+            <MudTable Items="_licenses" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>SKU</MudTh>
+                    <MudTh>Assigned</MudTh>
+                    <MudTh>Total</MudTh>
+                    <MudTh>Usage</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="SKU">@context.SkuPartNumber</MudTd>
+                    <MudTd DataLabel="Assigned">@context.ConsumedLicenses</MudTd>
+                    <MudTd DataLabel="Total">@context.TotalLicenses</MudTd>
+                    <MudTd DataLabel="Usage">
+                        <MudProgressLinear Color="Color.Primary"
+                                           Value="@GetUsagePercent(context)"
+                                           Class="my-1" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private int _totalMau;
+    private int _teamsMau;
+    private int _exchangeMau;
+    private int _sharePointMau;
+    private List<MauSnapshot> _latestByService = [];
+    private List<LicenseSnapshot> _licenses = [];
+    private Dictionary<string, List<MauChartPoint>> _chartData = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _latestByService = await MauDataService.GetLatestMauByServiceAsync();
+        _totalMau = _latestByService.FirstOrDefault(s => s.ServiceName == M365Services.Office365)?.ActiveUserCount ?? 0;
+        _teamsMau = _latestByService.FirstOrDefault(s => s.ServiceName == M365Services.Teams)?.ActiveUserCount ?? 0;
+        _exchangeMau = _latestByService.FirstOrDefault(s => s.ServiceName == M365Services.Exchange)?.ActiveUserCount ?? 0;
+        _sharePointMau = _latestByService.FirstOrDefault(s => s.ServiceName == M365Services.SharePoint)?.ActiveUserCount ?? 0;
+
+        _licenses = await MauDataService.GetLatestLicensesAsync();
+
+        var history = await MauDataService.GetMauHistoryAsync(months: 12);
+        _chartData = history
+            .GroupBy(s => s.ServiceName)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(s => s.ReportDate.ToString("yyyy-MM"))
+                      .Select(mg => new MauChartPoint
+                      {
+                          Month = mg.Key,
+                          Count = mg.Sum(x => x.ActiveUserCount)
+                      })
+                      .OrderBy(p => p.Month)
+                      .ToList());
+    }
+
+    private double GetUsagePercent(LicenseSnapshot license)
+    {
+        if (license.TotalLicenses == 0) return 0;
+        return (double)license.ConsumedLicenses / license.TotalLicenses * 100;
+    }
+
+    public class MauChartPoint
+    {
+        public string Month { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+}
