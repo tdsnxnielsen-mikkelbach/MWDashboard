@@ -13,8 +13,13 @@
 @if (_loading)
 {
     <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading dashboard data...</MudText>
+    </div>
 }
-
+else
+{
 <MudGrid>
     @* KPI Cards *@
     <MudItem xs="12" sm="6" md="3">
@@ -131,6 +136,7 @@
         </MudPaper>
     </MudItem>
 </MudGrid>
+}
 
 @code {
     private int _totalMau;

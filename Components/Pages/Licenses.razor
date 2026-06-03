@@ -15,8 +15,13 @@
 @if (_loading)
 {
     <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading license data...</MudText>
+    </div>
 }
-
+else
+{
 @* Date Range Picker *@
 <MudPaper Class="pa-4 mb-4" Elevation="2">
     <MudGrid>
@@ -242,6 +247,7 @@
         }
     }
 </MudPaper>
+}
 
 @code {
     private List<LicenseSnapshot> _latestLicenses = [];
