@@ -164,9 +164,10 @@ az ad app create --display-name "MWDashboard-Deploy"
 # Note the appId from output, then create a service principal
 az ad sp create --id <appId>
 
-# Assign Contributor + AcrPush roles on your subscription
+# Assign Contributor + AcrPush + RBAC Admin roles on your subscription
 az role assignment create --assignee <appId> --role Contributor --scope /subscriptions/<subscriptionId>
 az role assignment create --assignee <appId> --role AcrPush --scope /subscriptions/<subscriptionId>
+az role assignment create --assignee <appId> --role "Role Based Access Control Administrator" --scope /subscriptions/<subscriptionId>
 
 # Configure federated credential for GitHub Actions
 # (PowerShell requires a JSON file — inline JSON gets mangled by the shell)
