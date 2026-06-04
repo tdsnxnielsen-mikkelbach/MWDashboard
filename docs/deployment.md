@@ -157,7 +157,7 @@ The pipeline at `.github/workflows/deploy.yml` runs on every push to `main` and 
 
 #### 1. Create a Service Principal with federated credentials
 
-```bash
+```powershell
 # Create the app registration
 az ad app create --display-name "MWDashboard-Deploy"
 
@@ -169,12 +169,16 @@ az role assignment create --assignee <appId> --role Contributor --scope /subscri
 az role assignment create --assignee <appId> --role AcrPush --scope /subscriptions/<subscriptionId>
 
 # Configure federated credential for GitHub Actions
-az ad app federated-credential create --id <appId> --parameters '{
-  "name": "github-main",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:<org>/<repo>:ref:refs/heads/main",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
+# (PowerShell requires a JSON file — inline JSON gets mangled by the shell)
+@{
+    name      = "github-main"
+    issuer    = "https://token.actions.githubusercontent.com"
+    subject   = "repo:<org>/<repo>:ref:refs/heads/main"
+    audiences = @("api://AzureADTokenExchange")
+} | ConvertTo-Json | Set-Content fed-cred.json
+
+az ad app federated-credential create --id <appId> --parameters "@fed-cred.json"
+Remove-Item fed-cred.json
 ```
 
 #### 2. Configure GitHub repository
