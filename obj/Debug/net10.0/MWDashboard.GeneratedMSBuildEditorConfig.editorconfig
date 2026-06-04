@@ -85,6 +85,58 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xfSW1wb3J0cy5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/App.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXEFwcC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Layout/TenantSelector.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXExheW91dFxUZW5hbnRTZWxlY3Rvci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/Counter.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXENvdW50ZXIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/Error.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXEVycm9yLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXEhvbWUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/Licenses.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXExpY2Vuc2VzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/NotFound.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXE5vdEZvdW5kLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/Security.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXFNlY3VyaXR5LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/Services.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXFNlcnZpY2VzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/Tenants.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXFRlbmFudHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Pages/Weather.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFBhZ2VzXFdlYXRoZXIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Routes.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXFJvdXRlcy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXF9JbXBvcnRzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Dev/MWDashboard/Components/Layout/MainLayout.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTWFpbkxheW91dC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-wa6ih9wt7k
@@ -96,3 +148,15 @@ build_metadata.AdditionalFiles.CssScope = b-ag1qrkif6l
 [C:/Dev/MWDashboard/Components/Layout/ReconnectModal.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcUmVjb25uZWN0TW9kYWwucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = b-o7d081hj5h
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXExheW91dFxNYWluTGF5b3V0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-nbjczawux4
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Layout/NavMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXExheW91dFxOYXZNZW51LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-0dansg8gx9
+
+[C:/Dev/MWDashboard/src/MWDashboard.Web/Components/Layout/ReconnectModal.razor]
+build_metadata.AdditionalFiles.TargetPath = c3JjXE1XRGFzaGJvYXJkLldlYlxDb21wb25lbnRzXExheW91dFxSZWNvbm5lY3RNb2RhbC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-p1tx5qoz2d

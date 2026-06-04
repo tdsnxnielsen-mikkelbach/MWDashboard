@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "kikElFADUUo=",
+  "dgSpecHash": "cuKd0WenFrU=",
   "success": true,
-  "projectFilePath": "c:\\Dev\\MWDashboard\\MWDashboard.csproj",
+  "projectFilePath": "C:\\Dev\\MWDashboard\\MWDashboard.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\sadmin\\.nuget\\packages\\azure.core\\1.53.0\\azure.core.1.53.0.nupkg.sha512",
     "C:\\Users\\sadmin\\.nuget\\packages\\azure.identity\\1.21.0\\azure.identity.1.21.0.nupkg.sha512",

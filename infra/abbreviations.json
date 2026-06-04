@@ -1,0 +1,9 @@
+{
+  "resourcesResourceGroups": "rg-",
+  "containerRegistryRegistries": "cr",
+  "operationalInsightsWorkspaces": "log-",
+  "sqlServers": "sql-",
+  "cacheRedis": "redis",
+  "appManagedEnvironments": "cae-",
+  "appContainerApps": "ca-"
+}

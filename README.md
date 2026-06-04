@@ -9,33 +9,55 @@ A Blazor Web App that visualizes Monthly Active Users (MAU) across Microsoft 365
 - **Blazor-ApexCharts** — Interactive charts
 - **Microsoft Graph SDK** — Usage reports & license data
 - **Microsoft Graph Beta SDK** — Sign-in logs with full authentication details (Entra ID P1/P2)
-- **EF Core + SQLite** — Local data persistence & history accumulation
+- **EF Core + Azure SQL** — Data persistence (Serverless tier with auto-pause)
+- **Azure Managed Redis** — Distributed caching for dashboard performance
+- **Azure Container Apps** — Hosting (web UI) + scheduled jobs (data collection)
+- **Azure Key Vault** — Secrets management (AD credentials, Redis connection string)
+- **Managed Identities** — Passwordless auth to SQL, ACR, and Key Vault
 - **Azure Identity** — Multi-tenant authentication
+- **Azure Developer CLI (azd)** — Infrastructure provisioning & deployment (.NET SDK container publish, no Docker required)
 
-## Quick Start
+## Project Structure
+
+```
+MWDashboard/
+├── azure.yaml                          # azd project definition
+├── MWDashboard.slnx                    # Solution file
+├── .github/workflows/deploy.yml        # CI/CD pipeline (GitHub Actions)
+├── infra/                              # Bicep infrastructure-as-code
+│   ├── main.bicep                      # Orchestrator
+│   ├── main.bicepparam                 # Parameters (reads env vars)
+│   └── modules/                        # Individual resource modules
+└── src/
+    ├── MWDashboard.Shared/             # Shared library (Models, Data, Services)
+    ├── MWDashboard.Web/                # Blazor UI → Azure Container App
+    └── MWDashboard.Job/                # Data collector → Azure Container App Job
+```
+
+## Quick Start (Local Development)
 
 ### Prerequisites
 
 - .NET 10 SDK
 - An Azure AD multi-tenant app registration (see [Permissions](docs/permissions.md))
+- SQL Server (local) or SQLite for development
 
 ### Configuration
 
-1. Update `appsettings.json` with your `ClientId` and `TenantId`
+1. Update `src/MWDashboard.Web/appsettings.Development.json` with your `ClientId` and `TenantId`
 2. Store the client secret securely:
    ```powershell
-   dotnet user-secrets init
+   cd src/MWDashboard.Web
    dotnet user-secrets set "AzureAd:ClientSecret" "your-secret"
    ```
 
 ### Run
 
 ```powershell
-cd MWDashboard
-dotnet run
+dotnet run --project src/MWDashboard.Web
 ```
 
-The SQLite database is auto-created on first run (Development mode).
+The database is auto-migrated on first run (Development mode).
 
 ### Onboarding a Tenant
 
@@ -43,13 +65,28 @@ The SQLite database is auto-created on first run (Development mode).
 2. Generate an admin consent URL and send it to the customer's Global Admin
 3. After consent is granted, register the tenant ID and name
 4. Click the **Collect Now** button (cloud sync icon) to immediately pull data
-5. The background service will also collect data automatically on the next 24-hour cycle
+5. The scheduled job collects data automatically on a daily 2:00 AM UTC cycle
+
+## Azure Deployment
+
+See [Deployment Guide](docs/deployment.md) for full instructions.
+
+**Quick deploy with azd:**
+```powershell
+azd auth login
+azd env new prod
+azd env set AZURE_AD_CLIENT_ID <your-client-id>
+azd env set AZURE_AD_CLIENT_SECRET <your-secret>
+azd env set AZURE_AD_TENANT_ID <your-tenant-id>
+azd up
+```
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](docs/architecture.md) | System diagrams, data flow, multi-tenant model, project structure, constraints |
+| [Architecture](docs/architecture.md) | System diagrams, data flow, multi-tenant model, project structure |
+| [Deployment](docs/deployment.md) | Azure deployment guide, infrastructure, CI/CD pipeline setup |
 | [Features](docs/features.md) | Detailed feature documentation per page |
 | [Permissions](docs/permissions.md) | Required API permissions, consent guide, troubleshooting |
 

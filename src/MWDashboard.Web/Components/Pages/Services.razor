@@ -1,0 +1,166 @@
+@page "/services"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Services</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Service Usage Overview</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading service data...</MudText>
+    </div>
+}
+else
+{
+<MudGrid>
+    @foreach (var service in M365Services.All)
+    {
+        var data = GetServiceCardData(service);
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.h6">@service</MudText>
+                <MudText Typo="Typo.h3" Color="Color.Primary" Class="my-2">
+                    @(data?.LastOrDefault()?.Count.ToString("N0") ?? "—")
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Latest MAU (all selected tenants)</MudText>
+                @if (data != null && data.Count > 0)
+                {
+                    <ApexChart TItem="ServiceChartPoint" Height="150">
+                        <ApexPointSeries TItem="ServiceChartPoint"
+                                         Items="data"
+                                         Name="@service"
+                                         SeriesType="SeriesType.Area"
+                                         XValue="@(e => e.Month)"
+                                         YValue="@(e => (decimal?)e.Count)" />
+                    </ApexChart>
+                }
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@if (_serviceData.Count > 0)
+{
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">All Services Comparison</MudText>
+        <ApexChart TItem="ServiceChartPoint" Options="_comparisonChartOptions" Height="400">
+            @foreach (var service in _serviceData.Keys)
+            {
+                <ApexPointSeries TItem="ServiceChartPoint"
+                                 Items="_serviceData[service]"
+                                 Name="@service"
+                                 SeriesType="SeriesType.Line"
+                                 XValue="@(e => e.Month)"
+                                 YValue="@(e => (decimal?)e.Count)" />
+            }
+        </ApexChart>
+    </MudPaper>
+}
+}
+
+@code {
+    private Dictionary<string, List<ServiceChartPoint>> _serviceData = [];
+    private List<MauSnapshot> _history = [];
+    private bool _loading = true;
+
+    private ApexChartOptions<ServiceChartPoint> _comparisonChartOptions = new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Active Users" } }],
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Month" } },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        _history = await MauDataService.GetMauHistoryAsync(tenantIds, months: 12);
+
+        // When multi-tenant, include tenant name in the series key for the comparison chart
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _serviceData = _history
+                .GroupBy(s => $"{s.ServiceName} ({TenantFilter.GetTenantName(s.TenantId)})")
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.GroupBy(s => s.ReportDate.ToString("yyyy-MM"))
+                          .Select(mg => new ServiceChartPoint
+                          {
+                              Month = mg.Key,
+                              Count = mg.Sum(x => x.ActiveUserCount)
+                          })
+                          .OrderBy(p => p.Month)
+                          .ToList());
+        }
+        else
+        {
+            _serviceData = _history
+                .GroupBy(s => s.ServiceName)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.GroupBy(s => s.ReportDate.ToString("yyyy-MM"))
+                          .Select(mg => new ServiceChartPoint
+                          {
+                              Month = mg.Key,
+                              Count = mg.Sum(x => x.ActiveUserCount)
+                          })
+                          .OrderBy(p => p.Month)
+                          .ToList());
+        }
+
+        _loading = false;
+    }
+
+    private List<ServiceChartPoint>? GetServiceCardData(string serviceName)
+    {
+        // Always aggregate across tenants for the sparkline summary cards
+        var serviceHistory = _history.Where(s => s.ServiceName == serviceName).ToList();
+        if (serviceHistory.Count == 0) return null;
+        return serviceHistory
+            .GroupBy(s => s.ReportDate.ToString("yyyy-MM"))
+            .Select(mg => new ServiceChartPoint { Month = mg.Key, Count = mg.Sum(x => x.ActiveUserCount) })
+            .OrderBy(p => p.Month)
+            .ToList();
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    public class ServiceChartPoint
+    {
+        public string Month { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+}

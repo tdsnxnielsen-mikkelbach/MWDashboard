@@ -1,0 +1,87 @@
+@using Size = MudBlazor.Size
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<div class="d-inline-flex align-center">
+    <MudMenu Label="@_displayLabel" Variant="Variant.Text" Color="Color.Inherit"
+             EndIcon="@Icons.Material.Filled.ArrowDropDown"
+             AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+             Disabled="@TenantFilter.IsLoading">
+        <MudMenuItem OnClick="@OnSelectAll">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.SelectAll" Size="Size.Small" Class="mr-2" />
+                <MudText Typo="Typo.body2"><strong>Select All</strong></MudText>
+            </div>
+        </MudMenuItem>
+        <MudMenuItem OnClick="@OnSelectNone">
+            <div class="d-flex align-center">
+                <MudIcon Icon="@Icons.Material.Filled.Deselect" Size="Size.Small" Class="mr-2" />
+                <MudText Typo="Typo.body2"><strong>Select None</strong></MudText>
+            </div>
+        </MudMenuItem>
+        <MudDivider />
+        @foreach (var tenant in TenantFilter.AllTenants)
+        {
+            var tid = tenant.TenantId;
+            var isSelected = TenantFilter.SelectedTenantIds.Contains(tid);
+            <MudMenuItem OnClick="@(() => OnToggleTenant(tid))">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@(isSelected ? Icons.Material.Filled.CheckBox : Icons.Material.Filled.CheckBoxOutlineBlank)"
+                             Size="Size.Small" Class="mr-2" Color="@(isSelected ? Color.Primary : Color.Default)" />
+                    <MudText Typo="Typo.body2">@(tenant.DisplayName ?? tenant.TenantName)</MudText>
+                </div>
+            </MudMenuItem>
+        }
+    </MudMenu>
+    @if (TenantFilter.IsLoading)
+    {
+        <MudProgressCircular Size="Size.Small" Color="Color.Inherit" Indeterminate="true" Class="ml-2" />
+    }
+    else if (!TenantFilter.IsAllSelected && TenantFilter.SelectedCount > 0)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="ml-1">@TenantFilter.SelectedCount</MudChip>
+    }
+</div>
+
+@code {
+    private string _displayLabel = "All Tenants";
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnFilterChangedAsync;
+        await TenantFilter.LoadTenantsAsync();
+        _displayLabel = TenantFilter.GetDisplayLabel();
+    }
+
+    private async Task OnToggleTenant(string tenantId)
+    {
+        await TenantFilter.ToggleTenantAsync(tenantId);
+        _displayLabel = TenantFilter.GetDisplayLabel();
+    }
+
+    private async Task OnSelectAll()
+    {
+        await TenantFilter.SelectAllAsync();
+        _displayLabel = TenantFilter.GetDisplayLabel();
+    }
+
+    private async Task OnSelectNone()
+    {
+        await TenantFilter.SelectNoneAsync();
+        _displayLabel = TenantFilter.GetDisplayLabel();
+    }
+
+    private Task OnFilterChangedAsync()
+    {
+        return InvokeAsync(() =>
+        {
+            _displayLabel = TenantFilter.GetDisplayLabel();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnFilterChangedAsync;
+    }
+}

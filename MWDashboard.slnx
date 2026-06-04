@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MWDashboard.Job/MWDashboard.Job.csproj" />
+    <Project Path="src/MWDashboard.Shared/MWDashboard.Shared.csproj" />
+    <Project Path="src/MWDashboard.Web/MWDashboard.Web.csproj" />
+  </Folder>
+</Solution>
