@@ -24,6 +24,22 @@ public interface IMauDataService
     Task<List<SecuritySignInSummary>> GetSecuritySummaryAsync(IEnumerable<string>? tenantIds, int days = 30);
     Task SaveSecuritySummariesAsync(IEnumerable<SecuritySignInSummary> summaries);
     Task<List<TenantEntraTier>> GetTenantEntraIdTiersAsync();
+
+    // Workload Activity
+    Task<List<WorkloadActivitySnapshot>> GetWorkloadActivityAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveWorkloadActivityAsync(IEnumerable<WorkloadActivitySnapshot> activities);
+
+    // Copilot Usage
+    Task<List<CopilotUsageSnapshot>> GetCopilotUsageAsync(IEnumerable<string>? tenantIds);
+    Task SaveCopilotUsageAsync(IEnumerable<CopilotUsageSnapshot> snapshots);
+
+    // User Segmentation
+    Task<List<UserSegmentSnapshot>> GetUserSegmentsAsync(IEnumerable<string>? tenantIds, int months = 6);
+    Task SaveUserSegmentsAsync(IEnumerable<UserSegmentSnapshot> segments);
+
+    // Department Usage
+    Task<List<DepartmentUsageSnapshot>> GetDepartmentUsageAsync(IEnumerable<string>? tenantIds);
+    Task SaveDepartmentUsageAsync(IEnumerable<DepartmentUsageSnapshot> snapshots);
 }
 
 public class MauDataService : IMauDataService
@@ -320,5 +336,176 @@ public class MauDataService : IMauDataService
         }
 
         return tiers;
+    }
+
+    // Workload Activity
+    public async Task<List<WorkloadActivitySnapshot>> GetWorkloadActivityAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var fromDate = DateTime.UtcNow.AddDays(-days);
+        var query = db.WorkloadActivities.Where(a => a.ReportDate >= fromDate);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(a => ids.Contains(a.TenantId));
+        }
+        return await query.OrderBy(a => a.ReportDate).ThenBy(a => a.Workload).ToListAsync();
+    }
+
+    public async Task SaveWorkloadActivityAsync(IEnumerable<WorkloadActivitySnapshot> activities)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        foreach (var activity in activities)
+        {
+            var existing = await db.WorkloadActivities
+                .FirstOrDefaultAsync(a =>
+                    a.TenantId == activity.TenantId &&
+                    a.Workload == activity.Workload &&
+                    a.ActivityType == activity.ActivityType &&
+                    a.ReportDate == activity.ReportDate);
+
+            if (existing != null)
+            {
+                existing.Count = activity.Count;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.WorkloadActivities.Add(activity);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // Copilot Usage
+    public async Task<List<CopilotUsageSnapshot>> GetCopilotUsageAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.CopilotUsageSnapshots.AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(c => ids.Contains(c.TenantId));
+        }
+        // Get latest snapshot per tenant per app
+        return await query
+            .GroupBy(c => new { c.TenantId, c.AppName })
+            .Select(g => g.OrderByDescending(c => c.ReportDate).First())
+            .ToListAsync();
+    }
+
+    public async Task SaveCopilotUsageAsync(IEnumerable<CopilotUsageSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.CopilotUsageSnapshots
+                .FirstOrDefaultAsync(c =>
+                    c.TenantId == snapshot.TenantId &&
+                    c.AppName == snapshot.AppName &&
+                    c.ReportDate == snapshot.ReportDate);
+
+            if (existing != null)
+            {
+                existing.ActiveUsers = snapshot.ActiveUsers;
+                existing.TotalAssignedLicenses = snapshot.TotalAssignedLicenses;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.CopilotUsageSnapshots.Add(snapshot);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // User Segmentation
+    public async Task<List<UserSegmentSnapshot>> GetUserSegmentsAsync(IEnumerable<string>? tenantIds, int months = 6)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var fromDate = DateTime.UtcNow.AddMonths(-months);
+        var query = db.UserSegmentSnapshots.Where(s => s.ReportDate >= fromDate);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveUserSegmentsAsync(IEnumerable<UserSegmentSnapshot> segments)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        foreach (var segment in segments)
+        {
+            var existing = await db.UserSegmentSnapshots
+                .FirstOrDefaultAsync(s =>
+                    s.TenantId == segment.TenantId &&
+                    s.ReportDate == segment.ReportDate);
+
+            if (existing != null)
+            {
+                existing.HeavyUsers = segment.HeavyUsers;
+                existing.LightUsers = segment.LightUsers;
+                existing.InactiveUsers = segment.InactiveUsers;
+                existing.TotalUsers = segment.TotalUsers;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.UserSegmentSnapshots.Add(segment);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // Department Usage
+    public async Task<List<DepartmentUsageSnapshot>> GetDepartmentUsageAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.DepartmentUsageSnapshots.AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(d => ids.Contains(d.TenantId));
+        }
+        // Latest snapshot per tenant/department
+        return await query
+            .GroupBy(d => new { d.TenantId, d.Department })
+            .Select(g => g.OrderByDescending(d => d.ReportDate).First())
+            .ToListAsync();
+    }
+
+    public async Task SaveDepartmentUsageAsync(IEnumerable<DepartmentUsageSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.DepartmentUsageSnapshots
+                .FirstOrDefaultAsync(d =>
+                    d.TenantId == snapshot.TenantId &&
+                    d.Department == snapshot.Department &&
+                    d.ReportDate == snapshot.ReportDate);
+
+            if (existing != null)
+            {
+                existing.ActiveUsers = snapshot.ActiveUsers;
+                existing.TotalUsers = snapshot.TotalUsers;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.DepartmentUsageSnapshots.Add(snapshot);
+            }
+        }
+
+        await db.SaveChangesAsync();
     }
 }

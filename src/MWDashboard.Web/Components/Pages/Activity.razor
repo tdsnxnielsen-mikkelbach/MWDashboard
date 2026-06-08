@@ -1,0 +1,188 @@
+@page "/activity"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Feature Usage</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Feature-Level Usage</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading activity data...</MudText>
+    </div>
+}
+else
+{
+<MudGrid>
+    @foreach (var workload in _workloads)
+    {
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.h6" Class="mb-3">@workload</MudText>
+                @if (GetWorkloadActivities(workload).Count > 0)
+                {
+                    <ApexChart TItem="ActivityChartPoint" Options="GetWorkloadChartOptions(workload)" Height="300" @key="workload">
+                        @foreach (var actType in GetActivityTypes(workload))
+                        {
+                            <ApexPointSeries TItem="ActivityChartPoint"
+                                             Items="GetSeriesData(workload, actType)"
+                                             Name="@actType"
+                                             SeriesType="SeriesType.Line"
+                                             XValue="@(e => e.Date)"
+                                             YValue="@(e => (decimal?)e.Count)" />
+                        }
+                    </ApexChart>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true">No activity data available for @workload</MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@if (_activities.Count > 0)
+{
+    <MudPaper Class="pa-4 mt-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">Activity Summary Table</MudText>
+        <MudTable Items="_summaryData" Dense="true" Hover="true" Striped="true" Filter="new Func<ActivitySummary, bool>(FilterFunc)">
+            <ToolBarContent>
+                <MudTextField @bind-Value="_searchString" Placeholder="Search..." Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
+            </ToolBarContent>
+            <HeaderContent>
+                @if (TenantFilter.IsMultiTenantView)
+                {
+                    <MudTh><MudTableSortLabel SortBy="new Func<ActivitySummary, object>(x => x.TenantName)">Tenant</MudTableSortLabel></MudTh>
+                }
+                <MudTh><MudTableSortLabel SortBy="new Func<ActivitySummary, object>(x => x.Workload)">Workload</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<ActivitySummary, object>(x => x.ActivityType)">Activity</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<ActivitySummary, object>(x => x.TotalCount)" InitialDirection="SortDirection.Descending">Total (30d)</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<ActivitySummary, object>(x => x.DailyAvg)">Daily Avg</MudTableSortLabel></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                @if (TenantFilter.IsMultiTenantView)
+                {
+                    <MudTd DataLabel="Tenant">@context.TenantName</MudTd>
+                }
+                <MudTd DataLabel="Workload">@context.Workload</MudTd>
+                <MudTd DataLabel="Activity">@context.ActivityType</MudTd>
+                <MudTd DataLabel="Total">@context.TotalCount.ToString("N0")</MudTd>
+                <MudTd DataLabel="Daily Avg">@context.DailyAvg.ToString("N0")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+}
+
+@code {
+    private List<WorkloadActivitySnapshot> _activities = [];
+    private List<ActivitySummary> _summaryData = [];
+    private bool _loading = true;
+    private string _searchString = string.Empty;
+    private readonly string[] _workloads = [M365Services.Teams, M365Services.Exchange, M365Services.SharePoint, M365Services.OneDrive];
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        _activities = await MauDataService.GetWorkloadActivityAsync(tenantIds, days: 30);
+
+        // Build summary table
+        _summaryData = _activities
+            .GroupBy(a => new { a.TenantId, a.TenantName, a.Workload, a.ActivityType })
+            .Select(g => new ActivitySummary
+            {
+                TenantName = g.Key.TenantName,
+                Workload = g.Key.Workload,
+                ActivityType = g.Key.ActivityType,
+                TotalCount = g.Sum(x => x.Count),
+                DailyAvg = g.Count() > 0 ? g.Sum(x => x.Count) / g.Count() : 0
+            })
+            .OrderByDescending(s => s.TotalCount)
+            .ToList();
+
+        _loading = false;
+    }
+
+    private List<WorkloadActivitySnapshot> GetWorkloadActivities(string workload) =>
+        _activities.Where(a => a.Workload == workload).ToList();
+
+    private List<string> GetActivityTypes(string workload) =>
+        _activities.Where(a => a.Workload == workload)
+                   .Select(a => a.ActivityType)
+                   .Distinct()
+                   .OrderBy(t => t)
+                   .ToList();
+
+    private List<ActivityChartPoint> GetSeriesData(string workload, string activityType) =>
+        _activities
+            .Where(a => a.Workload == workload && a.ActivityType == activityType)
+            .GroupBy(a => a.ReportDate.ToString("MM/dd"))
+            .Select(g => new ActivityChartPoint { Date = g.Key, Count = g.Sum(x => x.Count) })
+            .OrderBy(p => p.Date)
+            .ToList();
+
+    private ApexChartOptions<ActivityChartPoint> GetWorkloadChartOptions(string workload) => new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Count" } }],
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Date" } },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private bool FilterFunc(ActivitySummary item) =>
+        string.IsNullOrWhiteSpace(_searchString) ||
+        item.Workload.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+        item.ActivityType.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+        item.TenantName.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    public class ActivityChartPoint
+    {
+        public string Date { get; set; } = string.Empty;
+        public long Count { get; set; }
+    }
+
+    public class ActivitySummary
+    {
+        public string TenantName { get; set; } = string.Empty;
+        public string Workload { get; set; } = string.Empty;
+        public string ActivityType { get; set; } = string.Empty;
+        public long TotalCount { get; set; }
+        public long DailyAvg { get; set; }
+    }
+}

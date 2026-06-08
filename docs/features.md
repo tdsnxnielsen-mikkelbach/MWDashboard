@@ -37,6 +37,41 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
   - Tenant column visible in multi-tenant view
   - Inline severity color coding and "no matches" feedback
 
+## Feature-Level Activity (`/activity`)
+
+- **Per-workload feature breakdown** — Teams (meetings, chat messages, channel messages, calls), Exchange (emails sent/received/read), SharePoint (files viewed, files shared, page views, files synced), OneDrive (files viewed, files shared, files synced)
+- **30-day activity trend charts** — one chart per workload with line series per activity type
+- **Activity summary table** — searchable, sortable by total count and daily average across all workloads
+- Multi-tenant support — Tenant column visible when multiple tenants are selected
+- Data source: Graph Reports API (`getTeamsUserActivityCounts`, `getSharePointActivityUserCounts`, `getOneDriveActivityUserCounts`, `getEmailActivityCounts`)
+
+## Copilot Adoption (`/copilot`)
+
+- **KPI cards** — Total Copilot active users, total assigned licenses, overall adoption rate with color-coded thresholds
+- **Per-app bar chart** — Active users across Word, Excel, PowerPoint, Outlook, Teams, OneNote, Loop, and Copilot Chat
+- **Adoption detail table** — per-app breakdown with utilization progress bars and status chips (Strong/Growing/Low/Critical)
+- **Automated recommendations** — actionable alerts based on adoption patterns (low app usage, overall low adoption, Chat-only usage patterns)
+- Multi-tenant view — per-tenant grouped bar chart series
+- Data source: Graph Beta API (`getMicrosoft365CopilotUsageUserDetail`); requires Copilot licenses
+
+## User Segmentation (`/segmentation`)
+
+- **Segment KPIs** — Total users, Heavy (3+ active workloads), Light (1–2 workloads), Inactive (0 workloads) with percentages
+- **Donut chart** — Current distribution across Heavy/Light/Inactive segments
+- **Segment trend** — Stacked area chart tracking segment sizes over time (up to 6 months)
+- **Per-tenant breakdown table** — shows waste % (inactive/total) per tenant in multi-tenant view
+- **Recommendations** — license waste alerts for high inactive %, adoption maturity recognition, light-user campaign suggestions
+- Data source: Graph Reports API (`getOffice365ActiveUserDetail` with D30 period); user detail is aggregated into counts, no PII stored
+
+## Department Adoption (`/departments`)
+
+- **KPI cards** — Departments tracked, average adoption rate, lowest-adoption department
+- **Horizontal stacked bar chart** — Active vs. inactive users per department (top 20 by size)
+- **Department detail table** — searchable, with adoption progress bars and status chips (High/Medium/Low)
+- Multi-tenant support — Tenant column in table when multiple tenants selected
+- **Minimum threshold** — departments with fewer than 5 users excluded from "lowest adoption" KPI to avoid noise
+- Data source: Graph API `/users` (department field) + `getOffice365ActiveUserDetail`; requires `User.Read.All` permission
+
 ## Security Services (`/security`)
 
 - **Tenant Entra ID License Levels table** — auto-detects P1/P2/Free tier from stored license SKUs per tenant, shows which tenants can provide sign-in and MFA data
@@ -50,5 +85,5 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 
 - Register/deregister tenants — form auto-resets after successful registration with auto-dismissing success message
 - Admin consent URL generator with clipboard copy
-- **Collect Now button** — triggers immediate data collection for a specific tenant
+- **Collect Now button** — triggers immediate data collection for a specific tenant (MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments)
 - Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants

@@ -1,0 +1,220 @@
+@page "/departments"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Department Adoption</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Department Adoption</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading department data...</MudText>
+    </div>
+}
+else if (_departments.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        No department usage data available. This feature requires User.Read.All permission and tenants with the 'department' attribute populated on user accounts.
+    </MudAlert>
+}
+else
+{
+<MudGrid>
+    <!-- KPIs -->
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Departments Tracked</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Primary">@_departments.Count</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Avg Adoption Rate</MudText>
+            <MudText Typo="Typo.h3">@_avgAdoption.ToString("F1")%</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Lowest Adoption Dept</MudText>
+            <MudText Typo="Typo.h5" Color="Color.Error">@(_lowestDept?.Department ?? "—")</MudText>
+            <MudText Typo="Typo.caption">@((_lowestDept != null && _lowestDept.TotalUsers > 0 ? (double)_lowestDept.ActiveUsers / _lowestDept.TotalUsers * 100 : 0).ToString("F1"))%</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Bar Chart: Department Adoption -->
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Adoption by Department</MudText>
+            <ApexChart TItem="DeptChartData" Options="_barOptions" Height="@(Math.Max(300, _chartData.Count * 35))">
+                <ApexPointSeries TItem="DeptChartData"
+                                 Items="_chartData"
+                                 Name="Active Users"
+                                 SeriesType="SeriesType.Bar"
+                                 XValue="@(e => e.Department)"
+                                 YValue="@(e => (decimal?)e.ActiveUsers)" />
+                <ApexPointSeries TItem="DeptChartData"
+                                 Items="_chartData"
+                                 Name="Inactive"
+                                 SeriesType="SeriesType.Bar"
+                                 XValue="@(e => e.Department)"
+                                 YValue="@(e => (decimal?)(e.TotalUsers - e.ActiveUsers))" />
+            </ApexChart>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Detail Table -->
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Department Detail</MudText>
+            <MudTable Items="_departments" Dense="true" Hover="true" Striped="true"
+                      Filter="new Func<DepartmentUsageSnapshot, bool>(FilterFunc)">
+                <ToolBarContent>
+                    <MudTextField @bind-Value="_searchString" Placeholder="Search department..."
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                  IconSize="Size.Medium" Class="mt-0" />
+                </ToolBarContent>
+                <HeaderContent>
+                    @if (TenantFilter.IsMultiTenantView)
+                    {
+                        <MudTh><MudTableSortLabel SortBy="new Func<DepartmentUsageSnapshot, object>(x => x.TenantName)">Tenant</MudTableSortLabel></MudTh>
+                    }
+                    <MudTh><MudTableSortLabel SortBy="new Func<DepartmentUsageSnapshot, object>(x => x.Department)">Department</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<DepartmentUsageSnapshot, object>(x => x.ActiveUsers)" InitialDirection="SortDirection.Descending">Active Users</MudTableSortLabel></MudTh>
+                    <MudTh><MudTableSortLabel SortBy="new Func<DepartmentUsageSnapshot, object>(x => x.TotalUsers)">Total Users</MudTableSortLabel></MudTh>
+                    <MudTh>Adoption</MudTh>
+                    <MudTh>Status</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    @if (TenantFilter.IsMultiTenantView)
+                    {
+                        <MudTd>@context.TenantName</MudTd>
+                    }
+                    <MudTd>@context.Department</MudTd>
+                    <MudTd>@context.ActiveUsers.ToString("N0")</MudTd>
+                    <MudTd>@context.TotalUsers.ToString("N0")</MudTd>
+                    <MudTd>
+                        @{
+                            var rate = context.TotalUsers > 0 ? (double)context.ActiveUsers / context.TotalUsers * 100 : 0;
+                        }
+                        <MudProgressLinear Color="@GetColor(rate)" Value="@rate" Class="my-1" Style="min-width: 80px;" />
+                        <MudText Typo="Typo.caption">@rate.ToString("F1")%</MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudChip T="string" Color="@GetColor(context.TotalUsers > 0 ? (double)context.ActiveUsers / context.TotalUsers * 100 : 0)" Size="Size.Small">
+                            @GetLabel(context.TotalUsers > 0 ? (double)context.ActiveUsers / context.TotalUsers * 100 : 0)
+                        </MudChip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private List<DepartmentUsageSnapshot> _departments = [];
+    private List<DeptChartData> _chartData = [];
+    private DepartmentUsageSnapshot? _lowestDept;
+    private double _avgAdoption;
+    private bool _loading = true;
+    private string _searchString = string.Empty;
+
+    private ApexChartOptions<DeptChartData> _barOptions = new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Users" } }],
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Department" } },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)", Stacked = true },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true } }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        _departments = await MauDataService.GetDepartmentUsageAsync(tenantIds);
+
+        // Aggregate for chart (combine across tenants)
+        _chartData = _departments
+            .GroupBy(d => d.Department)
+            .Select(g => new DeptChartData
+            {
+                Department = g.Key,
+                ActiveUsers = g.Sum(x => x.ActiveUsers),
+                TotalUsers = g.Sum(x => x.TotalUsers)
+            })
+            .OrderByDescending(d => d.TotalUsers)
+            .Take(20) // Top 20 departments for readability
+            .ToList();
+
+        // KPIs
+        _avgAdoption = _departments.Count > 0
+            ? _departments.Where(d => d.TotalUsers > 0).Average(d => (double)d.ActiveUsers / d.TotalUsers * 100)
+            : 0;
+        _lowestDept = _departments
+            .Where(d => d.TotalUsers >= 5) // Only consider departments with at least 5 users
+            .OrderBy(d => d.TotalUsers > 0 ? (double)d.ActiveUsers / d.TotalUsers : 1)
+            .FirstOrDefault();
+
+        _loading = false;
+    }
+
+    private bool FilterFunc(DepartmentUsageSnapshot item) =>
+        string.IsNullOrWhiteSpace(_searchString) ||
+        item.Department.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+        item.TenantName.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+
+    private static Color GetColor(double rate) => rate switch
+    {
+        >= 70 => Color.Success,
+        >= 40 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private static string GetLabel(double rate) => rate switch
+    {
+        >= 70 => "High",
+        >= 40 => "Medium",
+        _ => "Low"
+    };
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    public class DeptChartData
+    {
+        public string Department { get; set; } = string.Empty;
+        public int ActiveUsers { get; set; }
+        public int TotalUsers { get; set; }
+    }
+}

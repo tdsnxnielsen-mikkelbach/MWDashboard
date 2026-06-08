@@ -67,6 +67,38 @@ try
             if (signIns.Count > 0)
                 await dataService.SaveSecuritySummariesAsync(signIns);
 
+            var activities = await graphService.GetWorkloadActivityAsync(tenant.TenantId);
+            if (activities.Count > 0)
+            {
+                foreach (var a in activities)
+                    a.TenantName = tenant.TenantName;
+                await dataService.SaveWorkloadActivityAsync(activities);
+            }
+
+            var copilot = await graphService.GetCopilotUsageAsync(tenant.TenantId);
+            if (copilot.Count > 0)
+            {
+                foreach (var c in copilot)
+                    c.TenantName = tenant.TenantName;
+                await dataService.SaveCopilotUsageAsync(copilot);
+            }
+
+            var segments = await graphService.GetUserSegmentationAsync(tenant.TenantId);
+            if (segments.Count > 0)
+            {
+                foreach (var s in segments)
+                    s.TenantName = tenant.TenantName;
+                await dataService.SaveUserSegmentsAsync(segments);
+            }
+
+            var depts = await graphService.GetDepartmentUsageAsync(tenant.TenantId);
+            if (depts.Count > 0)
+            {
+                foreach (var d in depts)
+                    d.TenantName = tenant.TenantName;
+                await dataService.SaveDepartmentUsageAsync(depts);
+            }
+
             logger.LogInformation("Data collection completed for tenant {TenantName}", tenant.TenantName);
         }
         catch (Exception ex)

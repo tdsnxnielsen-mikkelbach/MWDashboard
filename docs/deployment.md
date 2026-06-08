@@ -257,6 +257,37 @@ azd deploy collector # Deploy only the collector job
 azd down
 ```
 
+## Database Migrations
+
+EF Core migrations are applied **automatically on startup** — both the Web container and the Job container call `db.Database.MigrateAsync()` before processing requests. When you push code with new migrations:
+
+1. The CI/CD pipeline builds and deploys new container images
+2. On first startup, the Web app applies any pending migrations to Azure SQL
+3. New tables/columns are created automatically — no manual intervention needed
+
+This means pushing a commit that includes a new migration will automatically update the database schema in Azure.
+
+### Adding Migrations Locally
+
+```powershell
+cd src/MWDashboard.Web
+dotnet ef migrations add <MigrationName> --project ../MWDashboard.Shared
+```
+
+### Current Schema (9 tables)
+
+| Table | Purpose |
+|-------|---------|
+| `MauSnapshots` | Monthly active user counts per service per day |
+| `Tenants` | Registered tenant info (ID, name, active status) |
+| `LicenseSnapshots` | SKU license counts (total, consumed) over time |
+| `MessageCenterPosts` | M365 Message Center announcements |
+| `SecuritySignInSummaries` | Sign-in success/failure/MFA counts per day |
+| `WorkloadActivities` | Feature-level usage (meetings, chats, files, emails) |
+| `CopilotUsageSnapshots` | Copilot active users per app |
+| `UserSegmentSnapshots` | User segmentation (heavy/light/inactive) |
+| `DepartmentUsageSnapshots` | Per-department active vs total users |
+
 ## Environment Variables (Runtime)
 
 These are set automatically by the Bicep templates as Container App env vars and Key Vault-backed secrets:

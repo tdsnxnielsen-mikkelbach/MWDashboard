@@ -97,3 +97,52 @@ public class TenantEntraTier
         return tier;
     }
 }
+
+public class WorkloadActivitySnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string Workload { get; set; } = string.Empty;
+    public string ActivityType { get; set; } = string.Empty;
+    public long Count { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class CopilotUsageSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string AppName { get; set; } = string.Empty;
+    public int ActiveUsers { get; set; }
+    public int TotalAssignedLicenses { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class UserSegmentSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public int HeavyUsers { get; set; }
+    public int LightUsers { get; set; }
+    public int InactiveUsers { get; set; }
+    public int TotalUsers { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class DepartmentUsageSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string Department { get; set; } = string.Empty;
+    public int ActiveUsers { get; set; }
+    public int TotalUsers { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}

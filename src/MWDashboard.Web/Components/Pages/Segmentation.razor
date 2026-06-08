@@ -1,0 +1,293 @@
+@page "/segmentation"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>User Segmentation</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">User Segmentation</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading segmentation data...</MudText>
+    </div>
+}
+else if (_segments.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        No user segmentation data available yet. Data is collected when the daily job runs or via "Collect Now" on the Tenants page.
+    </MudAlert>
+}
+else
+{
+<MudGrid>
+    <!-- Current Segment Breakdown KPIs -->
+    <MudItem xs="12" sm="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Total Users</MudText>
+            <MudText Typo="Typo.h3">@_latestTotal.ToString("N0")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Heavy Users (3+ workloads)</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Success">@_latestHeavy.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption">@((_latestTotal > 0 ? (double)_latestHeavy / _latestTotal * 100 : 0).ToString("F1"))%</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Light Users (1–2 workloads)</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Warning">@_latestLight.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption">@((_latestTotal > 0 ? (double)_latestLight / _latestTotal * 100 : 0).ToString("F1"))%</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Inactive Users (0 workloads)</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Error">@_latestInactive.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption">@((_latestTotal > 0 ? (double)_latestInactive / _latestTotal * 100 : 0).ToString("F1"))%</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Donut Chart - Current Distribution -->
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Current User Distribution</MudText>
+            <ApexChart TItem="SegmentPieData" Options="_pieOptions" Height="300">
+                <ApexPointSeries TItem="SegmentPieData"
+                                 Items="_pieData"
+                                 Name="Users"
+                                 SeriesType="SeriesType.Donut"
+                                 XValue="@(e => e.Segment)"
+                                 YValue="@(e => (decimal?)e.Count)" />
+            </ApexChart>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Trend over time -->
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Segmentation Trend</MudText>
+            @if (_trendData.Count > 0)
+            {
+                <ApexChart TItem="SegmentTrendPoint" Options="_trendOptions" Height="300">
+                    <ApexPointSeries TItem="SegmentTrendPoint"
+                                     Items="@(_trendData.Where(t => t.Segment == "Heavy").ToList())"
+                                     Name="Heavy"
+                                     SeriesType="SeriesType.Area"
+                                     XValue="@(e => e.Date)"
+                                     YValue="@(e => (decimal?)e.Count)" />
+                    <ApexPointSeries TItem="SegmentTrendPoint"
+                                     Items="@(_trendData.Where(t => t.Segment == "Light").ToList())"
+                                     Name="Light"
+                                     SeriesType="SeriesType.Area"
+                                     XValue="@(e => e.Date)"
+                                     YValue="@(e => (decimal?)e.Count)" />
+                    <ApexPointSeries TItem="SegmentTrendPoint"
+                                     Items="@(_trendData.Where(t => t.Segment == "Inactive").ToList())"
+                                     Name="Inactive"
+                                     SeriesType="SeriesType.Area"
+                                     XValue="@(e => e.Date)"
+                                     YValue="@(e => (decimal?)e.Count)" />
+                </ApexChart>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">Trend data requires multiple collection points over time.</MudAlert>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <!-- Per-tenant breakdown in multi-tenant view -->
+    @if (TenantFilter.IsMultiTenantView)
+    {
+        <MudItem xs="12">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.h6" Class="mb-3">Segmentation by Tenant</MudText>
+                <MudTable Items="_latestPerTenant" Dense="true" Hover="true" Striped="true">
+                    <HeaderContent>
+                        <MudTh>Tenant</MudTh>
+                        <MudTh>Total Users</MudTh>
+                        <MudTh>Heavy</MudTh>
+                        <MudTh>Light</MudTh>
+                        <MudTh>Inactive</MudTh>
+                        <MudTh>Waste %</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@context.TenantName</MudTd>
+                        <MudTd>@context.TotalUsers.ToString("N0")</MudTd>
+                        <MudTd><MudText Color="Color.Success">@context.HeavyUsers.ToString("N0")</MudText></MudTd>
+                        <MudTd><MudText Color="Color.Warning">@context.LightUsers.ToString("N0")</MudText></MudTd>
+                        <MudTd><MudText Color="Color.Error">@context.InactiveUsers.ToString("N0")</MudText></MudTd>
+                        <MudTd>
+                            <MudProgressLinear Color="Color.Error" Value="@(context.TotalUsers > 0 ? (double)context.InactiveUsers / context.TotalUsers * 100 : 0)" Class="my-1" />
+                            <MudText Typo="Typo.caption">@((context.TotalUsers > 0 ? (double)context.InactiveUsers / context.TotalUsers * 100 : 0).ToString("F1"))%</MudText>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+    }
+
+    <!-- Recommendations -->
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Recommendations</MudText>
+            @foreach (var rec in GetRecommendations())
+            {
+                <MudAlert Severity="@rec.Severity" Dense="true" Class="mb-2">@rec.Message</MudAlert>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private List<UserSegmentSnapshot> _segments = [];
+    private List<UserSegmentSnapshot> _latestPerTenant = [];
+    private List<SegmentPieData> _pieData = [];
+    private List<SegmentTrendPoint> _trendData = [];
+    private int _latestTotal, _latestHeavy, _latestLight, _latestInactive;
+    private bool _loading = true;
+
+    private ApexChartOptions<SegmentPieData> _pieOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private ApexChartOptions<SegmentTrendPoint> _trendOptions = new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Users" } }],
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Date" } },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)", Stacked = true }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        _segments = await MauDataService.GetUserSegmentsAsync(tenantIds, months: 6);
+
+        // Get latest per tenant
+        _latestPerTenant = _segments
+            .GroupBy(s => s.TenantId)
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToList();
+
+        // Aggregate KPIs
+        _latestTotal = _latestPerTenant.Sum(s => s.TotalUsers);
+        _latestHeavy = _latestPerTenant.Sum(s => s.HeavyUsers);
+        _latestLight = _latestPerTenant.Sum(s => s.LightUsers);
+        _latestInactive = _latestPerTenant.Sum(s => s.InactiveUsers);
+
+        // Pie chart
+        _pieData =
+        [
+            new() { Segment = "Heavy (3+ workloads)", Count = _latestHeavy },
+            new() { Segment = "Light (1–2 workloads)", Count = _latestLight },
+            new() { Segment = "Inactive (0 workloads)", Count = _latestInactive }
+        ];
+
+        // Trend data (aggregate across tenants per date)
+        var grouped = _segments
+            .GroupBy(s => s.ReportDate.ToString("yyyy-MM-dd"))
+            .OrderBy(g => g.Key);
+
+        _trendData = [];
+        foreach (var g in grouped)
+        {
+            _trendData.Add(new() { Date = g.Key, Segment = "Heavy", Count = g.Sum(x => x.HeavyUsers) });
+            _trendData.Add(new() { Date = g.Key, Segment = "Light", Count = g.Sum(x => x.LightUsers) });
+            _trendData.Add(new() { Date = g.Key, Segment = "Inactive", Count = g.Sum(x => x.InactiveUsers) });
+        }
+
+        _loading = false;
+    }
+
+    private List<Recommendation> GetRecommendations()
+    {
+        var recs = new List<Recommendation>();
+        var inactiveRate = _latestTotal > 0 ? (double)_latestInactive / _latestTotal * 100 : 0;
+        var heavyRate = _latestTotal > 0 ? (double)_latestHeavy / _latestTotal * 100 : 0;
+
+        if (inactiveRate > 30)
+        {
+            recs.Add(new(Severity.Error,
+                $"{inactiveRate:F0}% of licensed users are inactive (no workload activity in 30 days). " +
+                $"This represents potential license waste of ~{_latestInactive} seats."));
+        }
+        else if (inactiveRate > 15)
+        {
+            recs.Add(new(Severity.Warning,
+                $"{inactiveRate:F0}% inactive users detected. Consider targeted re-engagement campaigns or license reassignment."));
+        }
+
+        if (heavyRate >= 50)
+        {
+            recs.Add(new(Severity.Success,
+                $"Strong adoption: {heavyRate:F0}% of users are active across 3+ workloads. This indicates mature digital workplace usage."));
+        }
+
+        var lightRate = _latestTotal > 0 ? (double)_latestLight / _latestTotal * 100 : 0;
+        if (lightRate > 40)
+        {
+            recs.Add(new(Severity.Info,
+                $"{lightRate:F0}% of users are light users (1–2 workloads). These are prime candidates for adoption workshops to expand their usage."));
+        }
+
+        if (recs.Count == 0)
+            recs.Add(new(Severity.Info, "User segmentation is balanced. Continue monitoring for shifts."));
+
+        return recs;
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    public class SegmentPieData
+    {
+        public string Segment { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
+    public class SegmentTrendPoint
+    {
+        public string Date { get; set; } = string.Empty;
+        public string Segment { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
+    public record Recommendation(Severity Severity, string Message);
+}

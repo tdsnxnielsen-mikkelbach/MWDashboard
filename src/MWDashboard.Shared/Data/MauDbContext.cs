@@ -12,6 +12,10 @@ public class MauDbContext : DbContext
     public DbSet<LicenseSnapshot> LicenseSnapshots => Set<LicenseSnapshot>();
     public DbSet<MessageCenterPost> MessageCenterPosts => Set<MessageCenterPost>();
     public DbSet<SecuritySignInSummary> SecuritySignInSummaries => Set<SecuritySignInSummary>();
+    public DbSet<WorkloadActivitySnapshot> WorkloadActivities => Set<WorkloadActivitySnapshot>();
+    public DbSet<CopilotUsageSnapshot> CopilotUsageSnapshots => Set<CopilotUsageSnapshot>();
+    public DbSet<UserSegmentSnapshot> UserSegmentSnapshots => Set<UserSegmentSnapshot>();
+    public DbSet<DepartmentUsageSnapshot> DepartmentUsageSnapshots => Set<DepartmentUsageSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -54,6 +58,38 @@ public class MauDbContext : DbContext
             entity.HasIndex(e => new { e.TenantId, e.ServiceName, e.ReportDate }).IsUnique();
             entity.Property(e => e.TenantId).HasMaxLength(100);
             entity.Property(e => e.ServiceName).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<WorkloadActivitySnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.Workload, e.ActivityType, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.Workload).HasMaxLength(100);
+            entity.Property(e => e.ActivityType).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<CopilotUsageSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.AppName, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.AppName).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<UserSegmentSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<DepartmentUsageSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.Department, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.Department).HasMaxLength(250);
         });
     }
 }

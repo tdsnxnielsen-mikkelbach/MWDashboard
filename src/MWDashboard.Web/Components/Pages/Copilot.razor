@@ -1,0 +1,302 @@
+@page "/copilot"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Copilot Adoption</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Microsoft 365 Copilot Adoption</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading Copilot data...</MudText>
+    </div>
+}
+else if (_copilotData.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        No Copilot usage data available. This requires tenants with Microsoft 365 Copilot licenses assigned and Reports.Read.All permission.
+    </MudAlert>
+}
+else
+{
+<MudGrid>
+    <!-- KPI Cards -->
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Total Copilot Users</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Primary">@_totalActiveUsers.ToString("N0")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Total Copilot Licenses</MudText>
+            <MudText Typo="Typo.h3">@_totalLicenses.ToString("N0")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Overall Adoption Rate</MudText>
+            <MudText Typo="Typo.h3" Color="@(_adoptionRate >= 50 ? Color.Success : Color.Warning)">
+                @_adoptionRate.ToString("F1")%
+            </MudText>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Per-App Bar Chart -->
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Active Users by Copilot App</MudText>
+            <ApexChart TItem="CopilotAppData" Options="_barChartOptions" Height="350">
+                @if (TenantFilter.IsMultiTenantView)
+                {
+                    @foreach (var tenant in _perTenantData.Keys)
+                    {
+                        <ApexPointSeries TItem="CopilotAppData"
+                                         Items="_perTenantData[tenant]"
+                                         Name="@tenant"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.AppName)"
+                                         YValue="@(e => (decimal?)e.ActiveUsers)" />
+                    }
+                }
+                else
+                {
+                    <ApexPointSeries TItem="CopilotAppData"
+                                     Items="_appData"
+                                     Name="Active Users"
+                                     SeriesType="SeriesType.Bar"
+                                     XValue="@(e => e.AppName)"
+                                     YValue="@(e => (decimal?)e.ActiveUsers)" />
+                }
+            </ApexChart>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Adoption Table -->
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Copilot Adoption Detail</MudText>
+            <MudTable Items="_tableData" Dense="true" Hover="true" Striped="true">
+                <HeaderContent>
+                    @if (TenantFilter.IsMultiTenantView)
+                    {
+                        <MudTh>Tenant</MudTh>
+                    }
+                    <MudTh>App</MudTh>
+                    <MudTh>Active Users</MudTh>
+                    <MudTh>Assigned Licenses</MudTh>
+                    <MudTh>Adoption Rate</MudTh>
+                    <MudTh>Status</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    @if (TenantFilter.IsMultiTenantView)
+                    {
+                        <MudTd>@context.TenantName</MudTd>
+                    }
+                    <MudTd>@context.AppName</MudTd>
+                    <MudTd>@context.ActiveUsers.ToString("N0")</MudTd>
+                    <MudTd>@context.TotalLicenses.ToString("N0")</MudTd>
+                    <MudTd>
+                        <MudProgressLinear Color="@GetAdoptionColor(context.AdoptionRate)" Value="@context.AdoptionRate" Class="my-1" Style="min-width: 80px;" />
+                        <MudText Typo="Typo.caption">@context.AdoptionRate.ToString("F1")%</MudText>
+                    </MudTd>
+                    <MudTd>
+                        <MudChip T="string" Color="@GetAdoptionColor(context.AdoptionRate)" Size="Size.Small">
+                            @GetAdoptionLabel(context.AdoptionRate)
+                        </MudChip>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Recommendations -->
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Recommendations</MudText>
+            @foreach (var rec in GetRecommendations())
+            {
+                <MudAlert Severity="@rec.Severity" Dense="true" Class="mb-2">@rec.Message</MudAlert>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private List<CopilotUsageSnapshot> _copilotData = [];
+    private List<CopilotAppData> _appData = [];
+    private List<CopilotTableRow> _tableData = [];
+    private Dictionary<string, List<CopilotAppData>> _perTenantData = [];
+    private int _totalActiveUsers;
+    private int _totalLicenses;
+    private double _adoptionRate;
+    private bool _loading = true;
+
+    private ApexChartOptions<CopilotAppData> _barChartOptions = new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Active Users" } }],
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Copilot App" } },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, ColumnWidth = "60%" } }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        _copilotData = await MauDataService.GetCopilotUsageAsync(tenantIds);
+
+        // Aggregate per app
+        _appData = _copilotData
+            .GroupBy(c => c.AppName)
+            .Select(g => new CopilotAppData
+            {
+                AppName = g.Key,
+                ActiveUsers = g.Sum(x => x.ActiveUsers)
+            })
+            .OrderByDescending(a => a.ActiveUsers)
+            .ToList();
+
+        // Per-tenant data for multi-tenant view
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _perTenantData = _copilotData
+                .GroupBy(c => c.TenantName)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Select(c => new CopilotAppData { AppName = c.AppName, ActiveUsers = c.ActiveUsers })
+                          .OrderBy(a => a.AppName)
+                          .ToList());
+        }
+
+        // Table data
+        _tableData = _copilotData
+            .Select(c => new CopilotTableRow
+            {
+                TenantName = c.TenantName,
+                AppName = c.AppName,
+                ActiveUsers = c.ActiveUsers,
+                TotalLicenses = c.TotalAssignedLicenses,
+                AdoptionRate = c.TotalAssignedLicenses > 0
+                    ? (double)c.ActiveUsers / c.TotalAssignedLicenses * 100
+                    : 0
+            })
+            .OrderByDescending(t => t.AdoptionRate)
+            .ToList();
+
+        // KPIs - deduplicate by taking max per tenant (users can be active in multiple apps)
+        _totalActiveUsers = _copilotData
+            .GroupBy(c => c.TenantId)
+            .Sum(g => g.Max(c => c.ActiveUsers));
+        _totalLicenses = _copilotData
+            .GroupBy(c => c.TenantId)
+            .Sum(g => g.Max(c => c.TotalAssignedLicenses));
+        _adoptionRate = _totalLicenses > 0 ? (double)_totalActiveUsers / _totalLicenses * 100 : 0;
+
+        _loading = false;
+    }
+
+    private static Color GetAdoptionColor(double rate) => rate switch
+    {
+        >= 70 => Color.Success,
+        >= 40 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private static string GetAdoptionLabel(double rate) => rate switch
+    {
+        >= 70 => "Strong",
+        >= 40 => "Growing",
+        >= 15 => "Low",
+        _ => "Critical"
+    };
+
+    private List<Recommendation> GetRecommendations()
+    {
+        var recs = new List<Recommendation>();
+
+        var lowApps = _tableData.Where(t => t.AdoptionRate < 20).ToList();
+        if (lowApps.Count > 0)
+        {
+            var appNames = string.Join(", ", lowApps.Select(a => a.AppName).Distinct().Take(3));
+            recs.Add(new(Severity.Warning,
+                $"Low Copilot adoption in {appNames}. Consider targeted enablement workshops or training campaigns."));
+        }
+
+        if (_adoptionRate < 30 && _totalLicenses > 0)
+        {
+            recs.Add(new(Severity.Error,
+                $"Overall Copilot adoption is only {_adoptionRate:F0}%. Review license assignment strategy — some users may not be in roles that benefit from Copilot."));
+        }
+
+        if (_adoptionRate >= 60)
+        {
+            recs.Add(new(Severity.Success,
+                "Strong Copilot adoption! Consider expanding licenses to additional user groups."));
+        }
+
+        if (_copilotData.Any(c => c.AppName == CopilotApps.CopilotChat && c.ActiveUsers > 0) &&
+            _copilotData.Where(c => c.AppName != CopilotApps.CopilotChat).All(c => c.ActiveUsers < 5))
+        {
+            recs.Add(new(Severity.Info,
+                "Users are engaging with Copilot Chat but not in-app Copilot features. Promote Copilot in Word, Excel, and Teams for deeper productivity gains."));
+        }
+
+        if (recs.Count == 0)
+            recs.Add(new(Severity.Info, "Copilot usage is tracking normally. Continue monitoring monthly."));
+
+        return recs;
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    public class CopilotAppData
+    {
+        public string AppName { get; set; } = string.Empty;
+        public int ActiveUsers { get; set; }
+    }
+
+    public class CopilotTableRow
+    {
+        public string TenantName { get; set; } = string.Empty;
+        public string AppName { get; set; } = string.Empty;
+        public int ActiveUsers { get; set; }
+        public int TotalLicenses { get; set; }
+        public double AdoptionRate { get; set; }
+    }
+
+    public record Recommendation(Severity Severity, string Message);
+}

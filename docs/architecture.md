@@ -20,9 +20,10 @@ graph TB
 
     subgraph Microsoft Cloud
         Graph[Microsoft Graph API<br/>Reports.Read.All]
-        GraphBeta[Microsoft Graph Beta API<br/>AuditLog.Read.All]
+        GraphBeta[Microsoft Graph Beta API<br/>AuditLog.Read.All<br/>Copilot Usage]
         AAD[Azure AD<br/>Multi-tenant App Registration]
         MsgCenter[M365 Message Center<br/>ServiceMessage.Read.All]
+        UsersApi[Microsoft Graph API<br/>User.Read.All]
     end
 
     Web --> SQL
@@ -31,7 +32,9 @@ graph TB
     Job --> Graph
     Job --> GraphBeta
     Job --> MsgCenter
+    Job --> UsersApi
     Web --> Graph
+    Web --> UsersApi
     Graph --> AAD
     GraphBeta --> AAD
     MsgCenter --> AAD
@@ -70,6 +73,21 @@ sequenceDiagram
     Job->>GraphBeta: GET /auditLogs/signIns (Beta)
     GraphBeta-->>Job: Sign-in logs with AuthenticationDetails
     Job->>DB: Upsert MAU snapshots + licenses + posts + sign-ins
+    Job->>Graph: GET /reports/getTeamsUserActivityCounts(D30)
+    Graph-->>Job: Teams activity data
+    Job->>Graph: GET /reports/getSharePointActivityUserCounts(D30)
+    Graph-->>Job: SharePoint activity data
+    Job->>Graph: GET /reports/getOneDriveActivityUserCounts(D30)
+    Graph-->>Job: OneDrive activity data
+    Job->>Graph: GET /reports/getEmailActivityCounts(D30)
+    Graph-->>Job: Exchange activity data
+    Job->>GraphBeta: GET /reports/getMicrosoft365CopilotUsageUserDetail(D30)
+    GraphBeta-->>Job: Copilot per-user usage
+    Job->>Graph: GET /reports/getOffice365ActiveUserDetail(D30)
+    Graph-->>Job: Per-user activity for segmentation
+    Job->>Graph: GET /users (department field)
+    Graph-->>Job: User department data
+    Job->>DB: Upsert activity + copilot + segments + departments
 
     Note over Admin, Web: On-demand Collection (via Web UI)
     Admin->>Web: Click "Collect Now" for tenant
@@ -136,10 +154,10 @@ MWDashboard/
 ├── src/
 │   ├── MWDashboard.Shared/                # Shared class library
 │   │   ├── Data/
-│   │   │   └── MauDbContext.cs            # EF Core context — 5 DbSets
+│   │   │   └── MauDbContext.cs            # EF Core context — 9 DbSets
 │   │   ├── Models/
 │   │   │   ├── MauSnapshot.cs             # All entity models + TenantEntraTier
-│   │   │   └── M365Services.cs            # Service name constants
+│   │   │   └── M365Services.cs            # Service, activity type & Copilot app constants
 │   │   └── Services/
 │   │       ├── GraphReportService.cs      # Graph API integration (v1.0 + Beta)
 │   │       ├── MauDataService.cs          # DB read/write operations
@@ -157,7 +175,11 @@ MWDashboard/
 │   │   │   └── Pages/
 │   │   │       ├── Home.razor             # MAU dashboard with KPIs & charts
 │   │   │       ├── Services.razor         # Per-service comparison
+│   │   │       ├── Activity.razor         # Feature-level usage (Teams/SP/OD/Exchange)
 │   │   │       ├── Licenses.razor         # License adoption + Message Center
+│   │   │       ├── Copilot.razor          # Copilot adoption analytics
+│   │   │       ├── Segmentation.razor     # User segmentation (heavy/light/inactive)
+│   │   │       ├── Departments.razor      # Department-level adoption
 │   │   │       ├── Security.razor         # Security sign-in monitoring
 │   │   │       └── Tenants.razor          # Tenant management
 │   │   └── wwwroot/                       # Static assets
@@ -180,7 +202,10 @@ MWDashboard/
 | Graph API throttling | Retry with exponential backoff (SDK built-in) |
 | Azure SQL Serverless cold-start (~60s) | EF Core `EnableRetryOnFailure` (5 retries, 30s max delay) + 60s command timeout |
 | Sign-in logs require Entra ID P1/P2 | Security page gracefully shows info alert if unavailable |
-| Graph Beta SDK is preview | Used only for sign-in endpoint; stable API used elsewhere |
+| Copilot usage requires Copilot licenses | Copilot page shows info alert when no data; collection logs warning |
+| Department data requires User.Read.All | Department page shows info alert; collection handles 403 gracefully |
+| Concealed usernames in activity reports | Segmentation uses aggregated counts only; no PII stored |
+| Graph Beta SDK is preview | Used for sign-in and Copilot endpoints; stable API used elsewhere |
 | Container App Job max 1hr runtime | Sufficient for hundreds of tenants; parallelism=1 ensures serialized collection |
 
 ## Caching Strategy

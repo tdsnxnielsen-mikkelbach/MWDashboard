@@ -42,6 +42,38 @@ public class OnDemandDataCollectionService : IDataCollectionService
         if (signIns.Count > 0)
             await _dataService.SaveSecuritySummariesAsync(signIns);
 
+        var activities = await _graphService.GetWorkloadActivityAsync(tenantId);
+        if (activities.Count > 0)
+        {
+            foreach (var a in activities)
+                a.TenantName = tenantName;
+            await _dataService.SaveWorkloadActivityAsync(activities);
+        }
+
+        var copilot = await _graphService.GetCopilotUsageAsync(tenantId);
+        if (copilot.Count > 0)
+        {
+            foreach (var c in copilot)
+                c.TenantName = tenantName;
+            await _dataService.SaveCopilotUsageAsync(copilot);
+        }
+
+        var segments = await _graphService.GetUserSegmentationAsync(tenantId);
+        if (segments.Count > 0)
+        {
+            foreach (var s in segments)
+                s.TenantName = tenantName;
+            await _dataService.SaveUserSegmentsAsync(segments);
+        }
+
+        var depts = await _graphService.GetDepartmentUsageAsync(tenantId);
+        if (depts.Count > 0)
+        {
+            foreach (var d in depts)
+                d.TenantName = tenantName;
+            await _dataService.SaveDepartmentUsageAsync(depts);
+        }
+
         _logger.LogInformation("On-demand data collection completed for tenant {TenantName}", tenantName);
     }
 }
