@@ -76,7 +76,18 @@ This single command:
 3. Pushes images to Azure Container Registry
 4. Deploys the web container app and the scheduled job
 
-### 5. Verify deployment
+### 5. Register Redirect URI in Entra ID
+
+After deployment, register the consent callback URL in your app registration:
+
+1. Go to **Azure Portal → App registrations → your app → Authentication → Web → Redirect URIs**
+2. Add the following URIs:
+   - Production: `https://<your-container-app-url>/consent-complete`
+   - Local development: `https://localhost:7265/consent-complete`
+
+This is required for the admin consent flow — after a tenant admin grants consent, Azure AD redirects them to the `/consent-complete` page.
+
+### 6. Verify deployment
 
 After `azd up` completes, it outputs the web URL:
 ```

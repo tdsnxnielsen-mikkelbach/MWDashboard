@@ -16,6 +16,17 @@ After adding permissions in Azure Portal → App Registrations → API Permissio
 - Send the tenant admin the consent URL generated on the Tenants page, or
 - Click "Grant admin consent" in the Azure Portal if you're in the home tenant
 
+### Redirect URI Registration
+
+The consent URL uses a redirect URI pointing to `/consent-complete` on the app. You must register this in the app registration:
+
+1. Go to **Azure Portal → App registrations → your app → Authentication → Web → Redirect URIs**
+2. Add:
+   - Production: `https://<your-container-app-url>/consent-complete`
+   - Local development: `https://localhost:7265/consent-complete`
+
+After granting consent, the admin is redirected to a thank-you page confirming the operation succeeded.
+
 ## Entra ID License Requirements
 
 | Target Tenant License | What's Available |

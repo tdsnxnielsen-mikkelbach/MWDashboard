@@ -84,6 +84,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 ## Tenant Management (`/tenants`)
 
 - Register/deregister tenants — form auto-resets after successful registration with auto-dismissing success message
-- Admin consent URL generator with clipboard copy
+- Admin consent URL generator with clipboard copy — redirect URI dynamically uses the app's base URL pointing to `/consent-complete`
+- **Consent Complete page** (`/consent-complete`) — thank-you page shown after a tenant admin grants consent, with a link back to Tenant Management
 - **Collect Now button** — triggers immediate data collection for a specific tenant (MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments)
 - Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants

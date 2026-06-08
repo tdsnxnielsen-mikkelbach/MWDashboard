@@ -185,7 +185,8 @@ else
         Yaxis = [new YAxis { Title = new AxisTitle { Text = "Active Users" } }],
         Xaxis = new XAxis { Title = new AxisTitle { Text = "Service" } },
         Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
-        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        DataLabels = new DataLabels { Enabled = true }
     };
 
     protected override async Task OnInitializedAsync()
@@ -222,45 +223,36 @@ else
         _licenses = await MauDataService.GetLatestLicensesAsync(tenantIds);
         _totalLicenseSeats = _licenses.Sum(l => l.TotalLicenses);
 
-        // Build bar chart series: per-tenant when multi-tenant view
-        var services = _latestByService.Select(s => s.ServiceName).Distinct().ToList();
+        // Build bar chart series (active users only, data labels show active/available)
         if (TenantFilter.IsMultiTenantView)
         {
             _barSeries = _latestByService
                 .GroupBy(s => TenantFilter.GetTenantName(s.TenantId))
                 .ToDictionary(g => g.Key, g => g.ToList());
-
-            // Add per-tenant licensed seats series
-            var licenseByTenant = _licenses.GroupBy(l => l.TenantId)
-                .ToDictionary(g => g.Key, g => g.Sum(l => l.TotalLicenses));
-            foreach (var tenantId in licenseByTenant.Keys)
-            {
-                var tenantName = TenantFilter.GetTenantName(tenantId);
-                var licenseSeries = services.Select(svc => new MauSnapshot
-                {
-                    ServiceName = svc,
-                    ActiveUserCount = licenseByTenant[tenantId],
-                    TenantId = tenantId
-                }).ToList();
-                _barSeries[$"Licensed ({tenantName})"] = licenseSeries;
-            }
         }
         else
         {
             _barSeries = new Dictionary<string, List<MauSnapshot>>
             {
-                ["Active Users"] = _latestByService,
-                ["Licensed Seats"] = services.Select(svc => new MauSnapshot
-                {
-                    ServiceName = svc,
-                    ActiveUserCount = _totalLicenseSeats
-                }).ToList()
+                ["Active Users"] = _latestByService
             };
         }
+
+        // Build license-per-tenant lookup for data labels
+        _licenseByTenant = _licenses.GroupBy(l => l.TenantId)
+            .ToDictionary(g => g.Key, g => g.Sum(l => l.TotalLicenses));
+
+        // Set bar chart data label formatter to show "active / available"
+        _barChartOptions.DataLabels = new DataLabels
+        {
+            Enabled = true,
+            Formatter = BuildBarLabelFormatter()
+        };
 
         var history = await MauDataService.GetMauHistoryAsync(tenantIds, months: 12);
 
         // When multiple tenants selected, show per-tenant series
+        // Use the latest snapshot per month (not sum of daily snapshots)
         if (TenantFilter.IsMultiTenantView)
         {
             _chartData = history
@@ -271,7 +263,7 @@ else
                           .Select(mg => new MauChartPoint
                           {
                               Month = mg.Key,
-                              Count = mg.Sum(x => x.ActiveUserCount)
+                              Count = mg.OrderByDescending(x => x.ReportDate).First().ActiveUserCount
                           })
                           .OrderBy(p => p.Month)
                           .ToList());
@@ -286,13 +278,36 @@ else
                           .Select(mg => new MauChartPoint
                           {
                               Month = mg.Key,
-                              Count = mg.Sum(x => x.ActiveUserCount)
+                              Count = mg.OrderByDescending(x => x.ReportDate).First().ActiveUserCount
                           })
                           .OrderBy(p => p.Month)
                           .ToList());
         }
 
         _loading = false;
+    }
+
+    private Dictionary<string, int> _licenseByTenant = [];
+
+    private string BuildBarLabelFormatter()
+    {
+        // In multi-tenant view, each series corresponds to a tenant
+        // In single-tenant view, there's one series with total licenses
+        if (TenantFilter.IsMultiTenantView)
+        {
+            var seriesKeys = _barSeries.Keys.ToList();
+            var availableArray = string.Join(",", seriesKeys.Select(k =>
+            {
+                var items = _barSeries[k];
+                var tenantId = items.FirstOrDefault()?.TenantId ?? "";
+                return _licenseByTenant.GetValueOrDefault(tenantId, 0);
+            }));
+            return $"function(val, opts) {{ var avail = [{availableArray}]; return val + ' / ' + avail[opts.seriesIndex]; }}";
+        }
+        else
+        {
+            return $"function(val) {{ return val + ' / ' + {_totalLicenseSeats}; }}";
+        }
     }
 
     public void Dispose()
