@@ -96,9 +96,17 @@ public class MauDataService : IMauDataService
         if (!string.IsNullOrEmpty(tenantId))
             query = query.Where(s => s.TenantId == tenantId);
 
-        return await query
+        // Get the max ReportDate per TenantId+ServiceName, then fetch those rows
+        var latestDates = query
             .GroupBy(s => new { s.TenantId, s.ServiceName })
-            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .Select(g => new { g.Key.TenantId, g.Key.ServiceName, MaxDate = g.Max(s => s.ReportDate) });
+
+        return await query
+            .Where(s => latestDates.Any(d =>
+                d.TenantId == s.TenantId &&
+                d.ServiceName == s.ServiceName &&
+                d.MaxDate == s.ReportDate))
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -111,9 +119,18 @@ public class MauDataService : IMauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        return await query
+
+        // Get the max ReportDate per TenantId+ServiceName, then fetch those rows
+        var latestDates = query
             .GroupBy(s => new { s.TenantId, s.ServiceName })
-            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .Select(g => new { g.Key.TenantId, g.Key.ServiceName, MaxDate = g.Max(s => s.ReportDate) });
+
+        return await query
+            .Where(s => latestDates.Any(d =>
+                d.TenantId == s.TenantId &&
+                d.ServiceName == s.ServiceName &&
+                d.MaxDate == s.ReportDate))
+            .AsNoTracking()
             .ToListAsync();
     }
 
@@ -539,8 +556,17 @@ public class MauDataService : IMauDataService
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
 
-        foreach (var snapshot in snapshots)
+        // Deduplicate input — keep the last entry per composite key
+        var deduped = snapshots
+            .GroupBy(s => new { s.TenantId, s.ServiceName, ReportDate = s.ReportDate.Date })
+            .Select(g => g.Last())
+            .ToList();
+
+        foreach (var snapshot in deduped)
         {
+            // Normalize to date-only to avoid time component mismatches
+            snapshot.ReportDate = snapshot.ReportDate.Date;
+
             var existing = await db.StorageSnapshots
                 .FirstOrDefaultAsync(s =>
                     s.TenantId == snapshot.TenantId &&
@@ -555,11 +581,41 @@ public class MauDataService : IMauDataService
             }
             else
             {
+                snapshot.CollectedAt = DateTime.UtcNow;
                 db.StorageSnapshots.Add(snapshot);
             }
         }
 
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Handle race condition: row was inserted between our check and save
+            // Detach failed entries and retry as updates
+            foreach (var entry in db.ChangeTracker.Entries<StorageSnapshot>()
+                .Where(e => e.State == EntityState.Added).ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
+            // Reload and update
+            foreach (var snapshot in deduped)
+            {
+                var existing = await db.StorageSnapshots
+                    .FirstOrDefaultAsync(s =>
+                        s.TenantId == snapshot.TenantId &&
+                        s.ServiceName == snapshot.ServiceName &&
+                        s.ReportDate == snapshot.ReportDate);
+                if (existing != null)
+                {
+                    existing.UsedBytes = snapshot.UsedBytes;
+                    existing.AllocatedBytes = snapshot.AllocatedBytes;
+                    existing.CollectedAt = DateTime.UtcNow;
+                }
+            }
+            await db.SaveChangesAsync();
+        }
     }
 
     // Consumption Scores
