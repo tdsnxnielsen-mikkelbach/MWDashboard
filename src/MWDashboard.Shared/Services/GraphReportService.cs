@@ -18,6 +18,7 @@ public interface IGraphReportService
     Task<List<UserSegmentSnapshot>> GetUserSegmentationAsync(string tenantId);
     Task<List<DepartmentUsageSnapshot>> GetDepartmentUsageAsync(string tenantId);
     Task<List<StorageSnapshot>> GetStorageUsageAsync(string tenantId);
+    Task<List<M365AppUsageSnapshot>> GetM365AppUsageAsync(string tenantId);
 }
 
 public class GraphReportService : IGraphReportService
@@ -846,6 +847,106 @@ public class GraphReportService : IGraphReportService
                 UsedBytes = usedBytes,
                 CollectedAt = DateTime.UtcNow
             });
+        }
+
+        return snapshots;
+    }
+
+    public async Task<List<M365AppUsageSnapshot>> GetM365AppUsageAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var snapshots = new List<M365AppUsageSnapshot>();
+
+        try
+        {
+            var report = await client.Reports
+                .GetM365AppUserCountsWithPeriod("D30")
+                .GetAsync();
+
+            if (report != null)
+            {
+                using var reader = new StreamReader(report);
+                var csv = await reader.ReadToEndAsync();
+                snapshots.AddRange(ParseM365AppUsage(csv, tenantId));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get M365 App usage for tenant {TenantId}", tenantId);
+        }
+
+        return snapshots;
+    }
+
+    private static List<M365AppUsageSnapshot> ParseM365AppUsage(string csv, string tenantId)
+    {
+        var snapshots = new List<M365AppUsageSnapshot>();
+        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length < 2) return snapshots;
+
+        var headers = lines[0].Split(',');
+        var dateIndex = Array.IndexOf(headers, "Report Date");
+
+        // Platform columns — each contains user counts for that platform
+        var platformColumns = new Dictionary<string, int>
+        {
+            ["Windows"] = Array.IndexOf(headers, "Windows"),
+            ["Mac"] = Array.IndexOf(headers, "Mac"),
+            ["Mobile"] = Array.IndexOf(headers, "Mobile"),
+            ["Web"] = Array.IndexOf(headers, "Web")
+        };
+
+        // App columns
+        var appColumns = new Dictionary<string, int>
+        {
+            ["Outlook"] = Array.IndexOf(headers, "Outlook"),
+            ["Word"] = Array.IndexOf(headers, "Word"),
+            ["Excel"] = Array.IndexOf(headers, "Excel"),
+            ["PowerPoint"] = Array.IndexOf(headers, "PowerPoint"),
+            ["OneNote"] = Array.IndexOf(headers, "OneNote"),
+            ["Teams"] = Array.IndexOf(headers, "Teams")
+        };
+
+        // This endpoint returns per-date rows with app-level user counts
+        // Try to parse app counts (the format varies — handle both patterns)
+        for (int i = 1; i < lines.Length; i++)
+        {
+            var values = lines[i].Split(',');
+            if (!DateTime.TryParse(GetValue(values, dateIndex), out var date)) continue;
+
+            // Try app columns first
+            foreach (var (app, colIndex) in appColumns)
+            {
+                if (colIndex < 0 || colIndex >= values.Length) continue;
+                if (!int.TryParse(values[colIndex].Trim(), out var count) || count == 0) continue;
+
+                snapshots.Add(new M365AppUsageSnapshot
+                {
+                    TenantId = tenantId,
+                    ReportDate = date,
+                    AppName = app,
+                    Platform = "All",
+                    UserCount = count,
+                    CollectedAt = DateTime.UtcNow
+                });
+            }
+
+            // Platform columns
+            foreach (var (platform, colIndex) in platformColumns)
+            {
+                if (colIndex < 0 || colIndex >= values.Length) continue;
+                if (!int.TryParse(values[colIndex].Trim(), out var count) || count == 0) continue;
+
+                snapshots.Add(new M365AppUsageSnapshot
+                {
+                    TenantId = tenantId,
+                    ReportDate = date,
+                    AppName = "All",
+                    Platform = platform,
+                    UserCount = count,
+                    CollectedAt = DateTime.UtcNow
+                });
+            }
         }
 
         return snapshots;

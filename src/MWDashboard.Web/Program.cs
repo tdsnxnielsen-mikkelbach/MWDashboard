@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using MudBlazor.Services;
 using MWDashboard.Shared.Data;
 using MWDashboard.Shared.Services;
@@ -46,7 +47,11 @@ builder.Services.AddOutputCache(options =>
 
 // Application services
 builder.Services.AddScoped<IGraphReportService, GraphReportService>();
-builder.Services.AddScoped<IMauDataService, MauDataService>();
+builder.Services.AddScoped<MauDataService>();
+builder.Services.AddScoped<IMauDataService>(sp =>
+    new CachedMauDataService(
+        sp.GetRequiredService<MauDataService>(),
+        sp.GetRequiredService<IDistributedCache>()));
 builder.Services.AddScoped<TenantFilterService>();
 builder.Services.AddScoped<IDataCollectionService, OnDemandDataCollectionService>();
 
@@ -75,5 +80,23 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Export endpoint for consumption data (CSV)
+app.MapGet("/api/export/consumption", async (IMauDataService dataService, HttpContext ctx) =>
+{
+    var consumption = await dataService.GetConsumptionAsync(null, months: 12);
+    ctx.Response.ContentType = "text/csv";
+    ctx.Response.Headers.Append("Content-Disposition", "attachment; filename=consumption-report.csv");
+
+    await using var writer = new StreamWriter(ctx.Response.Body);
+    await writer.WriteLineAsync("TenantId,TenantName,ReportDate,ConsumptionScore,ActiveUsers,LicensedUsers,AdoptionPct,StorageUsedGB,AvgWorkloads,TotalActivity");
+    foreach (var c in consumption)
+    {
+        var adoptionPct = c.LicensedUserCount > 0 ? (double)c.ActiveUserCount / c.LicensedUserCount * 100 : 0;
+        await writer.WriteLineAsync($"{c.TenantId},{EscapeCsv(c.TenantName)},{c.ReportDate:yyyy-MM-dd},{c.ConsumptionScore:F1},{c.ActiveUserCount},{c.LicensedUserCount},{adoptionPct:F1},{c.StorageUsedBytes / 1073741824.0:F2},{c.AvgWorkloadsPerUser:F2},{c.TotalActivityCount}");
+    }
+});
+
+static string EscapeCsv(string value) => value.Contains(',') ? $"\"{value}\"" : value;
 
 app.Run();

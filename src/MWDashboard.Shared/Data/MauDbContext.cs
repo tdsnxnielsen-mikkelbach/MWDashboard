@@ -18,6 +18,7 @@ public class MauDbContext : DbContext
     public DbSet<DepartmentUsageSnapshot> DepartmentUsageSnapshots => Set<DepartmentUsageSnapshot>();
     public DbSet<StorageSnapshot> StorageSnapshots => Set<StorageSnapshot>();
     public DbSet<ConsumptionSnapshot> ConsumptionSnapshots => Set<ConsumptionSnapshot>();
+    public DbSet<M365AppUsageSnapshot> M365AppUsageSnapshots => Set<M365AppUsageSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -107,6 +108,15 @@ public class MauDbContext : DbContext
             entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
             entity.Property(e => e.TenantId).HasMaxLength(100);
             entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<M365AppUsageSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.AppName, e.Platform, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.AppName).HasMaxLength(100);
+            entity.Property(e => e.Platform).HasMaxLength(100);
         });
     }
 }

@@ -174,3 +174,15 @@ public class ConsumptionSnapshot
     public double ConsumptionScore { get; set; }
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class M365AppUsageSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string AppName { get; set; } = string.Empty;
+    public string Platform { get; set; } = string.Empty;
+    public int UserCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}

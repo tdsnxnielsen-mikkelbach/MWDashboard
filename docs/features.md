@@ -79,7 +79,8 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
   - Activity Intensity (30%) — total actions (emails, meetings, files) / active users
   - Storage Utilization (20%) — used storage / estimated allocation
   - Workload Breadth (20%) — avg services used per user (from segmentation)
-- **KPI cards** — Overall score, adoption %, total storage used, avg workloads per user
+- **KPI cards with month-over-month deltas** — Overall score, adoption %, total storage, avg workloads; each shows a color-coded chip indicating change vs previous month (+green / -red)
+- **Export CSV** — "Export CSV" button downloads all consumption data as `/api/export/consumption` (TenantId, Score, Adoption, Storage, Workloads, Activity)
 - **Per-tenant score comparison** — horizontal progress bars ranked by score
 - **Radar chart** — 4-axis breakdown (Adoption, Activity, Storage, Breadth) per tenant
 - **Score trend** — line chart tracking consumption score over time (up to 6 months); per-tenant series in multi-tenant view

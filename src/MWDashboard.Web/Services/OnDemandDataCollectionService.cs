@@ -83,6 +83,15 @@ public class OnDemandDataCollectionService : IDataCollectionService
             await _dataService.SaveStorageAsync(storage);
         }
 
+        // M365 App Platform usage
+        var appUsage = await _graphService.GetM365AppUsageAsync(tenantId);
+        if (appUsage.Count > 0)
+        {
+            foreach (var a in appUsage)
+                a.TenantName = tenantName;
+            await _dataService.SaveM365AppUsageAsync(appUsage);
+        }
+
         // Compute and save consumption score
         await ComputeConsumptionScoreAsync(tenantId, tenantName, storage, activities, segments, licenses);
 

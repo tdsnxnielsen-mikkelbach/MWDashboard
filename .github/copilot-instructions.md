@@ -15,7 +15,7 @@
 - All snapshot models follow: `Id`, `TenantId`, `TenantName`, `ReportDate`, metric fields, `CollectedAt`
 - Composite unique indexes on `(TenantId, ServiceName/SkuId/Workload+ActivityType/AppName/Department, ReportDate)` for upsert deduplication
 - Use `DateTime` for dates (UTC everywhere)
-- 11 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots
+- 12 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots, M365AppUsageSnapshots
 
 ### Data Services (src/MWDashboard.Shared/Services/)
 - Use `IDbContextFactory<MauDbContext>` — create a new context per method call (`await using var db = await _dbFactory.CreateDbContextAsync()`)
@@ -28,13 +28,15 @@
 - Report endpoints return CSV streams — parse with header matching
 - Beta API uses separate `BetaGraphClient` instance (sign-ins + Copilot usage)
 - Always handle `ServiceException` gracefully (tenant may not have required license)
-- New endpoints: Teams/SharePoint/OneDrive/Exchange activity counts, Copilot user detail, Office365 active user detail (segmentation), /users (departments), SharePoint/OneDrive/Exchange storage usage
+- New endpoints: Teams/SharePoint/OneDrive/Exchange activity counts, Copilot user detail, Office365 active user detail (segmentation), /users (departments), SharePoint/OneDrive/Exchange storage usage, M365 App user counts
 
 ### Caching Strategy
-- **Redis distributed cache** (`IDistributedCache`): Use for expensive queries with TTL 15–60 minutes
+- **Redis distributed cache** (`IDistributedCache`): `CachedMauDataService` decorator wraps `MauDataService` — all read methods cached
 - **Cache key format**: `MWDashboard:{feature}:{tenantId|"all"}:{parameters}`
+- **TTL 15 min**: MAU history/latest, workload activity, security, storage, consumption, M365 app usage (dashboard-level queries)
+- **TTL 60 min**: Licenses, message center, Copilot, segmentation, departments, Entra tiers (daily-changing data)
 - **Output caching**: Applied at HTTP level for full page responses (5 min base, 15 min dashboard)
-- **Cache invalidation**: Invalidate on data collection (after saving new snapshots)
+- **Cache invalidation**: Every `Save*` method invalidates relevant cache keys automatically
 - **Fallback**: System gracefully falls back to in-memory cache when Redis unavailable
 
 ### Page Patterns (src/MWDashboard.Web/Components/Pages/)

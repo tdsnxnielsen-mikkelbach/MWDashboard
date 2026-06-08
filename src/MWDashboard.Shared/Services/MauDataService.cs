@@ -48,6 +48,10 @@ public interface IMauDataService
     // Consumption Scores
     Task<List<ConsumptionSnapshot>> GetConsumptionAsync(IEnumerable<string>? tenantIds, int months = 6);
     Task SaveConsumptionAsync(ConsumptionSnapshot snapshot);
+
+    // M365 App Platform Usage
+    Task<List<M365AppUsageSnapshot>> GetM365AppUsageAsync(IEnumerable<string>? tenantIds);
+    Task SaveM365AppUsageAsync(IEnumerable<M365AppUsageSnapshot> snapshots);
 }
 
 public class MauDataService : IMauDataService
@@ -595,6 +599,50 @@ public class MauDataService : IMauDataService
         else
         {
             db.ConsumptionSnapshots.Add(snapshot);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // M365 App Platform Usage
+    public async Task<List<M365AppUsageSnapshot>> GetM365AppUsageAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.M365AppUsageSnapshots.AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Latest per tenant/app/platform
+        return await query
+            .GroupBy(s => new { s.TenantId, s.AppName, s.Platform })
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToListAsync();
+    }
+
+    public async Task SaveM365AppUsageAsync(IEnumerable<M365AppUsageSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.M365AppUsageSnapshots
+                .FirstOrDefaultAsync(s =>
+                    s.TenantId == snapshot.TenantId &&
+                    s.AppName == snapshot.AppName &&
+                    s.Platform == snapshot.Platform &&
+                    s.ReportDate == snapshot.ReportDate);
+
+            if (existing != null)
+            {
+                existing.UserCount = snapshot.UserCount;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.M365AppUsageSnapshots.Add(snapshot);
+            }
         }
 
         await db.SaveChangesAsync();

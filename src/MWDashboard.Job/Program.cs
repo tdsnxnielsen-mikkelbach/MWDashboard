@@ -108,6 +108,15 @@ try
                 await dataService.SaveStorageAsync(storage);
             }
 
+            // M365 App Platform usage
+            var appUsage = await graphService.GetM365AppUsageAsync(tenant.TenantId);
+            if (appUsage.Count > 0)
+            {
+                foreach (var a in appUsage)
+                    a.TenantName = tenant.TenantName;
+                await dataService.SaveM365AppUsageAsync(appUsage);
+            }
+
             // Compute consumption score
             {
                 var totalLicenses = licenses.Sum(l => l.TotalLicenses);

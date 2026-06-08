@@ -4,6 +4,7 @@
 @using Size = MudBlazor.Size
 @inject IMauDataService MauDataService
 @inject TenantFilterService TenantFilter
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
 <PageTitle>Consumption</PageTitle>
@@ -19,11 +20,31 @@
 else
 {
 <MudGrid>
-    @* KPI Cards *@
+    @* Export + Header *@
+    <MudItem xs="12">
+        <div class="d-flex justify-space-between align-center">
+            <MudText Typo="Typo.h5">Consumption Overview</MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Download"
+                       Href="/api/export/consumption" Target="_blank">
+                Export CSV
+            </MudButton>
+        </div>
+    </MudItem>
+
+    @* KPI Cards with Month-over-Month *@
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.subtitle2" Color="Color.Primary">Overall Score</MudText>
-            <MudText Typo="Typo.h4">@_overallScore.ToString("F1")</MudText>
+            <div class="d-flex align-center gap-2">
+                <MudText Typo="Typo.h4">@_overallScore.ToString("F1")</MudText>
+                @if (_scoreDelta != 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@GetDeltaColor(_scoreDelta)" Variant="Variant.Outlined">
+                        @FormatDelta(_scoreDelta)
+                    </MudChip>
+                }
+            </div>
             <MudText Typo="Typo.caption" Color="Color.Secondary">out of 100</MudText>
             <MudProgressLinear Color="@GetScoreColor(_overallScore)" Value="@_overallScore" Class="mt-1" />
         </MudPaper>
@@ -31,21 +52,45 @@ else
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.subtitle2" Color="Color.Primary">Active User Adoption</MudText>
-            <MudText Typo="Typo.h4">@_adoptionPct.ToString("F0")%</MudText>
+            <div class="d-flex align-center gap-2">
+                <MudText Typo="Typo.h4">@_adoptionPct.ToString("F0")%</MudText>
+                @if (_adoptionDelta != 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@GetDeltaColor(_adoptionDelta)" Variant="Variant.Outlined">
+                        @FormatDelta(_adoptionDelta)%
+                    </MudChip>
+                }
+            </div>
             <MudText Typo="Typo.caption" Color="Color.Secondary">@_totalActive.ToString("N0") of @_totalLicensed.ToString("N0") licensed</MudText>
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.subtitle2" Color="Color.Primary">Total Storage Used</MudText>
-            <MudText Typo="Typo.h4">@FormatBytes(_totalStorageUsed)</MudText>
+            <div class="d-flex align-center gap-2">
+                <MudText Typo="Typo.h4">@FormatBytes(_totalStorageUsed)</MudText>
+                @if (_storageDeltaPct != 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@GetDeltaColor(_storageDeltaPct)" Variant="Variant.Outlined">
+                        @FormatDelta(_storageDeltaPct)%
+                    </MudChip>
+                }
+            </div>
             <MudText Typo="Typo.caption" Color="Color.Secondary">across all workloads</MudText>
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.subtitle2" Color="Color.Primary">Avg Workloads/User</MudText>
-            <MudText Typo="Typo.h4">@_avgWorkloads.ToString("F1")</MudText>
+            <div class="d-flex align-center gap-2">
+                <MudText Typo="Typo.h4">@_avgWorkloads.ToString("F1")</MudText>
+                @if (_workloadDelta != 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@GetDeltaColor(_workloadDelta)" Variant="Variant.Outlined">
+                        @FormatDelta(_workloadDelta)
+                    </MudChip>
+                }
+            </div>
             <MudText Typo="Typo.caption" Color="Color.Secondary">of 5 possible services</MudText>
         </MudPaper>
     </MudItem>
@@ -185,6 +230,10 @@ else
     private int _totalLicensed;
     private long _totalStorageUsed;
     private double _avgWorkloads;
+    private double _scoreDelta;
+    private double _adoptionDelta;
+    private double _storageDeltaPct;
+    private double _workloadDelta;
     private List<TenantScore> _tenantScores = [];
     private Dictionary<string, List<RadarPoint>> _radarData = [];
     private Dictionary<string, List<TrendPoint>> _trendData = [];
@@ -259,6 +308,40 @@ else
             _adoptionPct = 0;
             _totalStorageUsed = 0;
             _avgWorkloads = 0;
+        }
+
+        // Month-over-month deltas
+        _scoreDelta = 0;
+        _adoptionDelta = 0;
+        _storageDeltaPct = 0;
+        _workloadDelta = 0;
+        if (consumption.Count > 1)
+        {
+            var latestDate = latestPerTenant.Max(c => c.ReportDate);
+            var previousMonth = latestDate.AddMonths(-1);
+
+            var previousPerTenant = consumption
+                .Where(c => c.ReportDate <= previousMonth)
+                .GroupBy(c => c.TenantId)
+                .Select(g => g.OrderByDescending(c => c.ReportDate).First())
+                .ToList();
+
+            if (previousPerTenant.Count > 0)
+            {
+                var prevScore = previousPerTenant.Average(c => c.ConsumptionScore);
+                _scoreDelta = Math.Round(_overallScore - prevScore, 1);
+
+                var prevLicensed = previousPerTenant.Sum(c => c.LicensedUserCount);
+                var prevActive = previousPerTenant.Sum(c => c.ActiveUserCount);
+                var prevAdoption = prevLicensed > 0 ? (double)prevActive / prevLicensed * 100 : 0;
+                _adoptionDelta = Math.Round(_adoptionPct - prevAdoption, 1);
+
+                var prevStorage = previousPerTenant.Sum(c => c.StorageUsedBytes);
+                _storageDeltaPct = prevStorage > 0 ? Math.Round(((double)_totalStorageUsed - prevStorage) / prevStorage * 100, 1) : 0;
+
+                var prevWorkloads = previousPerTenant.Average(c => c.AvgWorkloadsPerUser);
+                _workloadDelta = Math.Round(_avgWorkloads - prevWorkloads, 2);
+            }
         }
 
         // Per-tenant scores
@@ -372,6 +455,10 @@ else
         >= 40 => Color.Warning,
         _ => Color.Error
     };
+
+    private static Color GetDeltaColor(double delta) => delta > 0 ? Color.Success : Color.Error;
+
+    private static string FormatDelta(double delta) => delta > 0 ? $"+{delta:F1}" : $"{delta:F1}";
 
     private static string FormatBytes(long bytes)
     {

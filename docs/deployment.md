@@ -300,6 +300,7 @@ dotnet ef migrations add <MigrationName> --project ../MWDashboard.Shared
 | `DepartmentUsageSnapshots` | Per-department active vs total users |
 | `StorageSnapshots` | Storage used per service (SharePoint, OneDrive, Exchange) |
 | `ConsumptionSnapshots` | Computed consumption score with all dimensions |
+| `M365AppUsageSnapshots` | M365 app platform usage (per-app, per-platform user counts) |
 
 ## Environment Variables (Runtime)
 

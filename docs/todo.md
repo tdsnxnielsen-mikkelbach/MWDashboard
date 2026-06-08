@@ -38,9 +38,9 @@
 
 ## Other Future Items
 
-- [ ] Redis caching for consumption/storage queries (TTL 15 min)
-- [ ] M365 App Platform usage (`getM365AppUserDetail`) for cross-app engagement metrics
-- [ ] Export consumption report to PDF/Excel
+- [x] Redis caching for consumption/storage queries (TTL 15 min) — `CachedMauDataService` decorator wraps `MauDataService`
+- [x] M365 App Platform usage (`getM365AppUserCounts`) for cross-app engagement metrics — model, Graph endpoint, collection pipeline
+- [x] Export consumption report to CSV — `/api/export/consumption` endpoint with download button on page
 - [ ] Consumption score threshold alerts (email/Teams notification when score drops)
-- [ ] Historical comparison: month-over-month score change indicators
+- [x] Historical comparison: month-over-month score change indicators — delta chips on all KPI cards
 - [ ] Per-department consumption scoring (combine department usage + segmentation)
