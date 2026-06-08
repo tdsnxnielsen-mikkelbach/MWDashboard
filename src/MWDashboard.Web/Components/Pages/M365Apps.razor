@@ -1,0 +1,235 @@
+@page "/m365apps"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>M365 Apps</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading M365 App usage data...</MudText>
+    </div>
+}
+else
+{
+<MudGrid>
+    <MudItem xs="12">
+        <MudText Typo="Typo.h5">M365 App Platform Usage</MudText>
+    </MudItem>
+
+    @* App Usage Bar Chart *@
+    <MudItem xs="12" md="7">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Users by Application</MudText>
+            @if (_appChartData.Count > 0)
+            {
+                <ApexChart TItem="AppDataPoint"
+                           Options="_appChartOptions"
+                           Height="350"
+                           @key="_chartKey">
+                    @foreach (var series in _appChartData)
+                    {
+                        <ApexPointSeries TItem="AppDataPoint"
+                                         Items="series.Value"
+                                         Name="@series.Key"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)"
+                                         YValue="@(e => (decimal?)e.Count)" />
+                    }
+                </ApexChart>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No app usage data available. Refresh tenant data to collect.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Platform Usage Donut *@
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Users by Platform</MudText>
+            @if (_platformData.Count > 0)
+            {
+                <ApexChart TItem="AppDataPoint"
+                           Options="_platformChartOptions"
+                           Height="350"
+                           @key="_chartKey">
+                    <ApexPointSeries TItem="AppDataPoint"
+                                     Items="_platformData"
+                                     Name="Users"
+                                     SeriesType="SeriesType.Donut"
+                                     XValue="@(e => e.Label)"
+                                     YValue="@(e => (decimal?)e.Count)" />
+                </ApexChart>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No platform data available.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Detailed Table *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">App Usage Details</MudText>
+            @if (_tableData.Count > 0)
+            {
+                <MudTable Items="_tableData" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                          SortLabel="Sort By" FixedHeader="true">
+                    <HeaderContent>
+                        <MudTh><MudTableSortLabel SortBy="new Func<AppTableRow, object>(x => x.AppName)">Application</MudTableSortLabel></MudTh>
+                        @if (TenantFilter.IsMultiTenantView)
+                        {
+                            <MudTh><MudTableSortLabel SortBy="new Func<AppTableRow, object>(x => x.TenantName)">Tenant</MudTableSortLabel></MudTh>
+                        }
+                        <MudTh><MudTableSortLabel SortBy="new Func<AppTableRow, object>(x => x.UserCount)" InitialDirection="SortDirection.Descending">Users</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<AppTableRow, object>(x => x.ReportDate)">Report Date</MudTableSortLabel></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Application"><b>@context.AppName</b></MudTd>
+                        @if (TenantFilter.IsMultiTenantView)
+                        {
+                            <MudTd DataLabel="Tenant">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.TenantName</MudChip>
+                            </MudTd>
+                        }
+                        <MudTd DataLabel="Users">@context.UserCount.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Report Date">@context.ReportDate.ToString("yyyy-MM-dd")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No data available.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private string _chartKey = Guid.NewGuid().ToString();
+    private Dictionary<string, List<AppDataPoint>> _appChartData = [];
+    private List<AppDataPoint> _platformData = [];
+    private List<AppTableRow> _tableData = [];
+
+    private ApexChartOptions<AppDataPoint> _appChartOptions = new()
+    {
+        PlotOptions = new PlotOptions
+        {
+            Bar = new PlotOptionsBar { Horizontal = true }
+        },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private ApexChartOptions<AppDataPoint> _platformChartOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        var data = await MauDataService.GetM365AppUsageAsync(tenantIds);
+
+        // Get the latest data per tenant + app + platform
+        var latest = data
+            .GroupBy(d => new { d.TenantId, d.AppName, d.Platform })
+            .Select(g => g.OrderByDescending(x => x.ReportDate).First())
+            .ToList();
+
+        // App chart: filter to app-level rows (Platform == "All")
+        var appRows = latest.Where(d => d.Platform == "All" && d.AppName != "All").ToList();
+
+        _appChartData = [];
+        if (TenantFilter.IsMultiTenantView)
+        {
+            foreach (var group in appRows.GroupBy(d => TenantFilter.GetTenantName(d.TenantId)))
+            {
+                _appChartData[group.Key] = group
+                    .Select(d => new AppDataPoint { Label = d.AppName, Count = d.UserCount })
+                    .OrderByDescending(d => d.Count)
+                    .ToList();
+            }
+        }
+        else
+        {
+            _appChartData["Users"] = appRows
+                .Select(d => new AppDataPoint { Label = d.AppName, Count = d.UserCount })
+                .OrderByDescending(d => d.Count)
+                .ToList();
+        }
+
+        // Platform donut: aggregate across tenants
+        var platformRows = latest.Where(d => d.AppName == "All" && d.Platform != "All").ToList();
+        _platformData = platformRows
+            .GroupBy(d => d.Platform)
+            .Select(g => new AppDataPoint { Label = g.Key, Count = g.Sum(x => x.UserCount) })
+            .OrderByDescending(d => d.Count)
+            .ToList();
+
+        // Table data: app-level detail
+        _tableData = appRows.Select(d => new AppTableRow
+        {
+            AppName = d.AppName,
+            TenantName = TenantFilter.GetTenantName(d.TenantId),
+            UserCount = d.UserCount,
+            ReportDate = d.ReportDate
+        }).OrderByDescending(d => d.UserCount).ToList();
+
+        _chartKey = Guid.NewGuid().ToString();
+        _loading = false;
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    public class AppDataPoint
+    {
+        public string Label { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
+    public class AppTableRow
+    {
+        public string AppName { get; set; } = string.Empty;
+        public string TenantName { get; set; } = string.Empty;
+        public int UserCount { get; set; }
+        public DateTime ReportDate { get; set; }
+    }
+}
