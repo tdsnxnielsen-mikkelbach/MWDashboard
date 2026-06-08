@@ -104,21 +104,28 @@ else
     <MudItem xs="12" md="6">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.h6" Class="mb-3">Active Users by Service</MudText>
-            @if (_latestByService.Count > 0)
+            @if (_serviceBarData.Count > 0)
             {
-                <ApexChart TItem="MauSnapshot"
-                           Options="_barChartOptions"
-                           Height="300">
-                    @foreach (var series in _barSeries)
+                <MudStack Spacing="3">
+                    @foreach (var item in _serviceBarData)
                     {
-                        <ApexPointSeries TItem="MauSnapshot"
-                                         Items="series.Value"
-                                         Name="@series.Key"
-                                         SeriesType="SeriesType.Bar"
-                                         XValue="@(e => e.ServiceName)"
-                                         YValue="@(e => (decimal?)e.ActiveUserCount)" />
+                        <div>
+                            <div class="d-flex justify-space-between align-center mb-1">
+                                <MudText Typo="Typo.body2">
+                                    <b>@item.ServiceName</b>
+                                    @if (!string.IsNullOrEmpty(item.TenantName))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">@item.TenantName</MudChip>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.body2">
+                                    <b>@item.ActiveUsers</b> active / @item.AvailableLicenses available
+                                </MudText>
+                            </div>
+                            <MudProgressLinear Color="@GetKpiColor(item.UsagePercent)" Value="@item.UsagePercent" Size="Size.Large" Rounded="true" />
+                        </div>
                     }
-                </ApexChart>
+                </MudStack>
             }
         </MudPaper>
     </MudItem>
@@ -170,7 +177,7 @@ else
     private List<MauSnapshot> _latestByService = [];
     private List<LicenseSnapshot> _licenses = [];
     private Dictionary<string, List<MauChartPoint>> _chartData = [];
-    private Dictionary<string, List<MauSnapshot>> _barSeries = [];
+    private List<ServiceBarItem> _serviceBarData = [];
 
     private ApexChartOptions<MauChartPoint> _trendChartOptions = new()
     {
@@ -178,15 +185,6 @@ else
         Xaxis = new XAxis { Title = new AxisTitle { Text = "Month" } },
         Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
         Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
-    };
-
-    private ApexChartOptions<MauSnapshot> _barChartOptions = new()
-    {
-        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Active Users" } }],
-        Xaxis = new XAxis { Title = new AxisTitle { Text = "Service" } },
-        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
-        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
-        DataLabels = new DataLabels { Enabled = true }
     };
 
     protected override async Task OnInitializedAsync()
@@ -223,31 +221,17 @@ else
         _licenses = await MauDataService.GetLatestLicensesAsync(tenantIds);
         _totalLicenseSeats = _licenses.Sum(l => l.TotalLicenses);
 
-        // Build bar chart series (active users only, data labels show active/available)
-        if (TenantFilter.IsMultiTenantView)
-        {
-            _barSeries = _latestByService
-                .GroupBy(s => TenantFilter.GetTenantName(s.TenantId))
-                .ToDictionary(g => g.Key, g => g.ToList());
-        }
-        else
-        {
-            _barSeries = new Dictionary<string, List<MauSnapshot>>
-            {
-                ["Active Users"] = _latestByService
-            };
-        }
-
-        // Build license-per-tenant lookup for data labels
-        _licenseByTenant = _licenses.GroupBy(l => l.TenantId)
+        // Build service bar data with active/available per service
+        var licenseByTenant = _licenses.GroupBy(l => l.TenantId)
             .ToDictionary(g => g.Key, g => g.Sum(l => l.TotalLicenses));
 
-        // Set bar chart data label formatter to show "active / available"
-        _barChartOptions.DataLabels = new DataLabels
+        _serviceBarData = _latestByService.Select(s => new ServiceBarItem
         {
-            Enabled = true,
-            Formatter = BuildBarLabelFormatter()
-        };
+            ServiceName = s.ServiceName,
+            TenantName = TenantFilter.IsMultiTenantView ? TenantFilter.GetTenantName(s.TenantId) : null,
+            ActiveUsers = s.ActiveUserCount,
+            AvailableLicenses = licenseByTenant.GetValueOrDefault(s.TenantId, _totalLicenseSeats)
+        }).OrderBy(s => s.TenantName).ThenBy(s => s.ServiceName).ToList();
 
         var history = await MauDataService.GetMauHistoryAsync(tenantIds, months: 12);
 
@@ -287,29 +271,6 @@ else
         _loading = false;
     }
 
-    private Dictionary<string, int> _licenseByTenant = [];
-
-    private string BuildBarLabelFormatter()
-    {
-        // In multi-tenant view, each series corresponds to a tenant
-        // In single-tenant view, there's one series with total licenses
-        if (TenantFilter.IsMultiTenantView)
-        {
-            var seriesKeys = _barSeries.Keys.ToList();
-            var availableArray = string.Join(",", seriesKeys.Select(k =>
-            {
-                var items = _barSeries[k];
-                var tenantId = items.FirstOrDefault()?.TenantId ?? "";
-                return _licenseByTenant.GetValueOrDefault(tenantId, 0);
-            }));
-            return $"function(val, opts) {{ var avail = [{availableArray}]; return val + ' / ' + avail[opts.seriesIndex]; }}";
-        }
-        else
-        {
-            return $"function(val) {{ return val + ' / ' + {_totalLicenseSeats}; }}";
-        }
-    }
-
     public void Dispose()
     {
         TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
@@ -332,5 +293,14 @@ else
     {
         public string Month { get; set; } = string.Empty;
         public int Count { get; set; }
+    }
+
+    public class ServiceBarItem
+    {
+        public string ServiceName { get; set; } = string.Empty;
+        public string? TenantName { get; set; }
+        public int ActiveUsers { get; set; }
+        public int AvailableLicenses { get; set; }
+        public double UsagePercent => AvailableLicenses > 0 ? (double)ActiveUsers / AvailableLicenses * 100 : 0;
     }
 }
