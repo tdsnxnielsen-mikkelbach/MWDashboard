@@ -167,6 +167,10 @@ az ad sp create --id <appId>
 # Assign Contributor + AcrPush + RBAC Admin roles on your subscription
 az role assignment create --assignee <appId> --role Contributor --scope /subscriptions/<subscriptionId>
 az role assignment create --assignee <appId> --role AcrPush --scope /subscriptions/<subscriptionId>
+
+# Required: The deployment creates role assignments (AcrPull, Key Vault Secrets User)
+# for container app identities. Without this role, provisioning fails with:
+# "does not have permission to perform action 'Microsoft.Authorization/roleAssignments/write'"
 az role assignment create --assignee <appId> --role "Role Based Access Control Administrator" --scope /subscriptions/<subscriptionId>
 
 # Configure federated credential for GitHub Actions
@@ -274,6 +278,7 @@ These are set automatically by the Bicep templates as Container App env vars and
 | Container App not starting | Check Log Analytics for startup errors: `ContainerAppConsoleLogs_CL` |
 | Redis connection refused | Verify firewall allows Azure services; check TLS settings |
 | `azd up` fails on permissions | Ensure Service Principal has Contributor + AcrPush on the subscription |
+| `azd up` fails with `Microsoft.Authorization/roleAssignments/write` | The deploying principal needs **Role Based Access Control Administrator** (or Owner) on the subscription because the template creates role assignments for container app identities. Fix: `az role assignment create --assignee <principalObjectId> --role "Role Based Access Control Administrator" --scope /subscriptions/<subscriptionId>` |
 | SQL deploy fails with `InvalidExternalAdministratorSid` | The managed identity failed to provision before SQL. This should not occur with the current Bicep dependency chain; run `azd down --force` and retry |
 | Redis deploy fails with `BadRequest` (retirement notice) | The classic `Microsoft.Cache/redis` resource type is retired. Use `Microsoft.Cache/redisEnterprise` (already updated in this repo) |
 | Container App fails with `MANIFEST_UNKNOWN` | The image hasn't been pushed to ACR yet. The Bicep templates use a placeholder image for initial provisioning; ensure `azd deploy` runs after provision |
