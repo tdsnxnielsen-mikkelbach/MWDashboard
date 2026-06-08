@@ -14,7 +14,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 
 ## Dashboard (`/`)
 
-- KPI cards showing total active users, Teams/Exchange/SharePoint/OneDrive counts
+- **KPI cards** showing total active users, Teams/Exchange/SharePoint/OneDrive counts — each card displays active users vs total licensed seats with a color-coded progress bar (green ≥70%, yellow ≥40%, red <40% adoption)
 - 12-month MAU trend line chart (per-tenant series in multi-tenant view)
 - Per-service bar chart comparison (grouped by tenant when multi-tenant)
 - License utilization table (with Tenant column in multi-tenant view)
@@ -40,9 +40,9 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 ## Feature-Level Activity (`/activity`)
 
 - **Per-workload feature breakdown** — Teams (meetings, chat messages, channel messages, calls), Exchange (emails sent/received/read), SharePoint (files viewed, files shared, page views, files synced), OneDrive (files viewed, files shared, files synced)
-- **30-day activity trend charts** — one chart per workload with line series per activity type
+- **30-day activity trend charts** — one chart per workload with line series per activity type; in multi-tenant view, series are labeled `"ActivityType (TenantName)"` for per-tenant granularity
 - **Activity summary table** — searchable, sortable by total count and daily average across all workloads
-- Multi-tenant support — Tenant column visible when multiple tenants are selected
+- Multi-tenant support — Tenant column visible when multiple tenants are selected; charts show tenant-level breakdown
 - Data source: Graph Reports API (`getTeamsUserActivityCounts`, `getSharePointActivityUserCounts`, `getOneDriveActivityUserCounts`, `getEmailActivityCounts`)
 
 ## Copilot Adoption (`/copilot`)
@@ -57,8 +57,8 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 ## User Segmentation (`/segmentation`)
 
 - **Segment KPIs** — Total users, Heavy (3+ active workloads), Light (1–2 workloads), Inactive (0 workloads) with percentages
-- **Donut chart** — Current distribution across Heavy/Light/Inactive segments
-- **Segment trend** — Stacked area chart tracking segment sizes over time (up to 6 months)
+- **Distribution chart** — Donut chart in single-tenant view; switches to grouped bar chart (one series per tenant) in multi-tenant view showing Heavy/Light/Inactive side by side
+- **Segment trend** — Stacked area chart tracking segment sizes over time (up to 6 months); in multi-tenant view, series are labeled per-tenant (e.g., "Heavy (Contoso)", "Inactive (Fabrikam)") for independent tracking
 - **Per-tenant breakdown table** — shows waste % (inactive/total) per tenant in multi-tenant view
 - **Recommendations** — license waste alerts for high inactive %, adoption maturity recognition, light-user campaign suggestions
 - Data source: Graph Reports API (`getOffice365ActiveUserDetail` with D30 period); user detail is aggregated into counts, no PII stored

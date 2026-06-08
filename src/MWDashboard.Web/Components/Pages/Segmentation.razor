@@ -60,14 +60,31 @@ else
     <MudItem xs="12" md="6">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.h6" Class="mb-3">Current User Distribution</MudText>
-            <ApexChart TItem="SegmentPieData" Options="_pieOptions" Height="300">
-                <ApexPointSeries TItem="SegmentPieData"
-                                 Items="_pieData"
-                                 Name="Users"
-                                 SeriesType="SeriesType.Donut"
-                                 XValue="@(e => e.Segment)"
-                                 YValue="@(e => (decimal?)e.Count)" />
-            </ApexChart>
+            @if (TenantFilter.IsMultiTenantView)
+            {
+                <ApexChart TItem="SegmentPieData" Options="_barPieOptions" Height="300">
+                    @foreach (var tenant in _perTenantPieData.Keys)
+                    {
+                        <ApexPointSeries TItem="SegmentPieData"
+                                         Items="_perTenantPieData[tenant]"
+                                         Name="@tenant"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Segment)"
+                                         YValue="@(e => (decimal?)e.Count)" />
+                    }
+                </ApexChart>
+            }
+            else
+            {
+                <ApexChart TItem="SegmentPieData" Options="_pieOptions" Height="300">
+                    <ApexPointSeries TItem="SegmentPieData"
+                                     Items="_pieData"
+                                     Name="Users"
+                                     SeriesType="SeriesType.Donut"
+                                     XValue="@(e => e.Segment)"
+                                     YValue="@(e => (decimal?)e.Count)" />
+                </ApexChart>
+            }
         </MudPaper>
     </MudItem>
 
@@ -78,24 +95,15 @@ else
             @if (_trendData.Count > 0)
             {
                 <ApexChart TItem="SegmentTrendPoint" Options="_trendOptions" Height="300">
-                    <ApexPointSeries TItem="SegmentTrendPoint"
-                                     Items="@(_trendData.Where(t => t.Segment == "Heavy").ToList())"
-                                     Name="Heavy"
-                                     SeriesType="SeriesType.Area"
-                                     XValue="@(e => e.Date)"
-                                     YValue="@(e => (decimal?)e.Count)" />
-                    <ApexPointSeries TItem="SegmentTrendPoint"
-                                     Items="@(_trendData.Where(t => t.Segment == "Light").ToList())"
-                                     Name="Light"
-                                     SeriesType="SeriesType.Area"
-                                     XValue="@(e => e.Date)"
-                                     YValue="@(e => (decimal?)e.Count)" />
-                    <ApexPointSeries TItem="SegmentTrendPoint"
-                                     Items="@(_trendData.Where(t => t.Segment == "Inactive").ToList())"
-                                     Name="Inactive"
-                                     SeriesType="SeriesType.Area"
-                                     XValue="@(e => e.Date)"
-                                     YValue="@(e => (decimal?)e.Count)" />
+                    @foreach (var seriesName in _trendSeriesKeys)
+                    {
+                        <ApexPointSeries TItem="SegmentTrendPoint"
+                                         Items="@(_trendData.Where(t => t.Segment == seriesName).ToList())"
+                                         Name="@seriesName"
+                                         SeriesType="SeriesType.Area"
+                                         XValue="@(e => e.Date)"
+                                         YValue="@(e => (decimal?)e.Count)" />
+                    }
                 </ApexChart>
             }
             else
@@ -154,6 +162,8 @@ else
     private List<UserSegmentSnapshot> _latestPerTenant = [];
     private List<SegmentPieData> _pieData = [];
     private List<SegmentTrendPoint> _trendData = [];
+    private List<string> _trendSeriesKeys = [];
+    private Dictionary<string, List<SegmentPieData>> _perTenantPieData = [];
     private int _latestTotal, _latestHeavy, _latestLight, _latestInactive;
     private bool _loading = true;
 
@@ -161,6 +171,14 @@ else
     {
         Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
         Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private ApexChartOptions<SegmentPieData> _barPieOptions = new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Users" } }],
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, ColumnWidth = "60%" } }
     };
 
     private ApexChartOptions<SegmentTrendPoint> _trendOptions = new()
@@ -218,18 +236,46 @@ else
             new() { Segment = "Inactive (0 workloads)", Count = _latestInactive }
         ];
 
-        // Trend data (aggregate across tenants per date)
-        var grouped = _segments
-            .GroupBy(s => s.ReportDate.ToString("yyyy-MM-dd"))
-            .OrderBy(g => g.Key);
+        // Per-tenant pie data for multi-tenant grouped bar chart
+        _perTenantPieData = _latestPerTenant.ToDictionary(
+            t => t.TenantName,
+            t => new List<SegmentPieData>
+            {
+                new() { Segment = "Heavy", Count = t.HeavyUsers },
+                new() { Segment = "Light", Count = t.LightUsers },
+                new() { Segment = "Inactive", Count = t.InactiveUsers }
+            });
 
+        // Trend data - per-tenant in multi-tenant view, aggregated otherwise
         _trendData = [];
-        foreach (var g in grouped)
+        if (TenantFilter.IsMultiTenantView)
         {
-            _trendData.Add(new() { Date = g.Key, Segment = "Heavy", Count = g.Sum(x => x.HeavyUsers) });
-            _trendData.Add(new() { Date = g.Key, Segment = "Light", Count = g.Sum(x => x.LightUsers) });
-            _trendData.Add(new() { Date = g.Key, Segment = "Inactive", Count = g.Sum(x => x.InactiveUsers) });
+            var grouped = _segments
+                .GroupBy(s => new { Date = s.ReportDate.ToString("yyyy-MM-dd"), s.TenantName })
+                .OrderBy(g => g.Key.Date);
+
+            foreach (var g in grouped)
+            {
+                _trendData.Add(new() { Date = g.Key.Date, Segment = $"Heavy ({g.Key.TenantName})", Count = g.Sum(x => x.HeavyUsers) });
+                _trendData.Add(new() { Date = g.Key.Date, Segment = $"Light ({g.Key.TenantName})", Count = g.Sum(x => x.LightUsers) });
+                _trendData.Add(new() { Date = g.Key.Date, Segment = $"Inactive ({g.Key.TenantName})", Count = g.Sum(x => x.InactiveUsers) });
+            }
         }
+        else
+        {
+            var grouped = _segments
+                .GroupBy(s => s.ReportDate.ToString("yyyy-MM-dd"))
+                .OrderBy(g => g.Key);
+
+            foreach (var g in grouped)
+            {
+                _trendData.Add(new() { Date = g.Key, Segment = "Heavy", Count = g.Sum(x => x.HeavyUsers) });
+                _trendData.Add(new() { Date = g.Key, Segment = "Light", Count = g.Sum(x => x.LightUsers) });
+                _trendData.Add(new() { Date = g.Key, Segment = "Inactive", Count = g.Sum(x => x.InactiveUsers) });
+            }
+        }
+
+        _trendSeriesKeys = _trendData.Select(t => t.Segment).Distinct().ToList();
 
         _loading = false;
     }

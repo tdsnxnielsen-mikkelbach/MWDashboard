@@ -24,28 +24,52 @@ else
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.subtitle2" Color="Color.Primary">Total MAU (M365)</MudText>
             <MudText Typo="Typo.h4">@_totalMau.ToString("N0")</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">Latest period</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                of @_totalLicenseSeats.ToString("N0") licensed seats
+            </MudText>
+            @if (_totalLicenseSeats > 0)
+            {
+                <MudProgressLinear Color="@GetKpiColor((double)_totalMau / _totalLicenseSeats * 100)" Value="@((double)_totalMau / _totalLicenseSeats * 100)" Class="mt-1" />
+            }
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.subtitle2" Color="Color.Primary">Teams MAU</MudText>
             <MudText Typo="Typo.h4">@_teamsMau.ToString("N0")</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">Latest period</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                of @_totalLicenseSeats.ToString("N0") licensed seats
+            </MudText>
+            @if (_totalLicenseSeats > 0)
+            {
+                <MudProgressLinear Color="@GetKpiColor((double)_teamsMau / _totalLicenseSeats * 100)" Value="@((double)_teamsMau / _totalLicenseSeats * 100)" Class="mt-1" />
+            }
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.subtitle2" Color="Color.Primary">Exchange MAU</MudText>
             <MudText Typo="Typo.h4">@_exchangeMau.ToString("N0")</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">Latest period</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                of @_totalLicenseSeats.ToString("N0") licensed seats
+            </MudText>
+            @if (_totalLicenseSeats > 0)
+            {
+                <MudProgressLinear Color="@GetKpiColor((double)_exchangeMau / _totalLicenseSeats * 100)" Value="@((double)_exchangeMau / _totalLicenseSeats * 100)" Class="mt-1" />
+            }
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.subtitle2" Color="Color.Primary">SharePoint MAU</MudText>
             <MudText Typo="Typo.h4">@_sharePointMau.ToString("N0")</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">Latest period</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                of @_totalLicenseSeats.ToString("N0") licensed seats
+            </MudText>
+            @if (_totalLicenseSeats > 0)
+            {
+                <MudProgressLinear Color="@GetKpiColor((double)_sharePointMau / _totalLicenseSeats * 100)" Value="@((double)_sharePointMau / _totalLicenseSeats * 100)" Class="mt-1" />
+            }
         </MudPaper>
     </MudItem>
 
@@ -141,6 +165,7 @@ else
     private int _teamsMau;
     private int _exchangeMau;
     private int _sharePointMau;
+    private int _totalLicenseSeats;
     private bool _loading = true;
     private List<MauSnapshot> _latestByService = [];
     private List<LicenseSnapshot> _licenses = [];
@@ -195,6 +220,7 @@ else
         _sharePointMau = _latestByService.Where(s => s.ServiceName == M365Services.SharePoint).Sum(s => s.ActiveUserCount);
 
         _licenses = await MauDataService.GetLatestLicensesAsync(tenantIds);
+        _totalLicenseSeats = _licenses.Sum(l => l.TotalLicenses);
 
         // Build bar chart series: per-tenant when multi-tenant view
         if (TenantFilter.IsMultiTenantView)
@@ -258,6 +284,13 @@ else
         if (license.TotalLicenses == 0) return 0;
         return (double)license.ConsumedLicenses / license.TotalLicenses * 100;
     }
+
+    private static Color GetKpiColor(double percent) => percent switch
+    {
+        >= 70 => Color.Success,
+        >= 40 => Color.Warning,
+        _ => Color.Error
+    };
 
     public class MauChartPoint
     {
