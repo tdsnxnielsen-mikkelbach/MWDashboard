@@ -16,7 +16,11 @@ builder.Services.AddMudServices();
 
 // EF Core with SQL Server for Azure deployment
 builder.Services.AddDbContextFactory<MauDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"), sqlOptions =>
+    {
+        sqlOptions.CommandTimeout(60);
+        sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+    }));
 
 // Redis distributed cache
 var redisConnection = builder.Configuration.GetConnectionString("Redis");

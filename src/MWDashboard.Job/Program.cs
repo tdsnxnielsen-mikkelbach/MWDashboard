@@ -10,7 +10,11 @@ var builder = Host.CreateApplicationBuilder(args);
 
 // EF Core with SQL Server
 builder.Services.AddDbContextFactory<MauDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"), sqlOptions =>
+    {
+        sqlOptions.CommandTimeout(60);
+        sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+    }));
 
 // Application services
 builder.Services.AddScoped<IGraphReportService, GraphReportService>();

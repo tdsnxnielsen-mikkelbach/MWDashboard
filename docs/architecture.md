@@ -178,6 +178,7 @@ MWDashboard/
 | Admin consent required per tenant | Built-in consent URL generator on Tenants page |
 | Concealed usernames in some tenants | Dashboard uses aggregated counts only |
 | Graph API throttling | Retry with exponential backoff (SDK built-in) |
+| Azure SQL Serverless cold-start (~60s) | EF Core `EnableRetryOnFailure` (5 retries, 30s max delay) + 60s command timeout |
 | Sign-in logs require Entra ID P1/P2 | Security page gracefully shows info alert if unavailable |
 | Graph Beta SDK is preview | Used only for sign-in endpoint; stable API used elsewhere |
 | Container App Job max 1hr runtime | Sufficient for hundreds of tenants; parallelism=1 ensures serialized collection |

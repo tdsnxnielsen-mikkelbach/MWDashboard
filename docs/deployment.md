@@ -94,6 +94,7 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 - **Authentication**: Azure AD only (Entra ID); a User-Assigned Managed Identity is set as AD admin automatically
 - **Firewall**: Allows Azure services (Container Apps)
 - **Connection**: `Active Directory Default` with UAMI client ID — no passwords or manual SQL grants needed
+- **Resilience**: EF Core configured with `EnableRetryOnFailure` (5 retries, 30s max delay) and 60s command timeout to handle serverless cold-start resume
 
 ### Azure Managed Redis (Enterprise)
 
@@ -273,12 +274,13 @@ These are set automatically by the Bicep templates as Container App env vars and
 
 | Issue | Resolution |
 |-------|-----------|
-| SQL cold start (~60s) on first request | Expected with Serverless tier; subsequent requests are fast |
+| SQL cold start (~60s) on first request | Expected with Serverless tier; EF Core retry policy (5 retries, 30s delay) handles this automatically. Subsequent requests are fast |
 | Job fails with timeout | Check tenant count; consider splitting into multiple jobs for >100 tenants |
 | Container App not starting | Check Log Analytics for startup errors: `ContainerAppConsoleLogs_CL` |
 | Redis connection refused | Verify firewall allows Azure services; check TLS settings |
 | `azd up` fails on permissions | Ensure Service Principal has Contributor + AcrPush on the subscription |
 | `azd up` fails with `Microsoft.Authorization/roleAssignments/write` | The deploying principal needs **Role Based Access Control Administrator** (or Owner) on the subscription because the template creates role assignments for container app identities. Fix: `az role assignment create --assignee <principalObjectId> --role "Role Based Access Control Administrator" --scope /subscriptions/<subscriptionId>` |
+| `azd up` publish fails with `MSB3491` (file already exists) | Both services share `MWDashboard.Shared` and are published in parallel. The `prepackage` hook in `azure.yaml` pre-builds the solution to avoid this race condition. If it recurs, ensure the hook is present |
 | SQL deploy fails with `InvalidExternalAdministratorSid` | The managed identity failed to provision before SQL. This should not occur with the current Bicep dependency chain; run `azd down --force` and retry |
 | Redis deploy fails with `BadRequest` (retirement notice) | The classic `Microsoft.Cache/redis` resource type is retired. Use `Microsoft.Cache/redisEnterprise` (already updated in this repo) |
 | Container App fails with `MANIFEST_UNKNOWN` | The image hasn't been pushed to ACR yet. The Bicep templates use a placeholder image for initial provisioning; ensure `azd deploy` runs after provision |

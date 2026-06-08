@@ -2,6 +2,10 @@
 name: mw-dashboard
 metadata:
   template: MWDashboard@0.0.1
+hooks:
+  prepackage:
+    shell: sh
+    run: dotnet build -c Release
 services:
   web:
     project: ./src/MWDashboard.Web
