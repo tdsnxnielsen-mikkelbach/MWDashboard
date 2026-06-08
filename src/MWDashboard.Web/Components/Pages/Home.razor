@@ -223,17 +223,38 @@ else
         _totalLicenseSeats = _licenses.Sum(l => l.TotalLicenses);
 
         // Build bar chart series: per-tenant when multi-tenant view
+        var services = _latestByService.Select(s => s.ServiceName).Distinct().ToList();
         if (TenantFilter.IsMultiTenantView)
         {
             _barSeries = _latestByService
                 .GroupBy(s => TenantFilter.GetTenantName(s.TenantId))
                 .ToDictionary(g => g.Key, g => g.ToList());
+
+            // Add per-tenant licensed seats series
+            var licenseByTenant = _licenses.GroupBy(l => l.TenantId)
+                .ToDictionary(g => g.Key, g => g.Sum(l => l.TotalLicenses));
+            foreach (var tenantId in licenseByTenant.Keys)
+            {
+                var tenantName = TenantFilter.GetTenantName(tenantId);
+                var licenseSeries = services.Select(svc => new MauSnapshot
+                {
+                    ServiceName = svc,
+                    ActiveUserCount = licenseByTenant[tenantId],
+                    TenantId = tenantId
+                }).ToList();
+                _barSeries[$"Licensed ({tenantName})"] = licenseSeries;
+            }
         }
         else
         {
             _barSeries = new Dictionary<string, List<MauSnapshot>>
             {
-                ["Active Users"] = _latestByService
+                ["Active Users"] = _latestByService,
+                ["Licensed Seats"] = services.Select(svc => new MauSnapshot
+                {
+                    ServiceName = svc,
+                    ActiveUserCount = _totalLicenseSeats
+                }).ToList()
             };
         }
 

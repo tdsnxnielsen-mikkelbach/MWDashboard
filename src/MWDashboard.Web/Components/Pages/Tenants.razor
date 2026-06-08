@@ -4,6 +4,7 @@
 @inject IJSRuntime JS
 @inject IDataCollectionService DataCollectionService
 @inject TenantFilterService TenantFilter
+@inject NavigationManager NavigationManager
 
 <PageTitle>Tenant Management</PageTitle>
 
@@ -188,9 +189,10 @@
 
     private string GetConsentUrlForTenant(string tenantId)
     {
+        var redirectUri = $"{NavigationManager.BaseUri.TrimEnd('/')}/consent-complete";
         return $"https://login.microsoftonline.com/{Uri.EscapeDataString(tenantId)}/adminconsent" +
                $"?client_id={Uri.EscapeDataString(ClientId)}" +
-               $"&redirect_uri={Uri.EscapeDataString("https://localhost")}" +
+               $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +
                $"&scope=https://graph.microsoft.com/.default";
     }
 
