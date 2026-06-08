@@ -146,3 +146,31 @@ public class DepartmentUsageSnapshot
     public int TotalUsers { get; set; }
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class StorageSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string ServiceName { get; set; } = string.Empty;
+    public long UsedBytes { get; set; }
+    public long AllocatedBytes { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class ConsumptionSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public long StorageUsedBytes { get; set; }
+    public long StorageAllocatedBytes { get; set; }
+    public long TotalActivityCount { get; set; }
+    public int ActiveUserCount { get; set; }
+    public int LicensedUserCount { get; set; }
+    public double AvgWorkloadsPerUser { get; set; }
+    public double ConsumptionScore { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}

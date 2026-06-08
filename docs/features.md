@@ -72,6 +72,21 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Minimum threshold** — departments with fewer than 5 users excluded from "lowest adoption" KPI to avoid noise
 - Data source: Graph API `/users` (department field) + `getOffice365ActiveUserDetail`; requires `User.Read.All` permission
 
+## Consumption Proxy (`/consumption`)
+
+- **Composite consumption score** (0–100) — weighted from 4 dimensions:
+  - Active User Adoption (30%) — MAU / licensed seats
+  - Activity Intensity (30%) — total actions (emails, meetings, files) / active users
+  - Storage Utilization (20%) — used storage / estimated allocation
+  - Workload Breadth (20%) — avg services used per user (from segmentation)
+- **KPI cards** — Overall score, adoption %, total storage used, avg workloads per user
+- **Per-tenant score comparison** — horizontal progress bars ranked by score
+- **Radar chart** — 4-axis breakdown (Adoption, Activity, Storage, Breadth) per tenant
+- **Score trend** — line chart tracking consumption score over time (up to 6 months); per-tenant series in multi-tenant view
+- **Storage by service** — breakdown of SharePoint, OneDrive, Exchange storage with bars
+- **Recommendations** — actionable alerts for low scores, license waste, narrow workload usage
+- Data source: Computed from `getSharePointSiteUsageStorage`, `getOneDriveUsageStorage`, `getMailboxUsageStorage` + existing MAU/activity/segmentation data
+
 ## Security Services (`/security`)
 
 - **Tenant Entra ID License Levels table** — auto-detects P1/P2/Free tier from stored license SKUs per tenant, shows which tenants can provide sign-in and MFA data

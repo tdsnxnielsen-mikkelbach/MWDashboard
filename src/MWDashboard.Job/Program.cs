@@ -99,6 +99,59 @@ try
                 await dataService.SaveDepartmentUsageAsync(depts);
             }
 
+            // Storage usage
+            var storage = await graphService.GetStorageUsageAsync(tenant.TenantId);
+            if (storage.Count > 0)
+            {
+                foreach (var s in storage)
+                    s.TenantName = tenant.TenantName;
+                await dataService.SaveStorageAsync(storage);
+            }
+
+            // Compute consumption score
+            {
+                var totalLicenses = licenses.Sum(l => l.TotalLicenses);
+                if (totalLicenses > 0)
+                {
+                    var latestMau = await dataService.GetLatestMauByServiceAsync(new[] { tenant.TenantId });
+                    var m365Active = latestMau.Where(s => s.ServiceName == "Office 365").Sum(s => s.ActiveUserCount);
+                    var activeUserPct = Math.Min(100.0, (double)m365Active / totalLicenses * 100);
+
+                    var totalActions = activities.Sum(a => a.Count);
+                    var activityIntensity = m365Active > 0 ? Math.Min(100.0, (double)totalActions / m365Active / 10.0) : 0;
+
+                    var totalStorageUsed = storage.GroupBy(s => s.ServiceName)
+                        .Sum(g => g.OrderByDescending(s => s.ReportDate).First().UsedBytes);
+                    var estimatedAllocated = (long)totalLicenses * 50L * 1024 * 1024 * 1024;
+                    var storageUtilPct = estimatedAllocated > 0 ? Math.Min(100.0, (double)totalStorageUsed / estimatedAllocated * 100) : 0;
+
+                    var latestSegment = segments.OrderByDescending(s => s.ReportDate).FirstOrDefault();
+                    double avgWorkloads = 0;
+                    if (latestSegment != null && latestSegment.TotalUsers > 0)
+                    {
+                        avgWorkloads = ((double)latestSegment.HeavyUsers * 4 + latestSegment.LightUsers * 1.5) / latestSegment.TotalUsers;
+                    }
+                    var breadthPct = Math.Min(100.0, avgWorkloads / 5.0 * 100);
+
+                    var score = activeUserPct * 0.30 + activityIntensity * 0.30 + storageUtilPct * 0.20 + breadthPct * 0.20;
+
+                    await dataService.SaveConsumptionAsync(new MWDashboard.Shared.Models.ConsumptionSnapshot
+                    {
+                        TenantId = tenant.TenantId,
+                        TenantName = tenant.TenantName,
+                        ReportDate = DateTime.UtcNow.Date,
+                        StorageUsedBytes = totalStorageUsed,
+                        StorageAllocatedBytes = estimatedAllocated,
+                        TotalActivityCount = totalActions,
+                        ActiveUserCount = m365Active,
+                        LicensedUserCount = totalLicenses,
+                        AvgWorkloadsPerUser = avgWorkloads,
+                        ConsumptionScore = Math.Round(score, 1),
+                        CollectedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
             logger.LogInformation("Data collection completed for tenant {TenantName}", tenant.TenantName);
         }
         catch (Exception ex)

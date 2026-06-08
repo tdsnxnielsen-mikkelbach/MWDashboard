@@ -298,6 +298,8 @@ dotnet ef migrations add <MigrationName> --project ../MWDashboard.Shared
 | `CopilotUsageSnapshots` | Copilot active users per app |
 | `UserSegmentSnapshots` | User segmentation (heavy/light/inactive) |
 | `DepartmentUsageSnapshots` | Per-department active vs total users |
+| `StorageSnapshots` | Storage used per service (SharePoint, OneDrive, Exchange) |
+| `ConsumptionSnapshots` | Computed consumption score with all dimensions |
 
 ## Environment Variables (Runtime)
 

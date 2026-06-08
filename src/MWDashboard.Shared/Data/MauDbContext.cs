@@ -16,6 +16,8 @@ public class MauDbContext : DbContext
     public DbSet<CopilotUsageSnapshot> CopilotUsageSnapshots => Set<CopilotUsageSnapshot>();
     public DbSet<UserSegmentSnapshot> UserSegmentSnapshots => Set<UserSegmentSnapshot>();
     public DbSet<DepartmentUsageSnapshot> DepartmentUsageSnapshots => Set<DepartmentUsageSnapshot>();
+    public DbSet<StorageSnapshot> StorageSnapshots => Set<StorageSnapshot>();
+    public DbSet<ConsumptionSnapshot> ConsumptionSnapshots => Set<ConsumptionSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -90,6 +92,21 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantId).HasMaxLength(100);
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.Department).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<StorageSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ServiceName, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.ServiceName).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<ConsumptionSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
         });
     }
 }

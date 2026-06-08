@@ -17,6 +17,7 @@ public interface IGraphReportService
     Task<List<CopilotUsageSnapshot>> GetCopilotUsageAsync(string tenantId);
     Task<List<UserSegmentSnapshot>> GetUserSegmentationAsync(string tenantId);
     Task<List<DepartmentUsageSnapshot>> GetDepartmentUsageAsync(string tenantId);
+    Task<List<StorageSnapshot>> GetStorageUsageAsync(string tenantId);
 }
 
 public class GraphReportService : IGraphReportService
@@ -757,5 +758,96 @@ public class GraphReportService : IGraphReportService
     private static string? GetValue(string[] values, int index)
     {
         return index >= 0 && index < values.Length ? values[index].Trim() : null;
+    }
+
+    public async Task<List<StorageSnapshot>> GetStorageUsageAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var snapshots = new List<StorageSnapshot>();
+
+        // SharePoint storage
+        try
+        {
+            var report = await client.Reports
+                .GetSharePointSiteUsageStorageWithPeriod("D30")
+                .GetAsync();
+            if (report != null)
+            {
+                using var reader = new StreamReader(report);
+                var csv = await reader.ReadToEndAsync();
+                snapshots.AddRange(ParseStorageReport(csv, tenantId, M365Services.SharePoint));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get SharePoint storage for tenant {TenantId}", tenantId);
+        }
+
+        // OneDrive storage
+        try
+        {
+            var report = await client.Reports
+                .GetOneDriveUsageStorageWithPeriod("D30")
+                .GetAsync();
+            if (report != null)
+            {
+                using var reader = new StreamReader(report);
+                var csv = await reader.ReadToEndAsync();
+                snapshots.AddRange(ParseStorageReport(csv, tenantId, M365Services.OneDrive));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get OneDrive storage for tenant {TenantId}", tenantId);
+        }
+
+        // Exchange mailbox storage
+        try
+        {
+            var report = await client.Reports
+                .GetMailboxUsageStorageWithPeriod("D30")
+                .GetAsync();
+            if (report != null)
+            {
+                using var reader = new StreamReader(report);
+                var csv = await reader.ReadToEndAsync();
+                snapshots.AddRange(ParseStorageReport(csv, tenantId, M365Services.Exchange));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get Exchange mailbox storage for tenant {TenantId}", tenantId);
+        }
+
+        return snapshots;
+    }
+
+    private static List<StorageSnapshot> ParseStorageReport(string csv, string tenantId, string serviceName)
+    {
+        var snapshots = new List<StorageSnapshot>();
+        var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        if (lines.Length < 2) return snapshots;
+
+        var headers = lines[0].Split(',');
+        var dateIndex = Array.IndexOf(headers, "Report Date");
+        var usedIndex = Array.IndexOf(headers, "Storage Used (Byte)");
+
+        for (int i = 1; i < lines.Length; i++)
+        {
+            var values = lines[i].Split(',');
+            if (!DateTime.TryParse(GetValue(values, dateIndex), out var date)) continue;
+            if (!long.TryParse(GetValue(values, usedIndex), out var usedBytes)) continue;
+
+            snapshots.Add(new StorageSnapshot
+            {
+                TenantId = tenantId,
+                ServiceName = serviceName,
+                ReportDate = date,
+                UsedBytes = usedBytes,
+                CollectedAt = DateTime.UtcNow
+            });
+        }
+
+        return snapshots;
     }
 }

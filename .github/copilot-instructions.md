@@ -15,7 +15,7 @@
 - All snapshot models follow: `Id`, `TenantId`, `TenantName`, `ReportDate`, metric fields, `CollectedAt`
 - Composite unique indexes on `(TenantId, ServiceName/SkuId/Workload+ActivityType/AppName/Department, ReportDate)` for upsert deduplication
 - Use `DateTime` for dates (UTC everywhere)
-- 9 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots
+- 11 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots
 
 ### Data Services (src/MWDashboard.Shared/Services/)
 - Use `IDbContextFactory<MauDbContext>` — create a new context per method call (`await using var db = await _dbFactory.CreateDbContextAsync()`)
@@ -28,7 +28,7 @@
 - Report endpoints return CSV streams — parse with header matching
 - Beta API uses separate `BetaGraphClient` instance (sign-ins + Copilot usage)
 - Always handle `ServiceException` gracefully (tenant may not have required license)
-- New endpoints: Teams/SharePoint/OneDrive/Exchange activity counts, Copilot user detail, Office365 active user detail (segmentation), /users (departments)
+- New endpoints: Teams/SharePoint/OneDrive/Exchange activity counts, Copilot user detail, Office365 active user detail (segmentation), /users (departments), SharePoint/OneDrive/Exchange storage usage
 
 ### Caching Strategy
 - **Redis distributed cache** (`IDistributedCache`): Use for expensive queries with TTL 15–60 minutes

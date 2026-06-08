@@ -40,6 +40,14 @@ public interface IMauDataService
     // Department Usage
     Task<List<DepartmentUsageSnapshot>> GetDepartmentUsageAsync(IEnumerable<string>? tenantIds);
     Task SaveDepartmentUsageAsync(IEnumerable<DepartmentUsageSnapshot> snapshots);
+
+    // Storage Usage
+    Task<List<StorageSnapshot>> GetStorageAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveStorageAsync(IEnumerable<StorageSnapshot> snapshots);
+
+    // Consumption Scores
+    Task<List<ConsumptionSnapshot>> GetConsumptionAsync(IEnumerable<string>? tenantIds, int months = 6);
+    Task SaveConsumptionAsync(ConsumptionSnapshot snapshot);
 }
 
 public class MauDataService : IMauDataService
@@ -504,6 +512,89 @@ public class MauDataService : IMauDataService
             {
                 db.DepartmentUsageSnapshots.Add(snapshot);
             }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // Storage Usage
+    public async Task<List<StorageSnapshot>> GetStorageAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var fromDate = DateTime.UtcNow.AddDays(-days);
+        var query = db.StorageSnapshots.Where(s => s.ReportDate >= fromDate);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveStorageAsync(IEnumerable<StorageSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.StorageSnapshots
+                .FirstOrDefaultAsync(s =>
+                    s.TenantId == snapshot.TenantId &&
+                    s.ServiceName == snapshot.ServiceName &&
+                    s.ReportDate == snapshot.ReportDate);
+
+            if (existing != null)
+            {
+                existing.UsedBytes = snapshot.UsedBytes;
+                existing.AllocatedBytes = snapshot.AllocatedBytes;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.StorageSnapshots.Add(snapshot);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // Consumption Scores
+    public async Task<List<ConsumptionSnapshot>> GetConsumptionAsync(IEnumerable<string>? tenantIds, int months = 6)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var fromDate = DateTime.UtcNow.AddMonths(-months);
+        var query = db.ConsumptionSnapshots.Where(c => c.ReportDate >= fromDate);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(c => ids.Contains(c.TenantId));
+        }
+        return await query.OrderBy(c => c.ReportDate).ThenBy(c => c.TenantId).ToListAsync();
+    }
+
+    public async Task SaveConsumptionAsync(ConsumptionSnapshot snapshot)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var existing = await db.ConsumptionSnapshots
+            .FirstOrDefaultAsync(c =>
+                c.TenantId == snapshot.TenantId &&
+                c.ReportDate == snapshot.ReportDate);
+
+        if (existing != null)
+        {
+            existing.StorageUsedBytes = snapshot.StorageUsedBytes;
+            existing.StorageAllocatedBytes = snapshot.StorageAllocatedBytes;
+            existing.TotalActivityCount = snapshot.TotalActivityCount;
+            existing.ActiveUserCount = snapshot.ActiveUserCount;
+            existing.LicensedUserCount = snapshot.LicensedUserCount;
+            existing.AvgWorkloadsPerUser = snapshot.AvgWorkloadsPerUser;
+            existing.ConsumptionScore = snapshot.ConsumptionScore;
+            existing.CollectedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            db.ConsumptionSnapshots.Add(snapshot);
         }
 
         await db.SaveChangesAsync();

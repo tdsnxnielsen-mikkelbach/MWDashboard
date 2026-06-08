@@ -1,0 +1,415 @@
+@page "/consumption"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Consumption</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading consumption data...</MudText>
+    </div>
+}
+else
+{
+<MudGrid>
+    @* KPI Cards *@
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Overall Score</MudText>
+            <MudText Typo="Typo.h4">@_overallScore.ToString("F1")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">out of 100</MudText>
+            <MudProgressLinear Color="@GetScoreColor(_overallScore)" Value="@_overallScore" Class="mt-1" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Active User Adoption</MudText>
+            <MudText Typo="Typo.h4">@_adoptionPct.ToString("F0")%</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@_totalActive.ToString("N0") of @_totalLicensed.ToString("N0") licensed</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Total Storage Used</MudText>
+            <MudText Typo="Typo.h4">@FormatBytes(_totalStorageUsed)</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">across all workloads</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Avg Workloads/User</MudText>
+            <MudText Typo="Typo.h4">@_avgWorkloads.ToString("F1")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">of 5 possible services</MudText>
+        </MudPaper>
+    </MudItem>
+
+    @* Per-Tenant Score Comparison *@
+    @if (_tenantScores.Count > 0)
+    {
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Consumption Score by Tenant</MudText>
+            <MudStack Spacing="3">
+                @foreach (var tenant in _tenantScores.OrderByDescending(t => t.Score))
+                {
+                    <div>
+                        <div class="d-flex justify-space-between align-center mb-1">
+                            <MudText Typo="Typo.body2"><b>@tenant.TenantName</b></MudText>
+                            <MudText Typo="Typo.body2"><b>@tenant.Score.ToString("F1")</b> / 100</MudText>
+                        </div>
+                        <MudProgressLinear Color="@GetScoreColor(tenant.Score)" Value="@tenant.Score" Size="Size.Large" Rounded="true" />
+                    </div>
+                }
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+    }
+
+    @* Score Breakdown Radar Chart *@
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Score Breakdown</MudText>
+            @if (_radarData.Count > 0)
+            {
+                <ApexChart TItem="RadarPoint"
+                           Options="_radarOptions"
+                           Height="300">
+                    @foreach (var series in _radarData)
+                    {
+                        <ApexPointSeries TItem="RadarPoint"
+                                         Items="series.Value"
+                                         Name="@series.Key"
+                                         SeriesType="SeriesType.Radar"
+                                         XValue="@(e => e.Dimension)"
+                                         YValue="@(e => (decimal?)e.Value)" />
+                    }
+                </ApexChart>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No consumption data available yet.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Score Trend *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Consumption Score Trend</MudText>
+            @if (_trendData.Count > 0)
+            {
+                <ApexChart TItem="TrendPoint"
+                           Options="_trendOptions"
+                           Height="300">
+                    @foreach (var series in _trendData)
+                    {
+                        <ApexPointSeries TItem="TrendPoint"
+                                         Items="series.Value"
+                                         Name="@series.Key"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.Date)"
+                                         YValue="@(e => (decimal?)e.Score)" />
+                    }
+                </ApexChart>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">Score trend data will appear after multiple collection cycles.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Storage Breakdown *@
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Storage by Service</MudText>
+            @if (_storageByService.Count > 0)
+            {
+                <MudStack Spacing="3">
+                    @foreach (var item in _storageByService)
+                    {
+                        <div>
+                            <div class="d-flex justify-space-between align-center mb-1">
+                                <MudText Typo="Typo.body2">
+                                    <b>@item.ServiceName</b>
+                                    @if (!string.IsNullOrEmpty(item.TenantName))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="ml-2">@item.TenantName</MudChip>
+                                    }
+                                </MudText>
+                                <MudText Typo="Typo.body2">@FormatBytes(item.UsedBytes)</MudText>
+                            </div>
+                            <MudProgressLinear Color="Color.Info" Value="@item.Percent" Size="Size.Medium" Rounded="true" />
+                        </div>
+                    }
+                </MudStack>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No storage data available.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Recommendations *@
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Recommendations</MudText>
+            <MudStack Spacing="2">
+                @foreach (var rec in _recommendations)
+                {
+                    <MudAlert Severity="@rec.Severity" Dense="true" NoIcon="false">@rec.Message</MudAlert>
+                }
+                @if (_recommendations.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true">All consumption metrics look healthy.</MudAlert>
+                }
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private double _overallScore;
+    private double _adoptionPct;
+    private int _totalActive;
+    private int _totalLicensed;
+    private long _totalStorageUsed;
+    private double _avgWorkloads;
+    private List<TenantScore> _tenantScores = [];
+    private Dictionary<string, List<RadarPoint>> _radarData = [];
+    private Dictionary<string, List<TrendPoint>> _trendData = [];
+    private List<StorageItem> _storageByService = [];
+    private List<Recommendation> _recommendations = [];
+
+    private ApexChartOptions<RadarPoint> _radarOptions = new()
+    {
+        Yaxis = [new YAxis { Max = 100 }],
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private ApexChartOptions<TrendPoint> _trendOptions = new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Score" }, Max = 100, Min = 0 }],
+        Xaxis = new XAxis { Title = new AxisTitle { Text = "Date" } },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+
+        var consumption = await MauDataService.GetConsumptionAsync(tenantIds, months: 6);
+        var storageData = await MauDataService.GetStorageAsync(tenantIds, days: 30);
+
+        // Latest consumption per tenant
+        var latestPerTenant = consumption
+            .GroupBy(c => c.TenantId)
+            .Select(g => g.OrderByDescending(c => c.ReportDate).First())
+            .ToList();
+
+        // KPIs from latest data
+        if (latestPerTenant.Count > 0)
+        {
+            _overallScore = latestPerTenant.Average(c => c.ConsumptionScore);
+            _totalActive = latestPerTenant.Sum(c => c.ActiveUserCount);
+            _totalLicensed = latestPerTenant.Sum(c => c.LicensedUserCount);
+            _adoptionPct = _totalLicensed > 0 ? (double)_totalActive / _totalLicensed * 100 : 0;
+            _totalStorageUsed = latestPerTenant.Sum(c => c.StorageUsedBytes);
+            _avgWorkloads = latestPerTenant.Average(c => c.AvgWorkloadsPerUser);
+        }
+        else
+        {
+            _overallScore = 0;
+            _totalActive = 0;
+            _totalLicensed = 0;
+            _adoptionPct = 0;
+            _totalStorageUsed = 0;
+            _avgWorkloads = 0;
+        }
+
+        // Per-tenant scores
+        _tenantScores = latestPerTenant.Select(c => new TenantScore
+        {
+            TenantName = TenantFilter.GetTenantName(c.TenantId),
+            Score = c.ConsumptionScore
+        }).ToList();
+
+        // Radar chart data - breakdown per tenant (or aggregated)
+        _radarData = [];
+        if (TenantFilter.IsMultiTenantView)
+        {
+            foreach (var c in latestPerTenant)
+            {
+                var tenantName = TenantFilter.GetTenantName(c.TenantId);
+                _radarData[tenantName] = BuildRadarPoints(c);
+            }
+        }
+        else if (latestPerTenant.Count > 0)
+        {
+            _radarData["Score"] = BuildRadarPoints(latestPerTenant.First());
+        }
+
+        // Trend data
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _trendData = consumption
+                .GroupBy(c => TenantFilter.GetTenantName(c.TenantId))
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderBy(c => c.ReportDate).Select(c => new TrendPoint
+                    {
+                        Date = c.ReportDate.ToString("yyyy-MM-dd"),
+                        Score = c.ConsumptionScore
+                    }).ToList());
+        }
+        else
+        {
+            _trendData = consumption.Count > 0
+                ? new Dictionary<string, List<TrendPoint>>
+                {
+                    ["Score"] = consumption.OrderBy(c => c.ReportDate).Select(c => new TrendPoint
+                    {
+                        Date = c.ReportDate.ToString("yyyy-MM-dd"),
+                        Score = c.ConsumptionScore
+                    }).ToList()
+                }
+                : [];
+        }
+
+        // Storage by service
+        var latestStorage = storageData
+            .GroupBy(s => new { s.TenantId, s.ServiceName })
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToList();
+
+        var maxStorage = latestStorage.Count > 0 ? latestStorage.Max(s => s.UsedBytes) : 1;
+        _storageByService = latestStorage.Select(s => new StorageItem
+        {
+            ServiceName = s.ServiceName,
+            TenantName = TenantFilter.IsMultiTenantView ? TenantFilter.GetTenantName(s.TenantId) : null,
+            UsedBytes = s.UsedBytes,
+            Percent = maxStorage > 0 ? (double)s.UsedBytes / maxStorage * 100 : 0
+        }).OrderByDescending(s => s.UsedBytes).ToList();
+
+        // Recommendations
+        _recommendations = [];
+        foreach (var c in latestPerTenant)
+        {
+            var name = TenantFilter.IsMultiTenantView ? $"{TenantFilter.GetTenantName(c.TenantId)}: " : "";
+            if (c.ConsumptionScore < 30)
+                _recommendations.Add(new Recommendation { Severity = Severity.Error, Message = $"{name}Very low consumption score ({c.ConsumptionScore:F0}/100) — review license allocation and drive adoption" });
+            else if (c.ConsumptionScore < 50)
+                _recommendations.Add(new Recommendation { Severity = Severity.Warning, Message = $"{name}Below-average consumption ({c.ConsumptionScore:F0}/100) — consider targeted training campaigns" });
+
+            if (c.LicensedUserCount > 0 && (double)c.ActiveUserCount / c.LicensedUserCount < 0.4)
+                _recommendations.Add(new Recommendation { Severity = Severity.Warning, Message = $"{name}Low user adoption ({c.ActiveUserCount}/{c.LicensedUserCount}) — significant license waste potential" });
+
+            if (c.AvgWorkloadsPerUser < 1.5)
+                _recommendations.Add(new Recommendation { Severity = Severity.Info, Message = $"{name}Users engage with few workloads (avg {c.AvgWorkloadsPerUser:F1}) — promote cross-service usage" });
+        }
+
+        _loading = false;
+    }
+
+    private static List<RadarPoint> BuildRadarPoints(ConsumptionSnapshot c)
+    {
+        var adoptionPct = c.LicensedUserCount > 0 ? Math.Min(100, (double)c.ActiveUserCount / c.LicensedUserCount * 100) : 0;
+        var activityIntensity = c.ActiveUserCount > 0 ? Math.Min(100, (double)c.TotalActivityCount / c.ActiveUserCount / 10.0) : 0;
+        var storagePct = c.StorageAllocatedBytes > 0 ? Math.Min(100, (double)c.StorageUsedBytes / c.StorageAllocatedBytes * 100) : 0;
+        var breadthPct = Math.Min(100, c.AvgWorkloadsPerUser / 5.0 * 100);
+
+        return
+        [
+            new() { Dimension = "Adoption", Value = adoptionPct },
+            new() { Dimension = "Activity", Value = activityIntensity },
+            new() { Dimension = "Storage", Value = storagePct },
+            new() { Dimension = "Breadth", Value = breadthPct }
+        ];
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    private static Color GetScoreColor(double score) => score switch
+    {
+        >= 70 => Color.Success,
+        >= 40 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1_099_511_627_776) return $"{bytes / 1_099_511_627_776.0:F1} TB";
+        if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:F1} GB";
+        if (bytes >= 1_048_576) return $"{bytes / 1_048_576.0:F1} MB";
+        return $"{bytes / 1024.0:F0} KB";
+    }
+
+    public class RadarPoint
+    {
+        public string Dimension { get; set; } = string.Empty;
+        public double Value { get; set; }
+    }
+
+    public class TrendPoint
+    {
+        public string Date { get; set; } = string.Empty;
+        public double Score { get; set; }
+    }
+
+    public class TenantScore
+    {
+        public string TenantName { get; set; } = string.Empty;
+        public double Score { get; set; }
+    }
+
+    public class StorageItem
+    {
+        public string ServiceName { get; set; } = string.Empty;
+        public string? TenantName { get; set; }
+        public long UsedBytes { get; set; }
+        public double Percent { get; set; }
+    }
+
+    public class Recommendation
+    {
+        public Severity Severity { get; set; }
+        public string Message { get; set; } = string.Empty;
+    }
+}
