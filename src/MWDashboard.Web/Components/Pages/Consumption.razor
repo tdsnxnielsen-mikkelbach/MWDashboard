@@ -76,7 +76,22 @@ else
                     </MudChip>
                 }
             </div>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">across all workloads</MudText>
+            @if (_storageKpiByService.Count > 0)
+            {
+                <MudStack Spacing="1" Class="mt-2">
+                    @foreach (var svc in _storageKpiByService)
+                    {
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.caption">@svc.ServiceName</MudText>
+                            <MudText Typo="Typo.caption"><b>@FormatBytes(svc.UsedBytes)</b></MudText>
+                        </div>
+                    }
+                </MudStack>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">across all workloads</MudText>
+            }
         </MudPaper>
     </MudItem>
     <MudItem xs="12" sm="6" md="3">
@@ -238,6 +253,7 @@ else
     private Dictionary<string, List<RadarPoint>> _radarData = [];
     private Dictionary<string, List<TrendPoint>> _trendData = [];
     private List<StorageItem> _storageByService = [];
+    private List<StorageKpiItem> _storageKpiByService = [];
     private List<Recommendation> _recommendations = [];
 
     private ApexChartOptions<RadarPoint> _radarOptions = new()
@@ -408,6 +424,17 @@ else
             Percent = maxStorage > 0 ? (double)s.UsedBytes / maxStorage * 100 : 0
         }).OrderByDescending(s => s.UsedBytes).ToList();
 
+        // Storage KPI breakdown by service (aggregated across tenants)
+        _storageKpiByService = latestStorage
+            .GroupBy(s => s.ServiceName)
+            .Select(g => new StorageKpiItem { ServiceName = g.Key, UsedBytes = g.Sum(s => s.UsedBytes) })
+            .OrderByDescending(s => s.UsedBytes)
+            .ToList();
+
+        // Use actual storage data for total when available (more accurate than consumption snapshot)
+        if (_storageKpiByService.Count > 0)
+            _totalStorageUsed = _storageKpiByService.Sum(s => s.UsedBytes);
+
         // Recommendations
         _recommendations = [];
         foreach (var c in latestPerTenant)
@@ -492,6 +519,12 @@ else
         public string? TenantName { get; set; }
         public long UsedBytes { get; set; }
         public double Percent { get; set; }
+    }
+
+    public class StorageKpiItem
+    {
+        public string ServiceName { get; set; } = string.Empty;
+        public long UsedBytes { get; set; }
     }
 
     public class Recommendation

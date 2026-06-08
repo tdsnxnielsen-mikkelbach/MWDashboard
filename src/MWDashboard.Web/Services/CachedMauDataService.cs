@@ -35,6 +35,16 @@ public class CachedMauDataService : IMauDataService
         return $"MWDashboard:{feature}:{tenantPart}{extraPart}";
     }
 
+    private static bool IsMultiTenantCombo(IEnumerable<string>? tenantIds)
+    {
+        // Returns true when tenantIds is a specific multi-tenant selection (not null/all, not single).
+        // These combos can't be reliably invalidated, so we skip caching for them.
+        if (tenantIds == null) return false;
+        using var enumerator = tenantIds.GetEnumerator();
+        if (!enumerator.MoveNext()) return false; // empty
+        return enumerator.MoveNext(); // true if 2+ items
+    }
+
     private async Task<T> GetOrSetAsync<T>(string key, Func<Task<T>> factory, DistributedCacheEntryOptions options)
     {
         try
@@ -76,6 +86,7 @@ public class CachedMauDataService : IMauDataService
     // --- Consumption (cached 15 min) ---
     public Task<List<ConsumptionSnapshot>> GetConsumptionAsync(IEnumerable<string>? tenantIds, int months = 6)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetConsumptionAsync(tenantIds, months);
         var key = BuildKey("consumption", tenantIds, months);
         return GetOrSetAsync(key, () => _inner.GetConsumptionAsync(tenantIds, months), CacheOptions15Min);
     }
@@ -89,6 +100,7 @@ public class CachedMauDataService : IMauDataService
     // --- Storage (cached 15 min) ---
     public Task<List<StorageSnapshot>> GetStorageAsync(IEnumerable<string>? tenantIds, int days = 30)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetStorageAsync(tenantIds, days);
         var key = BuildKey("storage", tenantIds, days);
         return GetOrSetAsync(key, () => _inner.GetStorageAsync(tenantIds, days), CacheOptions15Min);
     }
@@ -105,6 +117,7 @@ public class CachedMauDataService : IMauDataService
     // --- M365 App Usage (cached 15 min) ---
     public Task<List<M365AppUsageSnapshot>> GetM365AppUsageAsync(IEnumerable<string>? tenantIds)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetM365AppUsageAsync(tenantIds);
         var key = BuildKey("m365app", tenantIds);
         return GetOrSetAsync(key, () => _inner.GetM365AppUsageAsync(tenantIds), CacheOptions15Min);
     }
@@ -125,6 +138,7 @@ public class CachedMauDataService : IMauDataService
     }
     public Task<List<MauSnapshot>> GetMauHistoryAsync(IEnumerable<string>? tenantIds, int months = 12)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetMauHistoryAsync(tenantIds, months);
         var key = BuildKey("mau-history", tenantIds, months);
         return GetOrSetAsync(key, () => _inner.GetMauHistoryAsync(tenantIds, months), CacheOptions15Min);
     }
@@ -135,6 +149,7 @@ public class CachedMauDataService : IMauDataService
     }
     public Task<List<MauSnapshot>> GetLatestMauByServiceAsync(IEnumerable<string>? tenantIds)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetLatestMauByServiceAsync(tenantIds);
         var key = BuildKey("mau-latest", tenantIds);
         return GetOrSetAsync(key, () => _inner.GetLatestMauByServiceAsync(tenantIds), CacheOptions15Min);
     }
@@ -152,6 +167,7 @@ public class CachedMauDataService : IMauDataService
     }
     public Task<List<LicenseSnapshot>> GetLatestLicensesAsync(IEnumerable<string>? tenantIds)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetLatestLicensesAsync(tenantIds);
         var key = BuildKey("licenses-latest", tenantIds);
         return GetOrSetAsync(key, () => _inner.GetLatestLicensesAsync(tenantIds), CacheOptions60Min);
     }
@@ -162,6 +178,7 @@ public class CachedMauDataService : IMauDataService
     }
     public Task<List<LicenseSnapshot>> GetLicensesByDateRangeAsync(DateTime from, DateTime to, IEnumerable<string>? tenantIds)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetLicensesByDateRangeAsync(from, to, tenantIds);
         var key = BuildKey("licenses-range", tenantIds, from.ToString("yyyyMMdd"), to.ToString("yyyyMMdd"));
         return GetOrSetAsync(key, () => _inner.GetLicensesByDateRangeAsync(from, to, tenantIds), CacheOptions60Min);
     }
@@ -181,6 +198,7 @@ public class CachedMauDataService : IMauDataService
     }
     public Task<List<MessageCenterPost>> GetMessageCenterPostsAsync(IEnumerable<string>? tenantIds)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetMessageCenterPostsAsync(tenantIds);
         var key = BuildKey("msgcenter", tenantIds);
         return GetOrSetAsync(key, () => _inner.GetMessageCenterPostsAsync(tenantIds), CacheOptions60Min);
     }
@@ -198,6 +216,7 @@ public class CachedMauDataService : IMauDataService
     }
     public Task<List<SecuritySignInSummary>> GetSecuritySummaryAsync(IEnumerable<string>? tenantIds, int days = 30)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetSecuritySummaryAsync(tenantIds, days);
         var key = BuildKey("security", tenantIds, days);
         return GetOrSetAsync(key, () => _inner.GetSecuritySummaryAsync(tenantIds, days), CacheOptions15Min);
     }
@@ -215,6 +234,7 @@ public class CachedMauDataService : IMauDataService
     // --- Workload Activity (15 min — dashboard-level) ---
     public Task<List<WorkloadActivitySnapshot>> GetWorkloadActivityAsync(IEnumerable<string>? tenantIds, int days = 30)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetWorkloadActivityAsync(tenantIds, days);
         var key = BuildKey("activity", tenantIds, days);
         return GetOrSetAsync(key, () => _inner.GetWorkloadActivityAsync(tenantIds, days), CacheOptions15Min);
     }
@@ -227,6 +247,7 @@ public class CachedMauDataService : IMauDataService
     // --- Copilot (60 min — changes daily) ---
     public Task<List<CopilotUsageSnapshot>> GetCopilotUsageAsync(IEnumerable<string>? tenantIds)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetCopilotUsageAsync(tenantIds);
         var key = BuildKey("copilot", tenantIds);
         return GetOrSetAsync(key, () => _inner.GetCopilotUsageAsync(tenantIds), CacheOptions60Min);
     }
@@ -239,6 +260,7 @@ public class CachedMauDataService : IMauDataService
     // --- User Segmentation (60 min — changes daily) ---
     public Task<List<UserSegmentSnapshot>> GetUserSegmentsAsync(IEnumerable<string>? tenantIds, int months = 6)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetUserSegmentsAsync(tenantIds, months);
         var key = BuildKey("segments", tenantIds, months);
         return GetOrSetAsync(key, () => _inner.GetUserSegmentsAsync(tenantIds, months), CacheOptions60Min);
     }
@@ -251,6 +273,7 @@ public class CachedMauDataService : IMauDataService
     // --- Department Usage (60 min — changes daily) ---
     public Task<List<DepartmentUsageSnapshot>> GetDepartmentUsageAsync(IEnumerable<string>? tenantIds)
     {
+        if (IsMultiTenantCombo(tenantIds)) return _inner.GetDepartmentUsageAsync(tenantIds);
         var key = BuildKey("departments", tenantIds);
         return GetOrSetAsync(key, () => _inner.GetDepartmentUsageAsync(tenantIds), CacheOptions60Min);
     }

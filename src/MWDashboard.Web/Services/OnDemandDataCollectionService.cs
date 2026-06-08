@@ -1,3 +1,4 @@
+using MWDashboard.Shared.Models;
 using MWDashboard.Shared.Services;
 
 namespace MWDashboard.Web.Services;
@@ -111,7 +112,7 @@ public class OnDemandDataCollectionService : IDataCollectionService
 
         // Active user % (from latest MAU - use licenses consumed as proxy for active across services)
         var latestMau = await _dataService.GetLatestMauByServiceAsync(new[] { tenantId });
-        var m365Active = latestMau.Where(s => s.ServiceName == "Office 365").Sum(s => s.ActiveUserCount);
+        var m365Active = latestMau.Where(s => s.ServiceName == M365Services.Office365).Sum(s => s.ActiveUserCount);
         var activeUserPct = Math.Min(100.0, (double)m365Active / totalLicenses * 100);
 
         // Activity intensity (total actions / active users)
