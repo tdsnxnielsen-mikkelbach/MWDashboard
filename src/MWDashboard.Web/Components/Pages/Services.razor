@@ -117,7 +117,7 @@ else
                           .Select(mg => new ServiceChartPoint
                           {
                               Month = mg.Key,
-                              Count = mg.Sum(x => x.ActiveUserCount)
+                              Count = mg.OrderByDescending(x => x.ReportDate).First().ActiveUserCount
                           })
                           .OrderBy(p => p.Month)
                           .ToList());
@@ -132,7 +132,7 @@ else
                           .Select(mg => new ServiceChartPoint
                           {
                               Month = mg.Key,
-                              Count = mg.Sum(x => x.ActiveUserCount)
+                              Count = mg.OrderByDescending(x => x.ReportDate).First().ActiveUserCount
                           })
                           .OrderBy(p => p.Month)
                           .ToList());
@@ -148,7 +148,7 @@ else
         if (serviceHistory.Count == 0) return null;
         return serviceHistory
             .GroupBy(s => s.ReportDate.ToString("yyyy-MM"))
-            .Select(mg => new ServiceChartPoint { Month = mg.Key, Count = mg.Sum(x => x.ActiveUserCount) })
+            .Select(mg => new ServiceChartPoint { Month = mg.Key, Count = mg.OrderByDescending(x => x.ReportDate).First().ActiveUserCount })
             .OrderBy(p => p.Month)
             .ToList();
     }
