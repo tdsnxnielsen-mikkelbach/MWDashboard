@@ -97,7 +97,7 @@ public class MauDataService : IMauDataService
             query = query.Where(s => s.TenantId == tenantId);
 
         return await query
-            .GroupBy(s => s.ServiceName)
+            .GroupBy(s => new { s.TenantId, s.ServiceName })
             .Select(g => g.OrderByDescending(s => s.ReportDate).First())
             .ToListAsync();
     }
@@ -112,7 +112,7 @@ public class MauDataService : IMauDataService
             query = query.Where(s => ids.Contains(s.TenantId));
         }
         return await query
-            .GroupBy(s => s.ServiceName)
+            .GroupBy(s => new { s.TenantId, s.ServiceName })
             .Select(g => g.OrderByDescending(s => s.ReportDate).First())
             .ToListAsync();
     }
