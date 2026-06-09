@@ -2,12 +2,34 @@
 
 ## Project Architecture
 
-- **Solution**: Multi-project .NET 10 solution with `MWDashboard.Shared`, `MWDashboard.Web`, and `MWDashboard.Job`
+- **Solution**: Multi-project .NET 10 solution with `MWDashboard.Shared`, `MWDashboard.Web`, and `MWDashboard.Job` under `src/`
 - **UI**: Blazor Server with MudBlazor + Blazor-ApexCharts
 - **Data**: EF Core + Azure SQL Serverless (auto-pause), Redis distributed cache
 - **Auth**: Azure AD multi-tenant, app-only (client credentials) per tenant
 - **Hosting**: Azure Container Apps (web + scheduled job)
 - **Infra**: Bicep IaC via Azure Developer CLI (azd)
+- **No test projects** — manual/integration testing only
+
+> **Note**: The root-level `Components/`, `Services/`, `Models/`, `Data/` folders are a legacy scaffold. The active source code lives under `src/MWDashboard.Shared/`, `src/MWDashboard.Web/`, and `src/MWDashboard.Job/`.
+
+## Commands
+
+```powershell
+# Run locally
+dotnet run --project src/MWDashboard.Web
+
+# Build all projects
+dotnet build src/MWDashboard.Web
+
+# Add EF Core migration (run from src/MWDashboard.Web/)
+dotnet ef migrations add <Name> --project ../MWDashboard.Shared
+
+# Deploy to Azure (provision + deploy)
+azd up
+
+# Deploy code only (skip infra)
+azd deploy
+```
 
 ## Key Conventions
 
@@ -55,6 +77,28 @@
 ### EF Core Migrations (src/MWDashboard.Shared/Migrations/)
 - Add migrations from the Web project: `dotnet ef migrations add <Name> --project ../MWDashboard.Shared`
 - Auto-migrate on startup in both Web and Job
+- DbContext has 12 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
+
+### DI Registration (src/MWDashboard.Web/Program.cs)
+- `MauDataService` registered as Scoped (raw implementation)
+- `IMauDataService` resolves to `CachedMauDataService` (decorator wrapping `MauDataService`)
+- `IGraphReportService` → `GraphReportService` (Scoped)
+- `TenantFilterService` → Scoped (shared state per circuit)
+- `IDataCollectionService` → `OnDemandDataCollectionService` (Web) / inline in Job
+
+### Blazor-ApexCharts Usage
+- Import via `@using ApexCharts` in page components
+- Use `<ApexChart>` with `ApexChartOptions<T>` for typed chart configuration
+- Always set `@key` on chart components when data/date ranges change to force re-render
+- Limit data points per series to avoid client performance issues
+
+## Key Documentation
+
+- [docs/architecture.md](../docs/architecture.md) — System diagrams, data flow, multi-tenant model
+- [docs/deployment.md](../docs/deployment.md) — Azure provisioning, scaling, infrastructure details
+- [docs/features.md](../docs/features.md) — All dashboard pages and their functionality
+- [docs/permissions.md](../docs/permissions.md) — Required Graph API permissions per feature
+- [docs/todo.md](../docs/todo.md) — Planned features and backlog
 
 ## Performance Guidelines
 

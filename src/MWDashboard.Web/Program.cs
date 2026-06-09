@@ -19,8 +19,8 @@ builder.Services.AddMudServices();
 builder.Services.AddDbContextFactory<MauDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"), sqlOptions =>
     {
-        sqlOptions.CommandTimeout(60);
-        sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+        sqlOptions.CommandTimeout(120);
+        sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: [-2, 4060]);
     }));
 
 // Redis distributed cache
