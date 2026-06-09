@@ -221,16 +221,18 @@ else
         _licenses = await MauDataService.GetLatestLicensesAsync(tenantIds);
         _totalLicenseSeats = _licenses.Sum(l => l.TotalLicenses);
 
-        // Build service bar data with active/available per service
-        var licenseByTenant = _licenses.GroupBy(l => l.TenantId)
-            .ToDictionary(g => g.Key, g => g.Sum(l => l.TotalLicenses));
+        // Build service bar data with active users and service-relevant license seats
+        var licensesByTenant = _licenses.GroupBy(l => l.TenantId)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         _serviceBarData = _latestByService.Select(s => new ServiceBarItem
         {
             ServiceName = s.ServiceName,
             TenantName = TenantFilter.IsMultiTenantView ? TenantFilter.GetTenantName(s.TenantId) : null,
             ActiveUsers = s.ActiveUserCount,
-            AvailableLicenses = licenseByTenant.GetValueOrDefault(s.TenantId, _totalLicenseSeats)
+            AvailableLicenses = licensesByTenant.TryGetValue(s.TenantId, out var tenantLicenses)
+                ? M365Services.GetServiceLicenseCount(s.ServiceName, tenantLicenses)
+                : 0
         }).OrderBy(s => s.TenantName).ThenBy(s => s.ServiceName).ToList();
 
         var history = await MauDataService.GetMauHistoryAsync(tenantIds, months: 12);

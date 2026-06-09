@@ -81,6 +81,14 @@ public class GraphReportService : IGraphReportService
             {
                 foreach (var sku in skus.Value)
                 {
+                    // Auto-detect which M365 services this SKU includes from its service plans
+                    var servicePlanNames = sku.ServicePlans?
+                        .Where(sp => sp.ServicePlanName != null)
+                        .Select(sp => sp.ServicePlanName!)
+                        .ToList() ?? [];
+
+                    var includedServices = M365Services.DetectServicesFromPlans(servicePlanNames);
+
                     licenses.Add(new LicenseSnapshot
                     {
                         TenantId = tenantId,
@@ -88,6 +96,7 @@ public class GraphReportService : IGraphReportService
                         SkuPartNumber = sku.SkuPartNumber ?? string.Empty,
                         TotalLicenses = sku.PrepaidUnits?.Enabled ?? 0,
                         ConsumedLicenses = sku.ConsumedUnits ?? 0,
+                        IncludedServices = includedServices,
                         CollectedAt = DateTime.UtcNow
                     });
                 }

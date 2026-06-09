@@ -38,6 +38,7 @@ azd deploy
 - Composite unique indexes on `(TenantId, ServiceName/SkuId/Workload+ActivityType/AppName/Department, ReportDate)` for upsert deduplication
 - Use `DateTime` for dates (UTC everywhere)
 - 12 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots, M365AppUsageSnapshots
+- `LicenseSnapshot.IncludedServices` stores comma-separated service names auto-detected from Graph API service plans (e.g. `"Exchange,Office365,OneDrive,SharePoint,Teams"`)
 
 ### Data Services (src/MWDashboard.Shared/Services/)
 - Use `IDbContextFactory<MauDbContext>` — create a new context per method call (`await using var db = await _dbFactory.CreateDbContextAsync()`)
@@ -50,6 +51,7 @@ azd deploy
 - Report endpoints return CSV streams — parse with header matching
 - Beta API uses separate `BetaGraphClient` instance (sign-ins + Copilot usage)
 - Always handle `ServiceException` gracefully (tenant may not have required license)
+- License collection auto-detects included services from `sku.ServicePlans` via `M365Services.DetectServicesFromPlans()`
 - New endpoints: Teams/SharePoint/OneDrive/Exchange activity counts, Copilot user detail, Office365 active user detail (segmentation), /users (departments), SharePoint/OneDrive/Exchange storage usage, M365 App user counts
 
 ### Caching Strategy
@@ -102,7 +104,7 @@ azd deploy
 
 ## Performance Guidelines
 
-- **SQL Serverless cold-start**: EF Core configured with `EnableRetryOnFailure(5, 30s)` + 60s command timeout
+- **SQL Serverless cold-start**: EF Core configured with `EnableRetryOnFailure(5, 30s, errorNumbers: [-2, 4060])` + 120s command timeout
 - **Parallel builds**: `azure.yaml` has `prepackage` hook to pre-build shared project
 - **Chart rendering**: Limit data points to avoid client-side performance issues (aggregate to daily/weekly/monthly as appropriate)
 - **Large datasets**: Use `AsNoTracking()` for read-only queries, project to DTOs where possible

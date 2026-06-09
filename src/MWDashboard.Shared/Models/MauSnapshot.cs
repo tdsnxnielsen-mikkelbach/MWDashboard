@@ -29,6 +29,11 @@ public class LicenseSnapshot
     public string SkuPartNumber { get; set; } = string.Empty;
     public int TotalLicenses { get; set; }
     public int ConsumedLicenses { get; set; }
+    /// <summary>
+    /// Comma-separated list of M365 services included in this SKU (auto-detected from service plans).
+    /// e.g. "Teams,Exchange,SharePoint,OneDrive,Office365"
+    /// </summary>
+    public string IncludedServices { get; set; } = string.Empty;
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }
 

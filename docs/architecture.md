@@ -154,10 +154,10 @@ MWDashboard/
 ├── src/
 │   ├── MWDashboard.Shared/                # Shared class library
 │   │   ├── Data/
-│   │   │   └── MauDbContext.cs            # EF Core context — 9 DbSets
+│   │   │   └── MauDbContext.cs            # EF Core context — 12 DbSets
 │   │   ├── Models/
 │   │   │   ├── MauSnapshot.cs             # All entity models + TenantEntraTier
-│   │   │   └── M365Services.cs            # Service, activity type & Copilot app constants
+│   │   │   └── M365Services.cs            # Service constants, SKU-to-service mapping, service plan auto-detection
 │   │   └── Services/
 │   │       ├── GraphReportService.cs      # Graph API integration (v1.0 + Beta)
 │   │       ├── MauDataService.cs          # DB read/write operations

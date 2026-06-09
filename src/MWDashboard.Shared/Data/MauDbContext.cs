@@ -44,6 +44,7 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantId).HasMaxLength(100);
             entity.Property(e => e.SkuId).HasMaxLength(100);
             entity.Property(e => e.SkuPartNumber).HasMaxLength(250);
+            entity.Property(e => e.IncludedServices).HasMaxLength(500);
         });
 
         modelBuilder.Entity<MessageCenterPost>(entity =>

@@ -15,6 +15,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 ## Dashboard (`/`)
 
 - **KPI cards** showing total active users, Teams/Exchange/SharePoint/OneDrive counts — each card displays active users vs total licensed seats with a color-coded progress bar (green ≥70%, yellow ≥40%, red <40% adoption)
+- **Active Users by Service** — shows per-service active users vs **service-relevant** license seats (only counts SKUs that include that service, not all tenant licenses). Uses dynamic `IncludedServices` field auto-detected from Graph API service plans, with static `ServiceSkuMap` fallback for older data
 - 12-month MAU trend line chart (per-tenant series in multi-tenant view)
 - Per-service bar chart comparison (grouped by tenant when multi-tenant)
 - License utilization table (with Tenant column in multi-tenant view)
