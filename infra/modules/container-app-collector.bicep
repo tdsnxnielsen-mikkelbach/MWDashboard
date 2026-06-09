@@ -53,12 +53,12 @@ resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 80
         transport: 'auto'
       }
-      registries: [
+      registries: hasRealImage ? [
         {
           server: containerRegistryLoginServer
           identity: 'system'
         }
-      ]
+      ] : []
       secrets: [
         {
           name: 'azuread-client-id'
