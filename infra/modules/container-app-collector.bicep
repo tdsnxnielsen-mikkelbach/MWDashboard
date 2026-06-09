@@ -29,7 +29,6 @@ param azureAdTenantId string
 param managedIdentityId string
 
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
-var hasRealImage = imageName != ''
 
 resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
@@ -44,21 +43,18 @@ resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     managedEnvironmentId: containerAppsEnvironmentId
     configuration: {
-      ingress: hasRealImage ? {
-        external: false
-        targetPort: 8080
-        transport: 'auto'
-      } : {
+      ingress: {
         external: true
-        targetPort: 80
+        targetPort: imageName != '' ? 8080 : 80
         transport: 'auto'
+        allowInsecure: false
       }
-      registries: hasRealImage ? [
+      registries: [
         {
           server: containerRegistryLoginServer
           identity: 'system'
         }
-      ] : []
+      ]
       secrets: [
         {
           name: 'azuread-client-id'
