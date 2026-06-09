@@ -118,6 +118,28 @@ module keyVault './modules/key-vault.bicep' = {
   }
 }
 
+// Pre-assign AcrPull to UAMI so container apps can pull images on first deploy
+module acrPullUami './modules/role-assignment.bicep' = {
+  name: 'acr-pull-uami'
+  scope: rg
+  params: {
+    principalId: identity.outputs.principalId
+    roleDefinitionId: '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Pre-assign Key Vault Secrets User to UAMI so container apps can read secrets on first deploy
+module kvSecretsUami './modules/role-assignment.bicep' = {
+  name: 'kv-secrets-uami'
+  scope: rg
+  params: {
+    principalId: identity.outputs.principalId
+    roleDefinitionId: '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // Web Container App (Blazor Dashboard)
 module web './modules/container-app-web.bicep' = {
   name: 'container-app-web'
@@ -159,6 +181,7 @@ module job './modules/container-app-job.bicep' = {
 module ondemand './modules/container-app-collector.bicep' = {
   name: 'container-app-collector'
   scope: rg
+  dependsOn: [acrPullUami, kvSecretsUami]
   params: {
     name: '${abbrs.appContainerApps}collect-${resourceToken}'
     location: location

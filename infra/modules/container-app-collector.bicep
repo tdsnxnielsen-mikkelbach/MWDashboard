@@ -52,19 +52,19 @@ resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
       registries: [
         {
           server: containerRegistryLoginServer
-          identity: 'system'
+          identity: managedIdentityId
         }
       ]
       secrets: [
         {
           name: 'azuread-client-id'
           keyVaultUrl: '${keyVaultUri}secrets/AzureAdClientId'
-          identity: 'system'
+          identity: managedIdentityId
         }
         {
           name: 'azuread-client-secret'
           keyVaultUrl: '${keyVaultUri}secrets/AzureAdClientSecret'
-          identity: 'system'
+          identity: managedIdentityId
         }
       ]
     }
