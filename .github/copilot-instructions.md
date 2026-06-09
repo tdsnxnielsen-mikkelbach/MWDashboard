@@ -2,15 +2,15 @@
 
 ## Project Architecture
 
-- **Solution**: Multi-project .NET 10 solution with `MWDashboard.Shared`, `MWDashboard.Web`, and `MWDashboard.Job` under `src/`
+- **Solution**: Multi-project .NET 10 solution with `MWDashboard.Shared`, `MWDashboard.Web`, `MWDashboard.Collector`, and `MWDashboard.Job` under `src/`
 - **UI**: Blazor Server with MudBlazor + Blazor-ApexCharts
 - **Data**: EF Core + Azure SQL Serverless (auto-pause), Redis distributed cache
 - **Auth**: Azure AD multi-tenant, app-only (client credentials) per tenant
-- **Hosting**: Azure Container Apps (web + scheduled job)
+- **Hosting**: Azure Container Apps (web + on-demand collector + scheduled job)
 - **Infra**: Bicep IaC via Azure Developer CLI (azd)
 - **No test projects** — manual/integration testing only
 
-> **Note**: The root-level `Components/`, `Services/`, `Models/`, `Data/` folders are a legacy scaffold. The active source code lives under `src/MWDashboard.Shared/`, `src/MWDashboard.Web/`, and `src/MWDashboard.Job/`.
+> **Note**: The root-level `Components/`, `Services/`, `Models/`, `Data/` folders are a legacy scaffold. The active source code lives under `src/MWDashboard.Shared/`, `src/MWDashboard.Web/`, `src/MWDashboard.Collector/`, and `src/MWDashboard.Job/`.
 
 ## Commands
 
@@ -57,10 +57,13 @@ azd deploy
 ### Caching Strategy
 - **Redis distributed cache** (`IDistributedCache`): `CachedMauDataService` decorator wraps `MauDataService` — all read methods cached
 - **Cache key format**: `MWDashboard:{feature}:{tenantId|"all"}:{parameters}`
-- **TTL 15 min**: MAU history/latest, workload activity, security, storage, consumption, M365 app usage (dashboard-level queries)
-- **TTL 60 min**: Licenses, message center, Copilot, segmentation, departments, Entra tiers (daily-changing data)
+- **TTL 15 min** (with 5 min sliding): MAU history/latest, workload activity, security, storage, consumption, M365 app usage (dashboard-level queries)
+- **TTL 60 min** (with 20 min sliding): Licenses, message center, Copilot, segmentation, departments, Entra tiers (daily-changing data)
+- **TTL 4 min** (absolute only): Multi-tenant combo queries (2+ specific tenants selected)
 - **Output caching**: Applied at HTTP level for full page responses (5 min base, 15 min dashboard)
-- **Cache invalidation**: Every `Save*` method invalidates relevant cache keys automatically
+- **Cache invalidation**: Every `Save*` method invalidates relevant cache keys automatically + publishes via Redis pub/sub to all replicas
+- **Cross-replica invalidation**: `RedisCacheInvalidationService` uses Redis pub/sub channel `MWDashboard:cache-invalidation`
+- **Cache warm-up**: `CacheWarmupService` pre-populates common all-tenant queries on startup (avoids thundering herd on cold start)
 - **Fallback**: System gracefully falls back to in-memory cache when Redis unavailable
 
 ### Page Patterns (src/MWDashboard.Web/Components/Pages/)
@@ -76,6 +79,13 @@ azd deploy
 - Runs as Azure Container App Job (cron: `0 2 * * *`)
 - Same `IGraphReportService` / `IMauDataService` interfaces as web
 
+### On-Demand Collector (src/MWDashboard.Collector/)
+- Minimal API with single endpoint: `POST /collect/{tenantId}?tenantName=...`
+- Scales 0→3 independently via Container Apps HTTP scaling (5 concurrent requests)
+- Internal ingress only — not externally accessible
+- Web app calls it via `HttpCollectorClient`; falls back to local collection if unreachable
+- Shares `OnDemandDataCollectionService` from `MWDashboard.Shared`
+
 ### EF Core Migrations (src/MWDashboard.Shared/Migrations/)
 - Add migrations from the Web project: `dotnet ef migrations add <Name> --project ../MWDashboard.Shared`
 - Auto-migrate on startup in both Web and Job
@@ -83,10 +93,13 @@ azd deploy
 
 ### DI Registration (src/MWDashboard.Web/Program.cs)
 - `MauDataService` registered as Scoped (raw implementation)
-- `IMauDataService` resolves to `CachedMauDataService` (decorator wrapping `MauDataService`)
+- `IMauDataService` resolves to `CachedMauDataService` (decorator wrapping `MauDataService` + `RedisCacheInvalidationService`)
 - `IGraphReportService` → `GraphReportService` (Scoped)
 - `TenantFilterService` → Scoped (shared state per circuit)
-- `IDataCollectionService` → `OnDemandDataCollectionService` (Web) / inline in Job
+- `IDataCollectionService` → `HttpCollectorClient` (typed HttpClient, calls Collector container) / fallback to `OnDemandDataCollectionService` if no `CollectorBaseUrl` configured
+- `RedisCacheInvalidationService` → Singleton (Redis pub/sub for cross-replica invalidation)
+- `CacheWarmupService` → Hosted service (pre-populates cache on startup)
+- `IConnectionMultiplexer` → Singleton (Redis connection for pub/sub, if Redis configured)
 
 ### Blazor-ApexCharts Usage
 - Import via `@using ApexCharts` in page components
@@ -109,3 +122,8 @@ azd deploy
 - **Chart rendering**: Limit data points to avoid client-side performance issues (aggregate to daily/weekly/monthly as appropriate)
 - **Large datasets**: Use `AsNoTracking()` for read-only queries, project to DTOs where possible
 - **Redis TTL**: 15 min for dashboards, 60 min for license/historical data that changes daily
+- **Cache warm-up**: `CacheWarmupService` runs on startup to avoid thundering herd after cold starts
+- **Sliding expiration**: Active dashboards benefit from sliding within absolute cap (5/15 or 20/60 min)
+- **Multi-tenant combos**: Cached with short 4-min absolute TTL (avoids SQL hits for filtered views)
+- **Cross-replica invalidation**: Redis pub/sub ensures all Web replicas drop stale keys simultaneously
+- **Collector isolation**: On-demand collection offloaded to separate container (scales independently, doesn't block Web UI)

@@ -103,5 +103,5 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - Register/deregister tenants — form auto-resets after successful registration with auto-dismissing success message
 - Admin consent URL generator with clipboard copy — redirect URI dynamically uses the app's base URL pointing to `/consent-complete`
 - **Consent Complete page** (`/consent-complete`) — thank-you page shown after a tenant admin grants consent, with a link back to Tenant Management
-- **Collect Now button** — triggers immediate data collection for a specific tenant (MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments)
+- **Collect Now button** — triggers immediate data collection for a specific tenant via the dedicated Collector container app (internal HTTP call); automatically falls back to local collection if the collector is unavailable. Collects MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments, storage, M365 app usage, and consumption score
 - Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants

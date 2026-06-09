@@ -41,6 +41,11 @@
 - [x] Redis caching for consumption/storage queries (TTL 15 min) — `CachedMauDataService` decorator wraps `MauDataService`
 - [x] M365 App Platform usage (`getM365AppUserCounts`) for cross-app engagement metrics — model, Graph endpoint, collection pipeline
 - [x] Export consumption report to CSV — `/api/export/consumption` endpoint with download button on page
+- [x] Separate on-demand collector container app (scales 0→3 independently, internal HTTP, with Web fallback)
+- [x] Cache warm-up hosted service — pre-populates common queries on startup to avoid thundering herd
+- [x] Sliding + absolute expiration — active dashboards stay warm (5/15 min or 20/60 min)
+- [x] Cache multi-tenant combos — short 4-min TTL instead of bypassing cache entirely
+- [x] Redis pub/sub cross-replica cache invalidation — `RedisCacheInvalidationService`
 - [ ] Consumption score threshold alerts (email/Teams notification when score drops)
 - [x] Historical comparison: month-over-month score change indicators — delta chips on all KPI cards
 - [ ] Per-department consumption scoring (combine department usage + segmentation)

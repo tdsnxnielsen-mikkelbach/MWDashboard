@@ -6,7 +6,8 @@
 graph TB
     subgraph Azure Container Apps
         Web[Container App: Web<br/>Blazor Dashboard UI]
-        Job[Container App Job: Collector<br/>Scheduled daily 2AM UTC]
+        Collector[Container App: On-Demand Collector<br/>HTTP API, scales 0→3]
+        Job[Container App Job: Scheduled Collector<br/>Cron daily 2AM UTC]
     end
 
     subgraph Shared Services
@@ -28,6 +29,12 @@ graph TB
 
     Web --> SQL
     Web --> Redis
+    Web --> Collector
+    Collector --> SQL
+    Collector --> Graph
+    Collector --> GraphBeta
+    Collector --> MsgCenter
+    Collector --> UsersApi
     Job --> SQL
     Job --> Graph
     Job --> GraphBeta
@@ -40,8 +47,10 @@ graph TB
     MsgCenter --> AAD
     ACR --> Web
     ACR --> Job
+    ACR --> Collector
     Web --> Logs
     Job --> Logs
+    Collector --> Logs
 ```
 
 ## Data Flow
@@ -89,15 +98,20 @@ sequenceDiagram
     Graph-->>Job: User department data
     Job->>DB: Upsert activity + copilot + segments + departments
 
-    Note over Admin, Web: On-demand Collection (via Web UI)
+    Note over Admin, Web: On-demand Collection (via Collector Container)
     Admin->>Web: Click "Collect Now" for tenant
-    Web->>Graph: Fetch all data for tenant
-    Web->>DB: Store results immediately
+    Web->>Collector: POST /collect/{tenantId} (internal HTTP)
+    Collector->>Graph: Fetch all data for tenant
+    Collector->>DB: Store results immediately
+    Collector-->>Web: 200 OK (completed)
 
-    Note over Web, Cache: Dashboard Display
+    Note over Web, Cache: Dashboard Display (with warm-up + pub/sub)
     Web->>Cache: Check cached data
     Cache-->>Web: Cache hit (return cached)
     Web->>DB: Cache miss → query DB
+    Note over Cache: Sliding+absolute expiration (5/15 min or 20/60 min)
+    Note over Cache: Multi-tenant combos cached with 4-min short TTL
+    Note over Cache: Pub/sub invalidation across replicas
     Web->>Cache: Store in cache (TTL 15min)
     Web->>Web: Render charts & KPIs
 ```

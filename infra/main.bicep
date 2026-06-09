@@ -133,6 +133,7 @@ module web './modules/container-app-web.bicep' = {
     keyVaultUri: keyVault.outputs.uri
     azureAdTenantId: azureAdTenantId
     managedIdentityId: identity.outputs.id
+    collectorFqdn: ondemand.outputs.fqdn
   }
 }
 
@@ -142,6 +143,24 @@ module job './modules/container-app-job.bicep' = {
   scope: rg
   params: {
     name: '${abbrs.appContainerApps}job-${resourceToken}'
+    location: location
+    tags: tags
+    containerAppsEnvironmentId: containerEnv.outputs.id
+    containerRegistryLoginServer: acr.outputs.loginServer
+    imageName: ''
+    sqlConnectionString: sql.outputs.connectionString
+    keyVaultUri: keyVault.outputs.uri
+    azureAdTenantId: azureAdTenantId
+    managedIdentityId: identity.outputs.id
+  }
+}
+
+// On-Demand Collector Container App (HTTP API for data collection)
+module ondemand './modules/container-app-collector.bicep' = {
+  name: 'container-app-collector'
+  scope: rg
+  params: {
+    name: '${abbrs.appContainerApps}collect-${resourceToken}'
     location: location
     tags: tags
     containerAppsEnvironmentId: containerEnv.outputs.id
@@ -175,6 +194,16 @@ module acrPullJob './modules/role-assignment.bicep' = {
   }
 }
 
+module acrPullCollector './modules/role-assignment.bicep' = {
+  name: 'acr-pull-collector'
+  scope: rg
+  params: {
+    principalId: ondemand.outputs.principalId
+    roleDefinitionId: '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // Role assignments - Key Vault Secrets User for container apps
 module kvSecretsWeb './modules/role-assignment.bicep' = {
   name: 'kv-secrets-web'
@@ -196,6 +225,17 @@ module kvSecretsJob './modules/role-assignment.bicep' = {
   }
 }
 
+module kvSecretsCollector './modules/role-assignment.bicep' = {
+  name: 'kv-secrets-collector'
+  scope: rg
+  params: {
+    principalId: ondemand.outputs.principalId
+    roleDefinitionId: '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+    principalType: 'ServicePrincipal'
+  }
+}
+
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acr.outputs.loginServer
 output AZURE_CONTAINER_REGISTRY_NAME string = acr.outputs.name
+output COLLECTOR_FQDN string = ondemand.outputs.fqdn
 output WEB_URI string = web.outputs.uri

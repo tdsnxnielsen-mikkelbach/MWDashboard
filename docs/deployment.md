@@ -7,7 +7,8 @@ graph TB
     subgraph "Resource Group: rg-{env}"
         subgraph Container Apps Environment
             Web[Container App: Web<br/>Blazor Dashboard<br/>Port 8080, HTTPS ingress]
-            Job[Container App Job: Collector<br/>Cron: 0 2 * * * UTC<br/>Max 1hr, exits on completion]
+            Collector[Container App: On-Demand Collector<br/>Port 8080, internal ingress<br/>Scales 0→3 on HTTP]
+            Job[Container App Job: Scheduled Collector<br/>Cron: 0 2 * * * UTC<br/>Max 1hr, exits on completion]
         end
         ACR[Azure Container Registry<br/>Basic SKU]
         SQL[Azure SQL Server<br/>Serverless GP_S_Gen5_1<br/>Auto-pause 60min]
@@ -20,15 +21,21 @@ graph TB
     UAMI -.->|SQL admin| SQL
     UAMI -.->|assigned to| Web
     UAMI -.->|assigned to| Job
+    UAMI -.->|assigned to| Collector
     ACR -->|identity pull| Web
     ACR -->|identity pull| Job
+    ACR -->|identity pull| Collector
     Web -->|managed identity| SQL
     Job -->|managed identity| SQL
+    Collector -->|managed identity| SQL
     Web -->|Key Vault ref| KV
     Job -->|Key Vault ref| KV
+    Collector -->|Key Vault ref| KV
     Web -->|secret| Redis
+    Web -->|internal HTTP| Collector
     Logs ---|logs| Web
     Logs ---|logs| Job
+    Logs ---|logs| Collector
 ```
 
 ## Prerequisites
@@ -74,7 +81,7 @@ This single command:
 1. Provisions all Azure resources via Bicep
 2. Builds container images via .NET SDK publish
 3. Pushes images to Azure Container Registry
-4. Deploys the web container app and the scheduled job
+4. Deploys the web container app, the on-demand collector, and the scheduled job
 
 ### 5. Register Redirect URI in Entra ID
 
@@ -135,6 +142,16 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 - **Behaviour**: Runs, collects all tenant data, exits with code 0
 - **Identity**: System-Assigned (ACR pull, Key Vault access) + User-Assigned (SQL)
 
+### Container App (On-Demand Collector)
+
+- **Image**: `mwdashboard-collector:latest`
+- **Port**: 8080 (internal ingress only — not externally accessible)
+- **Scaling**: 0–3 replicas, scales on 5 concurrent HTTP requests
+- **Endpoint**: `POST /collect/{tenantId}?tenantName=...`
+- **Purpose**: Isolates on-demand data collection from the Web app for independent scaling
+- **Fallback**: If unreachable, the Web app falls back to local collection
+- **Identity**: System-Assigned (ACR pull, Key Vault access) + User-Assigned (SQL)
+
 ### Key Vault
 
 - **Purpose**: Stores Azure AD Client ID, Client Secret, and Redis connection string
@@ -146,9 +163,10 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 
 | Identity | Type | Purpose |
 |----------|------|---------|
-| `id-{token}` | User-Assigned | SQL Server AD admin; assigned to both container apps for database access |
+| `id-{token}` | User-Assigned | SQL Server AD admin; assigned to all container apps for database access |
 | Web (system) | System-Assigned | ACR image pull, Key Vault secrets reader |
 | Job (system) | System-Assigned | ACR image pull, Key Vault secrets reader |
+| Collector (system) | System-Assigned | ACR image pull, Key Vault secrets reader |
 
 ### Role Assignments (automated)
 
@@ -156,8 +174,10 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 |------|----------|-------|
 | AcrPull | Web system identity | Resource Group |
 | AcrPull | Job system identity | Resource Group |
+| AcrPull | Collector system identity | Resource Group |
 | Key Vault Secrets User | Web system identity | Resource Group |
 | Key Vault Secrets User | Job system identity | Resource Group |
+| Key Vault Secrets User | Collector system identity | Resource Group |
 
 ## CI/CD with GitHub Actions
 
@@ -259,7 +279,8 @@ azd deploy
 
 ```powershell
 azd deploy web       # Deploy only the web app
-azd deploy collector # Deploy only the collector job
+azd deploy collector # Deploy only the scheduled collector job
+azd deploy ondemand  # Deploy only the on-demand collector
 ```
 
 ### Tear down all resources
@@ -308,12 +329,13 @@ These are set automatically by the Bicep templates as Container App env vars and
 
 | Variable | Source | Used by |
 |----------|--------|---------|
-| `ConnectionStrings__DefaultConnection` | Azure SQL connection string (includes UAMI client ID) | Web, Job |
+| `ConnectionStrings__DefaultConnection` | Azure SQL connection string (includes UAMI client ID) | Web, Job, Collector |
 | `ConnectionStrings__Redis` | Key Vault secret ref | Web |
-| `AzureAd__ClientId` | Key Vault secret ref | Web, Job |
-| `AzureAd__ClientSecret` | Key Vault secret ref | Web, Job |
-| `AzureAd__TenantId` | Plain env var | Web, Job |
-| `ASPNETCORE_ENVIRONMENT` | `Production` | Web |
+| `AzureAd__ClientId` | Key Vault secret ref | Web, Job, Collector |
+| `AzureAd__ClientSecret` | Key Vault secret ref | Web, Job, Collector |
+| `AzureAd__TenantId` | Plain env var | Web, Job, Collector |
+| `CollectorBaseUrl` | Internal FQDN of collector container | Web |
+| `ASPNETCORE_ENVIRONMENT` | `Production` | Web, Collector |
 
 ## Troubleshooting
 

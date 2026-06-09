@@ -11,7 +11,7 @@ A Blazor Web App that visualizes Monthly Active Users (MAU) across Microsoft 365
 - **Microsoft Graph Beta SDK** — Sign-in logs with full authentication details (Entra ID P1/P2)
 - **EF Core + Azure SQL** — Data persistence (Serverless tier with auto-pause)
 - **Azure Managed Redis** — Distributed caching for dashboard performance
-- **Azure Container Apps** — Hosting (web UI) + scheduled jobs (data collection)
+- **Azure Container Apps** — Hosting: web UI, on-demand collector (scales 0→N), and scheduled jobs (data collection)
 - **Azure Key Vault** — Secrets management (AD credentials, Redis connection string)
 - **Managed Identities** — Passwordless auth to SQL, ACR, and Key Vault
 - **Azure Identity** — Multi-tenant authentication
@@ -31,7 +31,8 @@ MWDashboard/
 └── src/
     ├── MWDashboard.Shared/             # Shared library (Models, Data, Services)
     ├── MWDashboard.Web/                # Blazor UI → Azure Container App
-    └── MWDashboard.Job/                # Data collector → Azure Container App Job
+    ├── MWDashboard.Collector/          # On-demand collection API → Azure Container App (internal)
+    └── MWDashboard.Job/                # Scheduled data collector → Azure Container App Job
 ```
 
 ## Quick Start (Local Development)

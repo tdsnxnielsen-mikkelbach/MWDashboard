@@ -5,6 +5,7 @@ using MWDashboard.Shared.Data;
 using MWDashboard.Shared.Services;
 using MWDashboard.Web.Components;
 using MWDashboard.Web.Services;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,8 +24,9 @@ builder.Services.AddDbContextFactory<MauDbContext>(options =>
         sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: [-2, 4060]);
     }));
 
-// Redis distributed cache
+// Redis distributed cache + connection multiplexer for pub/sub
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
+IConnectionMultiplexer? redisMultiplexer = null;
 if (!string.IsNullOrEmpty(redisConnection))
 {
     builder.Services.AddStackExchangeRedisCache(options =>
@@ -32,11 +34,18 @@ if (!string.IsNullOrEmpty(redisConnection))
         options.Configuration = redisConnection;
         options.InstanceName = "MWDashboard:";
     });
+
+    // Register IConnectionMultiplexer for pub/sub invalidation
+    redisMultiplexer = ConnectionMultiplexer.Connect(redisConnection);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(redisMultiplexer);
 }
 else
 {
     builder.Services.AddDistributedMemoryCache();
 }
+
+// Redis pub/sub cache invalidation service
+builder.Services.AddSingleton<RedisCacheInvalidationService>();
 
 // Output caching for dashboard pages
 builder.Services.AddOutputCache(options =>
@@ -51,9 +60,28 @@ builder.Services.AddScoped<MauDataService>();
 builder.Services.AddScoped<IMauDataService>(sp =>
     new CachedMauDataService(
         sp.GetRequiredService<MauDataService>(),
-        sp.GetRequiredService<IDistributedCache>()));
+        sp.GetRequiredService<IDistributedCache>(),
+        sp.GetRequiredService<RedisCacheInvalidationService>()));
 builder.Services.AddScoped<TenantFilterService>();
-builder.Services.AddScoped<IDataCollectionService, OnDemandDataCollectionService>();
+
+// On-demand collection: HTTP client to collector container (with local fallback)
+var collectorBaseUrl = builder.Configuration["CollectorBaseUrl"];
+if (!string.IsNullOrEmpty(collectorBaseUrl))
+{
+    builder.Services.AddHttpClient<IDataCollectionService, HttpCollectorClient>(client =>
+    {
+        client.BaseAddress = new Uri(collectorBaseUrl);
+        client.Timeout = TimeSpan.FromMinutes(5);
+    });
+}
+else
+{
+    // Local fallback when no collector URL is configured (dev/local)
+    builder.Services.AddScoped<IDataCollectionService, MWDashboard.Shared.Services.OnDemandDataCollectionService>();
+}
+
+// Cache warm-up on startup
+builder.Services.AddHostedService<CacheWarmupService>();
 
 var app = builder.Build();
 

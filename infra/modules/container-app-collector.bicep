@@ -1,4 +1,4 @@
-@description('Name of the Container App')
+@description('Name of the Container App (Collector)')
 param name string
 
 @description('Location for the resource')
@@ -28,15 +28,12 @@ param azureAdTenantId string
 @description('User-Assigned Managed Identity resource ID')
 param managedIdentityId string
 
-@description('Internal FQDN of the collector container app')
-param collectorFqdn string = ''
-
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
   location: location
-  tags: union(tags, { 'azd-service-name': 'web' })
+  tags: union(tags, { 'azd-service-name': 'ondemand' })
   identity: {
     type: 'SystemAssigned,UserAssigned'
     userAssignedIdentities: {
@@ -47,10 +44,9 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: containerAppsEnvironmentId
     configuration: {
       ingress: {
-        external: true
+        external: false
         targetPort: 8080
         transport: 'auto'
-        allowInsecure: false
       }
       registries: [
         {
@@ -69,17 +65,12 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           keyVaultUrl: '${keyVaultUri}secrets/AzureAdClientSecret'
           identity: 'system'
         }
-        {
-          name: 'redis-connection-string'
-          keyVaultUrl: '${keyVaultUri}secrets/RedisConnectionString'
-          identity: 'system'
-        }
       ]
     }
     template: {
       containers: [
         {
-          name: 'web'
+          name: 'collector'
           image: fullImageName
           resources: {
             cpu: json('0.5')
@@ -95,10 +86,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: sqlConnectionString
             }
             {
-              name: 'ConnectionStrings__Redis'
-              secretRef: 'redis-connection-string'
-            }
-            {
               name: 'AzureAd__ClientId'
               secretRef: 'azuread-client-id'
             }
@@ -110,22 +97,18 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'AzureAd__TenantId'
               value: azureAdTenantId
             }
-            {
-              name: 'CollectorBaseUrl'
-              value: collectorFqdn != '' ? 'https://${collectorFqdn}' : ''
-            }
           ]
         }
       ]
       scale: {
-        minReplicas: 1
+        minReplicas: 0
         maxReplicas: 3
         rules: [
           {
             name: 'http-scaling'
             http: {
               metadata: {
-                concurrentRequests: '50'
+                concurrentRequests: '5'
               }
             }
           }
@@ -135,7 +118,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-output id string = containerApp.id
-output name string = containerApp.name
-output uri string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
-output principalId string = containerApp.identity.principalId
+output id string = containerAppCollector.id
+output name string = containerAppCollector.name
+output fqdn string = containerAppCollector.properties.configuration.ingress.fqdn
+output principalId string = containerAppCollector.identity.principalId

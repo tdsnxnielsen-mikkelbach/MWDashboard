@@ -15,6 +15,10 @@ services:
     project: ./src/MWDashboard.Job
     host: containerapp
     language: dotnet
+  ondemand:
+    project: ./src/MWDashboard.Collector
+    host: containerapp
+    language: dotnet
 infra:
   provider: bicep
   path: ./infra
