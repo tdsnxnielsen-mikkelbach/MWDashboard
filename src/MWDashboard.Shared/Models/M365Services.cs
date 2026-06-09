@@ -19,13 +19,13 @@ public static class M365Services
 
     /// <summary>
     /// Maps M365 service names to SKU part numbers that include that service.
-    /// Used to calculate relevant "total seats" per service (not all tenant licenses).
+    /// Used as fallback for license records that don't have IncludedServices populated.
     /// </summary>
     public static readonly Dictionary<string, HashSet<string>> ServiceSkuMap = new(StringComparer.OrdinalIgnoreCase)
     {
         [Office365] = new(StringComparer.OrdinalIgnoreCase)
         {
-            // Microsoft 365 / Office 365 suites
+            // Full M365/O365 suites (include Office apps + all workloads)
             "O365_BUSINESS_ESSENTIALS", "O365_BUSINESS_PREMIUM", "O365_BUSINESS",
             "SMB_BUSINESS_ESSENTIALS", "SMB_BUSINESS_PREMIUM", "SMB_BUSINESS",
             "MICROSOFT_365_BASIC", "M365_BUSINESS_BASIC", "M365_BUSINESS_STANDARD", "M365_BUSINESS_PREMIUM",
@@ -34,9 +34,10 @@ public static class M365Services
             "M365_E3", "M365_E5", "M365_F1", "M365_F3",
             "ENTERPRISEPACK", "ENTERPRISEPREMIUM", "ENTERPRISEPREMIUM_NOPSTNCONF",
             "DESKLESSPACK", "MIDSIZEPACK",
-            "OFFICESUBSCRIPTION", "O365_BUSINESS_PREMIUM",
-            "EXCHANGESTANDARD", "EXCHANGESTANDARD_STUDENT", "EXCHANGEENTERPRISE",
+            "OFFICESUBSCRIPTION",
             "M365_G3_GOV", "M365_G5_GOV",
+            // Exchange plans that include Office apps
+            "EXCHANGESTANDARD", "EXCHANGESTANDARD_STUDENT", "EXCHANGEENTERPRISE",
             "MICROSOFT_365_COPILOT",
         },
         [Teams] = new(StringComparer.OrdinalIgnoreCase)
@@ -134,16 +135,22 @@ public static class M365Services
     }
 
     /// <summary>
-    /// Service plan name prefixes/keywords that indicate a service is included in a SKU.
-    /// Used to auto-detect services from Graph API servicePlans collection.
+    /// Service plan names that indicate actual user-facing service access.
+    /// Foundation/infrastructure plans (e.g. EXCHANGE_S_FOUNDATION) are excluded
+    /// because Microsoft includes them in nearly every SKU as backend dependencies.
     /// </summary>
     private static readonly Dictionary<string, string[]> ServicePlanKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
-        [Teams] = ["TEAMS", "MCO"],
-        [Exchange] = ["EXCHANGE", "BPOS_S_"],
-        [SharePoint] = ["SHAREPOINT"],
-        [OneDrive] = ["ONEDRIVE", "ONEDRIVESTANDARD", "SWAY"],
-        [Office365] = ["OFFICE", "O365", "OFFICESUBSCRIPTION", "MCOSTANDARD"],
+        [Teams] = ["TEAMS1", "TEAMS_AR_DOD", "TEAMS_AR_GCCHIGH", "TEAMS_GOV", "MCO_TEAMS_IW",
+                   "MCOSTANDARD", "MCOIMP", "MCOMEETADV", "MCOEV", "MCOPSTN"],
+        [Exchange] = ["EXCHANGE_S_STANDARD", "EXCHANGE_S_ENTERPRISE", "EXCHANGE_S_ESSENTIALS",
+                      "EXCHANGE_S_DESKLESS", "EXCHANGE_S_ARCHIVE", "EXCHANGE_B_STANDARD",
+                      "BPOS_S_TODO_1", "EXCHANGE_ANALYTICS"],
+        [SharePoint] = ["SHAREPOINTSTANDARD", "SHAREPOINTENTERPRISE", "SHAREPOINTONLINE_MIDMARKET",
+                        "SHAREPOINTDESKLESS", "SHAREPOINT_S_DEVELOPER"],
+        [OneDrive] = ["ONEDRIVESTANDARD", "ONEDRIVE_BASIC", "SHAREPOINTWAC"],
+        [Office365] = ["OFFICESUBSCRIPTION", "OFFICE_BUSINESS", "OFFICEMOBILE_SUBSCRIPTION",
+                       "OFFICE_SHARED_COMPUTER_ACTIVATION", "OFFICE_PRO_PLUS_SUBSCRIPTION_SMBIZ"],
     };
 
     /// <summary>
@@ -158,7 +165,8 @@ public static class M365Services
         foreach (var (service, keywords) in ServicePlanKeywords)
         {
             if (plans.Any(plan => keywords.Any(kw =>
-                plan.Contains(kw, StringComparison.OrdinalIgnoreCase))))
+                plan.Equals(kw, StringComparison.OrdinalIgnoreCase) ||
+                plan.StartsWith(kw, StringComparison.OrdinalIgnoreCase))))
             {
                 detected.Add(service);
             }
