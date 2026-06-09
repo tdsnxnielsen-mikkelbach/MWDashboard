@@ -13,9 +13,10 @@ graph TB
         ACR[Azure Container Registry<br/>Basic SKU]
         SQL[Azure SQL Server<br/>Serverless GP_S_Gen5_1<br/>Auto-pause 60min]
         Redis[Azure Managed Redis<br/>Balanced B0, TLS 1.2]
-        KV[Key Vault<br/>Secrets: AD credentials, Redis conn]
+        KV[Key Vault<br/>Secrets Store]
         UAMI[User-Assigned Managed Identity<br/>SQL Admin + shared by apps]
         Logs[Log Analytics Workspace<br/>PerGB2018, 30-day retention]
+        AppInsights[Application Insights<br/>OpenTelemetry collection]
     end
 
     UAMI -.->|SQL admin| SQL
@@ -36,6 +37,10 @@ graph TB
     Logs ---|logs| Web
     Logs ---|logs| Job
     Logs ---|logs| Collector
+    AppInsights ---|telemetry| Web
+    AppInsights ---|telemetry| Job
+    AppInsights ---|telemetry| Collector
+    AppInsights -->|workspace| Logs
 ```
 
 ## Prerequisites
@@ -158,6 +163,16 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 - **Access**: RBAC-based (Key Vault Secrets User role assigned to container app identities)
 - **Soft delete**: Enabled (7-day retention)
 - Secrets are referenced from Container Apps via `keyVaultUrl` — never stored as plain text in app config
+
+### Application Insights (OpenTelemetry)
+
+- **Type**: `Microsoft.Insights/components` (workspace-based)
+- **Backend**: Linked to Log Analytics Workspace
+- **SDK**: `Azure.Monitor.OpenTelemetry.AspNetCore` v1.5.0 in all services
+- **Signals**: Distributed traces, metrics, logs, live metrics
+- **Configuration**: Connection string passed as `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable
+- **Cost**: Pay-per-GB ingestion (first 5 GB/month free)
+- **Retention**: Inherits Log Analytics workspace retention (30 days)
 
 ### Managed Identities
 

@@ -31,6 +31,9 @@ param managedIdentityId string
 @description('Internal FQDN of the collector container app')
 param collectorFqdn string = ''
 
+@description('Application Insights connection string')
+param appInsightsConnectionString string = ''
+
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -113,6 +116,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'CollectorBaseUrl'
               value: collectorFqdn != '' ? 'https://${collectorFqdn}' : ''
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsightsConnectionString
             }
           ]
         }

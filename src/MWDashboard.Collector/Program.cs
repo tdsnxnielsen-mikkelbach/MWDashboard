@@ -1,8 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using MWDashboard.Shared.Data;
 using MWDashboard.Shared.Services;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// OpenTelemetry with Azure Monitor (distributed tracing, metrics, logging)
+var aiConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrEmpty(aiConnectionString))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
+    {
+        options.ConnectionString = aiConnectionString;
+    });
+}
 
 // EF Core with SQL Server
 builder.Services.AddDbContextFactory<MauDbContext>(options =>

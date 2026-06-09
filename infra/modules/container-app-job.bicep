@@ -28,6 +28,9 @@ param azureAdTenantId string
 @description('User-Assigned Managed Identity resource ID')
 param managedIdentityId string
 
+@description('Application Insights connection string')
+param appInsightsConnectionString string = ''
+
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 resource containerAppJob 'Microsoft.App/jobs@2024-03-01' = {
@@ -95,6 +98,10 @@ resource containerAppJob 'Microsoft.App/jobs@2024-03-01' = {
             {
               name: 'AzureAd__TenantId'
               value: azureAdTenantId
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsightsConnectionString
             }
           ]
         }

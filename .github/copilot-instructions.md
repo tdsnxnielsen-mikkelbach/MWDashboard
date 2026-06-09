@@ -127,3 +127,13 @@ azd deploy
 - **Multi-tenant combos**: Cached with short 4-min absolute TTL (avoids SQL hits for filtered views)
 - **Cross-replica invalidation**: Redis pub/sub ensures all Web replicas drop stale keys simultaneously
 - **Collector isolation**: On-demand collection offloaded to separate container (scales independently, doesn't block Web UI)
+
+## Observability (OpenTelemetry)
+
+- **SDK**: `Azure.Monitor.OpenTelemetry.AspNetCore` v1.5.0 (in `MWDashboard.Shared`, used by all 3 services)
+- **Setup pattern**: Conditional on `APPLICATIONINSIGHTS_CONNECTION_STRING` env var — no telemetry when absent (local dev without AI)
+- **Wiring** (all services): `builder.Services.AddOpenTelemetry().UseAzureMonitor(o => o.ConnectionString = aiConnectionString);`
+- **Auto-instrumented**: HTTP requests (in/out), SQL queries, Redis commands, ILogger correlation
+- **Infrastructure**: `infra/modules/application-insights.bicep` → linked to Log Analytics workspace
+- **Env var injection**: Bicep passes `APPLICATIONINSIGHTS_CONNECTION_STRING` to all 3 container apps/job
+- **End-to-end tracing**: Web → Collector requests propagate W3C TraceContext (correlate full collection flow in Transaction Search)

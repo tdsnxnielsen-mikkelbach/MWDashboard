@@ -17,6 +17,7 @@ graph TB
         UAMI[User-Assigned Managed Identity]
         ACR[Azure Container Registry]
         Logs[Log Analytics Workspace]
+        AppInsights[Application Insights<br/>OpenTelemetry]
     end
 
     subgraph Microsoft Cloud
@@ -48,9 +49,10 @@ graph TB
     ACR --> Web
     ACR --> Job
     ACR --> Collector
-    Web --> Logs
-    Job --> Logs
-    Collector --> Logs
+    Web --> AppInsights
+    Job --> AppInsights
+    Collector --> AppInsights
+    AppInsights --> Logs
 ```
 
 ## Data Flow
@@ -160,6 +162,7 @@ MWDashboard/
 │       ├── container-app-web.bicep         # Web UI Container App (ingress, scaling)
 │       ├── container-app-job.bicep         # Scheduled job (cron: 0 2 * * *)
 │       ├── key-vault.bicep                 # Key Vault (secrets for AD + Redis)
+│       ├── application-insights.bicep      # Application Insights (OpenTelemetry)
 │       ├── log-analytics.bicep             # Log Analytics workspace
 │       ├── managed-identity.bicep          # User-Assigned Managed Identity (SQL admin)
 │       ├── redis.bicep                     # Azure Managed Redis (Balanced B0)
@@ -229,6 +232,21 @@ MWDashboard/
 | Output Cache | HTTP responses | 5–15 min | Avoids re-rendering identical dashboard pages |
 | Redis Distributed Cache | Cross-instance | Configurable | Shared cache between scaled web replicas |
 | In-Memory (fallback) | Single instance | Session lifetime | Local dev when Redis is unavailable |
+
+## Observability (OpenTelemetry + Azure Monitor)
+
+All three services (Web, Collector, Job) emit distributed traces, metrics, and logs to Application Insights via the `Azure.Monitor.OpenTelemetry.AspNetCore` SDK.
+
+| Signal | Auto-Collected |
+|--------|----------------|
+| Traces | HTTP requests, SQL queries, Redis commands, outbound HTTP (Graph API) |
+| Metrics | Request duration, failure rate, dependency latency |
+| Logs | ILogger output correlated with trace context |
+| Live Metrics | Real-time request/failure stream (Web + Collector) |
+
+**Configuration**: Set the `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable (injected automatically by Bicep from Application Insights resource). When the variable is absent (local dev without AI), telemetry is silently disabled.
+
+**End-to-end tracing**: Requests from Web → Collector propagate W3C trace context, allowing correlation of the full collection flow in Application Insights Transaction Search.
 
 ## Scaling Model
 

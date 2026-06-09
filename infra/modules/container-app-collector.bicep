@@ -28,6 +28,9 @@ param azureAdTenantId string
 @description('User-Assigned Managed Identity resource ID')
 param managedIdentityId string
 
+@description('Application Insights connection string')
+param appInsightsConnectionString string = ''
+
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
@@ -45,7 +48,7 @@ resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
     configuration: {
       ingress: {
         external: true
-        targetPort: imageName != '' ? 8080 : 80
+        targetPort: 8080
         transport: 'auto'
         allowInsecure: false
       }
@@ -97,6 +100,10 @@ resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'AzureAd__TenantId'
               value: azureAdTenantId
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsightsConnectionString
             }
           ]
         }

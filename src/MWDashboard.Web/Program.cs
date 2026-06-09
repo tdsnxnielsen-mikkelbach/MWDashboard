@@ -6,8 +6,19 @@ using MWDashboard.Shared.Services;
 using MWDashboard.Web.Components;
 using MWDashboard.Web.Services;
 using StackExchange.Redis;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// OpenTelemetry with Azure Monitor (distributed tracing, metrics, logging)
+var aiConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrEmpty(aiConnectionString))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
+    {
+        options.ConnectionString = aiConnectionString;
+    });
+}
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

@@ -13,6 +13,7 @@ A Blazor Web App that visualizes Monthly Active Users (MAU) across Microsoft 365
 - **Azure Managed Redis** — Distributed caching for dashboard performance
 - **Azure Container Apps** — Hosting: web UI, on-demand collector (scales 0→N), and scheduled jobs (data collection)
 - **Azure Key Vault** — Secrets management (AD credentials, Redis connection string)
+- **Application Insights** — Distributed tracing, metrics, and logging via OpenTelemetry
 - **Managed Identities** — Passwordless auth to SQL, ACR, and Key Vault
 - **Azure Identity** — Multi-tenant authentication
 - **Azure Developer CLI (azd)** — Infrastructure provisioning & deployment (.NET SDK container publish, no Docker required)

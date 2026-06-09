@@ -104,6 +104,18 @@ module containerEnv './modules/container-apps-environment.bicep' = {
   }
 }
 
+// Application Insights (linked to Log Analytics for distributed tracing)
+module appInsights './modules/application-insights.bicep' = {
+  name: 'application-insights'
+  scope: rg
+  params: {
+    name: 'appi-${resourceToken}'
+    location: location
+    tags: tags
+    logAnalyticsWorkspaceId: logAnalytics.outputs.id
+  }
+}
+
 // Key Vault for secrets
 module keyVault './modules/key-vault.bicep' = {
   name: 'key-vault'
@@ -156,6 +168,7 @@ module web './modules/container-app-web.bicep' = {
     azureAdTenantId: azureAdTenantId
     managedIdentityId: identity.outputs.id
     collectorFqdn: ondemand.outputs.fqdn
+    appInsightsConnectionString: appInsights.outputs.connectionString
   }
 }
 
@@ -174,6 +187,7 @@ module job './modules/container-app-job.bicep' = {
     keyVaultUri: keyVault.outputs.uri
     azureAdTenantId: azureAdTenantId
     managedIdentityId: identity.outputs.id
+    appInsightsConnectionString: appInsights.outputs.connectionString
   }
 }
 
@@ -193,6 +207,7 @@ module ondemand './modules/container-app-collector.bicep' = {
     keyVaultUri: keyVault.outputs.uri
     azureAdTenantId: azureAdTenantId
     managedIdentityId: identity.outputs.id
+    appInsightsConnectionString: appInsights.outputs.connectionString
   }
 }
 

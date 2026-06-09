@@ -5,8 +5,19 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MWDashboard.Shared.Data;
 using MWDashboard.Shared.Services;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// OpenTelemetry with Azure Monitor (distributed tracing for the job)
+var aiConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"];
+if (!string.IsNullOrEmpty(aiConnectionString))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(options =>
+    {
+        options.ConnectionString = aiConnectionString;
+    });
+}
 
 // EF Core with SQL Server
 builder.Services.AddDbContextFactory<MauDbContext>(options =>
