@@ -129,7 +129,8 @@ else
             Bar = new PlotOptionsBar { Horizontal = true }
         },
         Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
-        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        Xaxis = new XAxis { Categories = new List<string>() }
     };
 
     private ApexChartOptions<AppDataPoint> _platformChartOptions = new()
@@ -174,23 +175,30 @@ else
         // App chart: filter to app-level rows (Platform == "All")
         var appRows = latest.Where(d => d.Platform == "All" && d.AppName != "All").ToList();
 
+        // Build a consistent set of all app names across all tenants
+        var allAppNames = appRows.Select(d => d.AppName).Distinct().OrderBy(n => n).ToList();
+        _appChartOptions.Xaxis = new XAxis { Categories = allAppNames };
+
         _appChartData = [];
         if (TenantFilter.IsMultiTenantView)
         {
             foreach (var group in appRows.GroupBy(d => TenantFilter.GetTenantName(d.TenantId)))
             {
-                _appChartData[group.Key] = group
-                    .Select(d => new AppDataPoint { Label = d.AppName, Count = d.UserCount })
-                    .OrderByDescending(d => d.Count)
-                    .ToList();
+                var seriesData = allAppNames.Select(app =>
+                {
+                    var match = group.FirstOrDefault(d => d.AppName == app);
+                    return new AppDataPoint { Label = app, Count = match?.UserCount ?? 0 };
+                }).ToList();
+                _appChartData[group.Key] = seriesData;
             }
         }
         else
         {
-            _appChartData["Users"] = appRows
-                .Select(d => new AppDataPoint { Label = d.AppName, Count = d.UserCount })
-                .OrderByDescending(d => d.Count)
-                .ToList();
+            _appChartData["Users"] = allAppNames.Select(app =>
+            {
+                var match = appRows.FirstOrDefault(d => d.AppName == app);
+                return new AppDataPoint { Label = app, Count = match?.UserCount ?? 0 };
+            }).ToList();
         }
 
         // Platform donut: aggregate across tenants
