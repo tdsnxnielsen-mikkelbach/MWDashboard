@@ -26,7 +26,6 @@ services:
   consent-static:
     project: ./static/consent-complete
     host: staticwebapp
-    language: html
     hooks:
       predeploy:
         shell: pwsh
