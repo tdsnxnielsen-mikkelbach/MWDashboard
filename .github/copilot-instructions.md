@@ -102,7 +102,7 @@ azd deploy
 - Computes HMAC token client-side and POSTs to Consent Callback container
 - Shows branded success/error messages — no access to customer data
 - Application Insights JS SDK for client-side telemetry
-- Deploy-time placeholder injection: `%%CONSENT_CALLBACK_URL%%`, `%%CONSENT_SHARED_SECRET%%`, `%%APPINSIGHTS_CONNECTION_STRING%%` (replaced via azd predeploy hook)
+- Deploy-time placeholder injection: `%%CONSENT_CALLBACK_URL%%`, `%%CONSENT_SHARED_SECRET%%`, `%%APPINSIGHTS_CONNECTION_STRING%%`, `%%DASHBOARD_URL%%` (replaced via azd postdeploy hook)
 
 ### EF Core Migrations (src/MWDashboard.Shared/Migrations/)
 - Add migrations from the Web project: `dotnet ef migrations add <Name> --project ../MWDashboard.Shared`
@@ -114,9 +114,12 @@ azd deploy
 - **ClientSecret reuse**: `AzureAdAuth:ClientSecret` copied from `AzureAd:ClientSecret` at startup (single secret for both Graph API and user auth)
 - **Token validation**: `OnTokenValidated` event allows home tenant unconditionally; other tenants validated against DB (`Tenants.IsActive`)
 - **Access control**: Removing/deactivating a tenant immediately blocks login for users from that tenant; adding/activating allows login
+- **Access denied**: `OnRemoteFailure` redirects rejected tenants to `/access-denied` (anonymous endpoint) with error message and sign-out link
 - **Data scoping**: `TenantFilterService.SetTenantScope()` called in `MainLayout` — home tenant users see all data; customer tenant users are restricted to their own tenant
+- **Data isolation enforcement**: `GetFilteredTenantIds()` never returns `null` for scoped users — always passes tenant ID filter to queries
 - **UI**: Home tenant users see the full `TenantSelector` + Tenants page; customer tenant users see only their tenant name (no selector) and cannot access `/tenants`
 - **Route protection**: `.RequireAuthorization()` on `MapRazorComponents` enforces auth at HTTP level (triggers OIDC challenge before Blazor renders)
+- **Forwarded headers**: `UseForwardedHeaders` with cleared `KnownIPNetworks`/`KnownProxies` trusts Container Apps proxy (TLS terminated at ingress, ensures `https://` in redirect URIs)
 - **Redirect URI**: Must register `https://<web-url>/signin-oidc` in app registration
 - **Config section**: `AzureAdAuth` (Instance, TenantId=common, ClientId, CallbackPath, SignedOutCallbackPath)
 

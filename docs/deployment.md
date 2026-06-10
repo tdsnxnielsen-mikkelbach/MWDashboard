@@ -152,6 +152,7 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 - **Scaling**: 1–3 replicas, scales on 50 concurrent HTTP requests
 - **Resources**: 0.5 vCPU, 1 GB memory per replica
 - **Identity**: System-Assigned (ACR pull, Key Vault access) + User-Assigned (SQL)
+- **TLS**: Terminated at Container Apps ingress; app uses `UseForwardedHeaders` to trust `X-Forwarded-Proto` (ensures OIDC redirect URIs use `https://`)
 
 ### Container App Job (Collector)
 

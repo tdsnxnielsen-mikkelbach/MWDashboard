@@ -170,7 +170,14 @@
                 return '%%CONSENT_SHARED_SECRET%%';
             }
 
+            function getDashboardUrl() {
+                // Injected at deploy time — replaced during build/deploy
+                var url = '%%DASHBOARD_URL%%';
+                return (url && !url.startsWith('%%')) ? url : '';
+            }
+
             function showSuccess(displayName, tenantName) {
+                const dashboardUrl = getDashboardUrl();
                 contentEl.innerHTML = `
                     <div class="icon icon-success">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -183,7 +190,8 @@
                         <p><strong>Organization:</strong> ${escapeHtml(displayName)}</p>
                         ${tenantName ? `<p><strong>Domain:</strong> ${escapeHtml(tenantName)}</p>` : ''}
                     </div>
-                    <p class="status-message">You can close this window. Your administrator will see the tenant in the dashboard.</p>
+                    ${dashboardUrl ? `<p class="status-message" style="margin-top:24px;"><a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;padding:12px 24px;background:#667eea;color:white;border-radius:6px;text-decoration:none;font-weight:500;">Go to Dashboard</a></p>` : ''}
+                    <p class="status-message">You can now sign in to the dashboard with your organizational account.</p>
                 `;
             }
 

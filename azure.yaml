@@ -23,6 +23,7 @@ hooks:
       $html = $html.Replace('%%CONSENT_CALLBACK_URL%%', $callbackUrl)
       $html = $html.Replace('%%CONSENT_SHARED_SECRET%%', $secret)
       if ($aiConnStr) { $html = $html.Replace('%%APPINSIGHTS_CONNECTION_STRING%%', $aiConnStr) }
+      if ($env:WEB_URI) { $html = $html.Replace('%%DASHBOARD_URL%%', $env:WEB_URI) }
       Set-Content ./static/consent-complete/index.html -Value $html -NoNewline
       Write-Host "Injected consent callback URL: $callbackUrl"
       # Get deployment token and deploy

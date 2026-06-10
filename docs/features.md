@@ -8,10 +8,12 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Multi-tenant sign-in** — users from the home tenant (where the app registration lives) and any active customer tenant can sign in
 - **Automatic tenant validation** — on sign-in, the user's tenant ID is checked against the database; only active (consented) tenants are allowed
 - **Immediate access control** — deactivating or removing a tenant immediately blocks login for users from that tenant; adding/activating allows login
-- **Data isolation** — customer-tenant users can only view data from their own tenant; home-tenant users see all registered tenants
+- **Access denied page** — rejected tenants see a styled "Access Denied" page (`/access-denied`) with error message and "Sign Out & Try Another Account" link (no redirect loop)
+- **Data isolation** — customer-tenant users can only view data from their own tenant; queries always filter by scoped tenant ID (never fetches all data)
 - **Page-level restrictions** — Tenants management page (`/tenants`) is only accessible to home-tenant users; nav link hidden for customer-tenant users
 - **AppBar user controls** — user icon (tooltip shows name) + sign-out button visible when authenticated
 - **Login redirect** — unauthenticated users are automatically redirected to Azure AD sign-in (HTTP-level enforcement before Blazor renders)
+- **Container Apps TLS** — forwarded headers middleware trusts proxy `X-Forwarded-Proto` to ensure `https://` redirect URIs
 
 ## Global Tenant Selector
 
@@ -133,6 +135,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
   6. Auto-fills: TenantId (from URL), TenantName (*.onmicrosoft.com domain), DisplayName (organization name)
   7. Upserts `TenantInfo` with `IsActive = true`
   8. Triggers initial data collection for the newly registered tenant
-  9. Returns success — static page shows "Consent granted successfully" with org details
+  9. Returns success — static page shows "Consent granted successfully" with org details and a **"Go to Dashboard"** button linking to the web app
+- **Dashboard link**: On successful consent, partner tenant users see a button to navigate directly to the dashboard and sign in with their organizational account
 - **Security**: HMAC shared secret validation prevents unauthorized callback abuse; Graph API call verifies consent is actually granted
 - **Telemetry**: Application Insights JS SDK tracks consent page views and success/failure rates

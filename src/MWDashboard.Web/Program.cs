@@ -57,6 +57,13 @@ builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.Authentic
             context.Fail($"Tenant {tenantId} is not registered. Please complete the consent flow first.");
         }
     };
+    options.Events.OnRemoteFailure = context =>
+    {
+        // Redirect to access-denied page instead of looping back to sign-in
+        context.Response.Redirect("/access-denied?message=" + Uri.EscapeDataString(context.Failure?.Message ?? "Access denied"));
+        context.HandleResponse();
+        return Task.CompletedTask;
+    };
 });
 builder.Services.AddControllersWithViews()
     .AddMicrosoftIdentityUI();
@@ -168,6 +175,21 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapControllers(); // Microsoft Identity UI login/logout endpoints
+
+// Access denied page must be accessible without auth (handles rejected tenant logins)
+app.MapGet("/access-denied", (HttpContext ctx) =>
+{
+    var message = ctx.Request.Query["message"].FirstOrDefault() ?? "Your tenant is not authorized to access this application.";
+    var encodedMessage = System.Net.WebUtility.HtmlEncode(message);
+    return Results.Content(
+        "<!DOCTYPE html><html><head><title>Access Denied</title>" +
+        "<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#1e1e2e;color:#fff;}" +
+        ".box{text-align:center;padding:2rem;}.box h1{color:#f44336;}a{color:#90caf9;text-decoration:none;padding:0.7rem 1.5rem;border:1px solid #90caf9;border-radius:4px;display:inline-block;margin-top:1.5rem;}</style>" +
+        "</head><body><div class=\"box\"><h1>Access Denied</h1><p>" + encodedMessage + "</p>" +
+        "<a href=\"MicrosoftIdentity/Account/SignOut\">Sign Out &amp; Try Another Account</a></div></body></html>",
+        "text/html");
+}).AllowAnonymous();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .RequireAuthorization();

@@ -93,6 +93,10 @@ public class TenantFilterService
 
     public IEnumerable<string>? GetFilteredTenantIds()
     {
+        // Scoped users must always filter — never return null (which means "all tenants")
+        if (_scopedTenantIds != null)
+            return _selectedTenantIds.Count > 0 ? _selectedTenantIds : _scopedTenantIds;
+
         if (IsAllSelected || _selectedTenantIds.Count == 0)
             return null;
         return _selectedTenantIds;
@@ -100,6 +104,10 @@ public class TenantFilterService
 
     public IEnumerable<string>? GetFilterIds()
     {
+        // Scoped users must always filter — never return null (which means "all tenants")
+        if (_scopedTenantIds != null)
+            return _selectedTenantIds.Count > 0 ? _selectedTenantIds : _scopedTenantIds;
+
         if (IsAllSelected || _selectedTenantIds.Count == 0)
             return null;
         return _selectedTenantIds;
