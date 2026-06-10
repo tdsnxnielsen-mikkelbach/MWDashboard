@@ -217,13 +217,13 @@ module ondemand './modules/container-app-collector.bicep' = {
   }
 }
 
-// Static Web App (Consent Complete page)
+// Static Web App (Consent Complete page) — deployed to westeurope (not available in swedencentral)
 module consentStatic './modules/static-web-app.bicep' = {
   name: 'static-web-app-consent'
   scope: rg
   params: {
     name: 'swa-consent-${resourceToken}'
-    location: location
+    location: 'westeurope'
     tags: tags
   }
 }
