@@ -335,6 +335,7 @@ output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acr.outputs.loginServer
 output AZURE_CONTAINER_REGISTRY_NAME string = acr.outputs.name
 output COLLECTOR_FQDN string = ondemand.outputs.fqdn
 output CONSENT_CALLBACK_FQDN string = consent.outputs.fqdn
+output CONSENT_STATIC_NAME string = consentStatic.outputs.name
 output CONSENT_STATIC_URI string = consentStatic.outputs.uri
 output APPLICATIONINSIGHTS_CONNECTION_STRING string = appInsights.outputs.connectionString
 output WEB_URI string = web.outputs.uri

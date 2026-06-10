@@ -42,6 +42,15 @@ services:
           if ($aiConnStr) { $html = $html.Replace('%%APPINSIGHTS_CONNECTION_STRING%%', $aiConnStr) }
           Set-Content ./index.html -Value $html -NoNewline
           Write-Host "Injected consent callback URL: $callbackUrl"
+      deploy:
+        shell: pwsh
+        run: |
+          $swaName = $env:CONSENT_STATIC_NAME
+          $rgName = (az group list --tag "azd-env-name=$env:AZURE_ENV_NAME" --query "[0].name" -o tsv)
+          if (-not $swaName -or -not $rgName) { Write-Error "Could not resolve SWA name or resource group"; exit 1 }
+          $token = (az staticwebapp secrets list --name $swaName --resource-group $rgName --query "properties.apiKey" -o tsv)
+          if (-not $token) { Write-Error "Could not retrieve SWA deployment token"; exit 1 }
+          npx @azure/static-web-apps-cli deploy . --deployment-token $token --env production
 infra:
   provider: bicep
   path: ./infra
