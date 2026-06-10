@@ -5,7 +5,7 @@ The app registration needs the following **Application** permissions (not Delega
 | Permission | Purpose | Notes |
 |-----------|---------|-------|
 | `Reports.Read.All` | MAU usage reports, workload activity, user detail | Core functionality + Activity + Segmentation pages |
-| `Organization.Read.All` | Subscribed SKUs / license data | License page |
+| `Organization.Read.All` | Subscribed SKUs / license data, organization info | License page + Consent callback (verify tenant domain) |
 | `ServiceMessage.Read.All` | M365 Message Center posts | License page — Message Center section |
 | `AuditLog.Read.All` | Entra sign-in logs | Security page — requires Entra ID P1/P2 on target tenant |
 | `User.Read.All` | User department attribute | Department Adoption page — maps users to departments |
@@ -16,16 +16,17 @@ After adding permissions in Azure Portal → App Registrations → API Permissio
 - Send the tenant admin the consent URL generated on the Tenants page, or
 - Click "Grant admin consent" in the Azure Portal if you're in the home tenant
 
+When a tenant admin grants consent via the generated URL, they are redirected to an isolated Static Web App (not the dashboard) which automatically registers the tenant and triggers initial data collection.
+
 ### Redirect URI Registration
 
-The consent URL uses a redirect URI pointing to `/consent-complete` on the app. You must register this in the app registration:
+The consent URL redirects to the Azure Static Web App after consent is granted. You must register this URL in the app registration:
 
 1. Go to **Azure Portal → App registrations → your app → Authentication → Web → Redirect URIs**
-2. Add:
-   - Production: `https://<your-container-app-url>/consent-complete`
-   - Local development: `https://localhost:7265/consent-complete`
+2. Add the Static Web App URL from `azd env get-values` → `CONSENT_STATIC_URI`
+   - Example: `https://swa-consent-xxxxx.azurestaticapps.net`
 
-After granting consent, the admin is redirected to a thank-you page confirming the operation succeeded.
+This URL is stable after first deployment and does not change unless you recreate the infrastructure.
 
 ## Entra ID License Requirements
 

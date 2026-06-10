@@ -102,6 +102,7 @@
     private string _consentUrl = string.Empty;
 
     private string ClientId => Configuration["AzureAd:ClientId"] ?? string.Empty;
+    private string ConsentRedirectUri => Configuration["ConsentCallback:RedirectUri"] ?? $"{NavigationManager.BaseUri.TrimEnd('/')}/consent-complete";
 
     private bool IsValid => !string.IsNullOrWhiteSpace(_newTenant.TenantId) && !string.IsNullOrWhiteSpace(_newTenant.TenantName);
 
@@ -189,10 +190,9 @@
 
     private string GetConsentUrlForTenant(string tenantId)
     {
-        var redirectUri = $"{NavigationManager.BaseUri.TrimEnd('/')}/consent-complete";
         return $"https://login.microsoftonline.com/{Uri.EscapeDataString(tenantId)}/adminconsent" +
                $"?client_id={Uri.EscapeDataString(ClientId)}" +
-               $"&redirect_uri={Uri.EscapeDataString(redirectUri)}" +
+               $"&redirect_uri={Uri.EscapeDataString(ConsentRedirectUri)}" +
                $"&scope=https://graph.microsoft.com/.default";
     }
 

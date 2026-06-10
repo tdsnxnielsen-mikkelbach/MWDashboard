@@ -22,6 +22,10 @@ param azureAdClientId string
 @secure()
 param redisConnectionString string
 
+@description('Consent callback shared secret to store')
+@secure()
+param consentSharedSecret string
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
   location: location
@@ -59,6 +63,14 @@ resource secretRedisConnection 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
   name: 'RedisConnectionString'
   properties: {
     value: redisConnectionString
+  }
+}
+
+resource secretConsentShared 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'ConsentSharedSecret'
+  properties: {
+    value: consentSharedSecret
   }
 }
 

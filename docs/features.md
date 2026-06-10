@@ -101,7 +101,23 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 ## Tenant Management (`/tenants`)
 
 - Register/deregister tenants — form auto-resets after successful registration with auto-dismissing success message
-- Admin consent URL generator with clipboard copy — redirect URI dynamically uses the app's base URL pointing to `/consent-complete`
-- **Consent Complete page** (`/consent-complete`) — thank-you page shown after a tenant admin grants consent, with a link back to Tenant Management
+- Admin consent URL generator with clipboard copy — redirect URI points to the Static Web App consent-complete page (configured via `ConsentCallback:RedirectUri`)
 - **Collect Now button** — triggers immediate data collection for a specific tenant via the dedicated Collector container app (internal HTTP call); automatically falls back to local collection if the collector is unavailable. Collects MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments, storage, M365 app usage, and consumption score
 - Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants
+
+## Automated Consent & Tenant Registration
+
+- **Consent Complete Page** — Static Web App (`static/consent-complete/index.html`) hosted separately from the dashboard on Azure Static Web Apps (Free tier)
+- **Isolation**: Customer admins are never redirected to the actual dashboard — they see only a branded static page with no access to customer-sensitive data
+- **Auto-registration flow**:
+  1. Tenant admin clicks the consent URL (generated from Tenants page or sent via email)
+  2. Azure AD shows the permission consent prompt
+  3. On approval, Azure AD redirects to the Static Web App with `?tenant={tenantId}&admin_consent=True`
+  4. The static page computes an HMAC token and POSTs to the Consent Callback container (`/consent-callback`)
+  5. The Consent container validates the HMAC, calls Graph API `GET /organization` to verify consent and retrieve tenant details
+  6. Auto-fills: TenantId (from URL), TenantName (*.onmicrosoft.com domain), DisplayName (organization name)
+  7. Upserts `TenantInfo` with `IsActive = true`
+  8. Triggers initial data collection for the newly registered tenant
+  9. Returns success — static page shows "Consent granted successfully" with org details
+- **Security**: HMAC shared secret validation prevents unauthorized callback abuse; Graph API call verifies consent is actually granted
+- **Telemetry**: Application Insights JS SDK tracks consent page views and success/failure rates

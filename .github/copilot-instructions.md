@@ -2,15 +2,15 @@
 
 ## Project Architecture
 
-- **Solution**: Multi-project .NET 10 solution with `MWDashboard.Shared`, `MWDashboard.Web`, `MWDashboard.Collector`, and `MWDashboard.Job` under `src/`
+- **Solution**: Multi-project .NET 10 solution with `MWDashboard.Shared`, `MWDashboard.Web`, `MWDashboard.Collector`, `MWDashboard.Consent`, and `MWDashboard.Job` under `src/`
 - **UI**: Blazor Server with MudBlazor + Blazor-ApexCharts
 - **Data**: EF Core + Azure SQL Serverless (auto-pause), Redis distributed cache
 - **Auth**: Azure AD multi-tenant, app-only (client credentials) per tenant
-- **Hosting**: Azure Container Apps (web + on-demand collector + scheduled job)
+- **Hosting**: Azure Container Apps (web + on-demand collector + consent callback + scheduled job) + Azure Static Web App (consent page)
 - **Infra**: Bicep IaC via Azure Developer CLI (azd)
 - **No test projects** — manual/integration testing only
 
-> **Note**: The root-level `Components/`, `Services/`, `Models/`, `Data/` folders are a legacy scaffold. The active source code lives under `src/MWDashboard.Shared/`, `src/MWDashboard.Web/`, `src/MWDashboard.Collector/`, and `src/MWDashboard.Job/`.
+> **Note**: The root-level `Components/`, `Services/`, `Models/`, `Data/` folders are a legacy scaffold. The active source code lives under `src/MWDashboard.Shared/`, `src/MWDashboard.Web/`, `src/MWDashboard.Collector/`, `src/MWDashboard.Consent/`, and `src/MWDashboard.Job/`.
 
 ## Commands
 
@@ -86,6 +86,24 @@ azd deploy
 - Web app calls it via `HttpCollectorClient`; falls back to local collection if unreachable
 - Shares `OnDemandDataCollectionService` from `MWDashboard.Shared`
 
+### Consent Callback (src/MWDashboard.Consent/)
+- Minimal API with single endpoint: `POST /consent-callback?tenant={tenantId}&token={hmac}`
+- External ingress with CORS restricted to Static Web App origin
+- Scales 0→2, lightweight (0.25 vCPU, 0.5 GB)
+- Validates HMAC token (shared secret from Key Vault) to prevent unauthorized calls
+- Calls Graph API `GET /organization` to verify consent and fetch tenant domain/display name
+- Auto-registers tenant in DB (upserts `TenantInfo` with `IsActive = true`)
+- Triggers initial data collection after registration
+- Static Web App (`static/consent-complete/`) serves the consent redirect landing page (completely isolated from dashboard)
+
+### Consent Static Page (static/consent-complete/)
+- Azure Static Web App (Free tier) — customer-facing consent redirect landing page
+- Parses Azure AD redirect params (`?tenant=`, `&admin_consent=True`)
+- Computes HMAC token client-side and POSTs to Consent Callback container
+- Shows branded success/error messages — no access to customer data
+- Application Insights JS SDK for client-side telemetry
+- Deploy-time placeholder injection: `%%CONSENT_CALLBACK_URL%%`, `%%CONSENT_SHARED_SECRET%%`, `%%APPINSIGHTS_CONNECTION_STRING%%` (replaced via azd predeploy hook)
+
 ### EF Core Migrations (src/MWDashboard.Shared/Migrations/)
 - Add migrations from the Web project: `dotnet ef migrations add <Name> --project ../MWDashboard.Shared`
 - Auto-migrate on startup in both Web and Job
@@ -130,10 +148,11 @@ azd deploy
 
 ## Observability (OpenTelemetry)
 
-- **SDK**: `Azure.Monitor.OpenTelemetry.AspNetCore` v1.5.0 (in `MWDashboard.Shared`, used by all 3 services)
+- **SDK**: `Azure.Monitor.OpenTelemetry.AspNetCore` v1.5.0 (in `MWDashboard.Shared`, used by all 4 services)
 - **Setup pattern**: Conditional on `APPLICATIONINSIGHTS_CONNECTION_STRING` env var — no telemetry when absent (local dev without AI)
 - **Wiring** (all services): `builder.Services.AddOpenTelemetry().UseAzureMonitor(o => o.ConnectionString = aiConnectionString);`
 - **Auto-instrumented**: HTTP requests (in/out), SQL queries, Redis commands, ILogger correlation
 - **Infrastructure**: `infra/modules/application-insights.bicep` → linked to Log Analytics workspace
-- **Env var injection**: Bicep passes `APPLICATIONINSIGHTS_CONNECTION_STRING` to all 3 container apps/job
+- **Env var injection**: Bicep passes `APPLICATIONINSIGHTS_CONNECTION_STRING` to all 4 container apps/job + Static Web App (via predeploy hook)
 - **End-to-end tracing**: Web → Collector requests propagate W3C TraceContext (correlate full collection flow in Transaction Search)
+- **Client-side telemetry**: Static Web App consent page uses Application Insights JS SDK for page views and consent success/failure tracking

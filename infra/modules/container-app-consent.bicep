@@ -1,4 +1,4 @@
-@description('Name of the Container App')
+@description('Name of the Container App (Consent Callback)')
 param name string
 
 @description('Location for the resource')
@@ -28,21 +28,18 @@ param azureAdTenantId string
 @description('User-Assigned Managed Identity resource ID')
 param managedIdentityId string
 
-@description('Internal FQDN of the collector container app')
-param collectorFqdn string = ''
-
 @description('Application Insights connection string')
 param appInsightsConnectionString string = ''
 
-@description('Consent redirect URI (Static Web App URL)')
-param consentRedirectUri string = ''
+@description('Allowed CORS origin (Static Web App URL)')
+param corsOrigin string
 
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource containerAppConsent 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
   location: location
-  tags: union(tags, { 'azd-service-name': 'web' })
+  tags: union(tags, { 'azd-service-name': 'consent' })
   identity: {
     type: 'SystemAssigned,UserAssigned'
     userAssignedIdentities: {
@@ -57,39 +54,44 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 8080
         transport: 'auto'
         allowInsecure: false
+        corsPolicy: {
+          allowedOrigins: [corsOrigin]
+          allowedMethods: ['POST']
+          allowedHeaders: ['*']
+        }
       }
       registries: [
         {
           server: containerRegistryLoginServer
-          identity: 'system'
+          identity: managedIdentityId
         }
       ]
       secrets: [
         {
           name: 'azuread-client-id'
           keyVaultUrl: '${keyVaultUri}secrets/AzureAdClientId'
-          identity: 'system'
+          identity: managedIdentityId
         }
         {
           name: 'azuread-client-secret'
           keyVaultUrl: '${keyVaultUri}secrets/AzureAdClientSecret'
-          identity: 'system'
+          identity: managedIdentityId
         }
         {
-          name: 'redis-connection-string'
-          keyVaultUrl: '${keyVaultUri}secrets/RedisConnectionString'
-          identity: 'system'
+          name: 'consent-shared-secret'
+          keyVaultUrl: '${keyVaultUri}secrets/ConsentSharedSecret'
+          identity: managedIdentityId
         }
       ]
     }
     template: {
       containers: [
         {
-          name: 'web'
+          name: 'consent'
           image: fullImageName
           resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
+            cpu: json('0.25')
+            memory: '0.5Gi'
           }
           env: [
             {
@@ -99,10 +101,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'ConnectionStrings__DefaultConnection'
               value: sqlConnectionString
-            }
-            {
-              name: 'ConnectionStrings__Redis'
-              secretRef: 'redis-connection-string'
             }
             {
               name: 'AzureAd__ClientId'
@@ -117,29 +115,29 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: azureAdTenantId
             }
             {
-              name: 'CollectorBaseUrl'
-              value: collectorFqdn != '' ? 'https://${collectorFqdn}' : ''
+              name: 'ConsentCallback__SharedSecret'
+              secretRef: 'consent-shared-secret'
+            }
+            {
+              name: 'Cors__AllowedOrigins__0'
+              value: corsOrigin
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsightsConnectionString
             }
-            {
-              name: 'ConsentCallback__RedirectUri'
-              value: consentRedirectUri
-            }
           ]
         }
       ]
       scale: {
-        minReplicas: 1
-        maxReplicas: 3
+        minReplicas: 0
+        maxReplicas: 2
         rules: [
           {
             name: 'http-scaling'
             http: {
               metadata: {
-                concurrentRequests: '50'
+                concurrentRequests: '10'
               }
             }
           }
@@ -149,7 +147,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-output id string = containerApp.id
-output name string = containerApp.name
-output uri string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
-output principalId string = containerApp.identity.principalId
+output id string = containerAppConsent.id
+output name string = containerAppConsent.name
+output fqdn string = containerAppConsent.properties.configuration.ingress.fqdn
+output principalId string = containerAppConsent.identity.principalId

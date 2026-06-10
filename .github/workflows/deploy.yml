@@ -21,6 +21,7 @@ jobs:
       AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
       AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
       AZURE_AD_TENANT_ID: ${{ vars.AZURE_AD_TENANT_ID }}
+      CONSENT_SHARED_SECRET: ${{ secrets.CONSENT_SHARED_SECRET }}
 
     steps:
       - name: Checkout

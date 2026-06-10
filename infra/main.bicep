@@ -20,6 +20,10 @@ param azureAdClientSecret string
 @description('Azure AD Tenant ID for the app registration')
 param azureAdTenantId string
 
+@description('Shared secret for consent callback HMAC validation')
+@secure()
+param consentSharedSecret string
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = {
@@ -127,6 +131,7 @@ module keyVault './modules/key-vault.bicep' = {
     azureAdClientId: azureAdClientId
     azureAdClientSecret: azureAdClientSecret
     redisConnectionString: redis.outputs.connectionString
+    consentSharedSecret: consentSharedSecret
   }
 }
 
@@ -169,6 +174,7 @@ module web './modules/container-app-web.bicep' = {
     managedIdentityId: identity.outputs.id
     collectorFqdn: ondemand.outputs.fqdn
     appInsightsConnectionString: appInsights.outputs.connectionString
+    consentRedirectUri: consentStatic.outputs.uri
   }
 }
 
@@ -211,6 +217,38 @@ module ondemand './modules/container-app-collector.bicep' = {
   }
 }
 
+// Static Web App (Consent Complete page)
+module consentStatic './modules/static-web-app.bicep' = {
+  name: 'static-web-app-consent'
+  scope: rg
+  params: {
+    name: 'swa-consent-${resourceToken}'
+    location: location
+    tags: tags
+  }
+}
+
+// Consent Callback Container App (tenant auto-registration)
+module consent './modules/container-app-consent.bicep' = {
+  name: 'container-app-consent'
+  scope: rg
+  dependsOn: [acrPullUami, kvSecretsUami]
+  params: {
+    name: '${abbrs.appContainerApps}consent-${resourceToken}'
+    location: location
+    tags: tags
+    containerAppsEnvironmentId: containerEnv.outputs.id
+    containerRegistryLoginServer: acr.outputs.loginServer
+    imageName: ''
+    sqlConnectionString: sql.outputs.connectionString
+    keyVaultUri: keyVault.outputs.uri
+    azureAdTenantId: azureAdTenantId
+    managedIdentityId: identity.outputs.id
+    appInsightsConnectionString: appInsights.outputs.connectionString
+    corsOrigin: consentStatic.outputs.uri
+  }
+}
+
 // Role assignments - AcrPull for container apps
 module acrPullWeb './modules/role-assignment.bicep' = {
   name: 'acr-pull-web'
@@ -237,6 +275,16 @@ module acrPullCollector './modules/role-assignment.bicep' = {
   scope: rg
   params: {
     principalId: ondemand.outputs.principalId
+    roleDefinitionId: '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module acrPullConsent './modules/role-assignment.bicep' = {
+  name: 'acr-pull-consent'
+  scope: rg
+  params: {
+    principalId: consent.outputs.principalId
     roleDefinitionId: '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
     principalType: 'ServicePrincipal'
   }
@@ -273,7 +321,20 @@ module kvSecretsCollector './modules/role-assignment.bicep' = {
   }
 }
 
+module kvSecretsConsent './modules/role-assignment.bicep' = {
+  name: 'kv-secrets-consent'
+  scope: rg
+  params: {
+    principalId: consent.outputs.principalId
+    roleDefinitionId: '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+    principalType: 'ServicePrincipal'
+  }
+}
+
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acr.outputs.loginServer
 output AZURE_CONTAINER_REGISTRY_NAME string = acr.outputs.name
 output COLLECTOR_FQDN string = ondemand.outputs.fqdn
+output CONSENT_CALLBACK_FQDN string = consent.outputs.fqdn
+output CONSENT_STATIC_URI string = consentStatic.outputs.uri
+output APPLICATIONINSIGHTS_CONNECTION_STRING string = appInsights.outputs.connectionString
 output WEB_URI string = web.outputs.uri

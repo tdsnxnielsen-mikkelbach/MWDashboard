@@ -8,6 +8,7 @@ graph TB
         subgraph Container Apps Environment
             Web[Container App: Web<br/>Blazor Dashboard<br/>Port 8080, HTTPS ingress]
             Collector[Container App: On-Demand Collector<br/>Port 8080, internal ingress<br/>Scales 0→3 on HTTP]
+            Consent[Container App: Consent Callback<br/>Port 8080, HTTPS ingress<br/>Scales 0→2 on HTTP]
             Job[Container App Job: Scheduled Collector<br/>Cron: 0 2 * * * UTC<br/>Max 1hr, exits on completion]
         end
         ACR[Azure Container Registry<br/>Basic SKU]
@@ -17,29 +18,38 @@ graph TB
         UAMI[User-Assigned Managed Identity<br/>SQL Admin + shared by apps]
         Logs[Log Analytics Workspace<br/>PerGB2018, 30-day retention]
         AppInsights[Application Insights<br/>OpenTelemetry collection]
+        SWA[Static Web App<br/>Consent Complete Page<br/>Free Tier]
     end
 
     UAMI -.->|SQL admin| SQL
     UAMI -.->|assigned to| Web
     UAMI -.->|assigned to| Job
     UAMI -.->|assigned to| Collector
+    UAMI -.->|assigned to| Consent
     ACR -->|identity pull| Web
     ACR -->|identity pull| Job
     ACR -->|identity pull| Collector
+    ACR -->|identity pull| Consent
     Web -->|managed identity| SQL
     Job -->|managed identity| SQL
     Collector -->|managed identity| SQL
+    Consent -->|managed identity| SQL
     Web -->|Key Vault ref| KV
     Job -->|Key Vault ref| KV
     Collector -->|Key Vault ref| KV
+    Consent -->|Key Vault ref| KV
     Web -->|secret| Redis
     Web -->|internal HTTP| Collector
+    SWA -->|POST /consent-callback| Consent
     Logs ---|logs| Web
     Logs ---|logs| Job
     Logs ---|logs| Collector
+    Logs ---|logs| Consent
     AppInsights ---|telemetry| Web
     AppInsights ---|telemetry| Job
     AppInsights ---|telemetry| Collector
+    AppInsights ---|telemetry| Consent
+    AppInsights ---|JS SDK| SWA
     AppInsights -->|workspace| Logs
 ```
 
@@ -72,6 +82,9 @@ azd env set AZURE_AD_CLIENT_ID "your-app-client-id"
 azd env set AZURE_AD_CLIENT_SECRET "your-app-client-secret"
 azd env set AZURE_AD_TENANT_ID "your-home-tenant-id"
 
+# Required: Shared secret for consent callback HMAC validation
+azd env set CONSENT_SHARED_SECRET "your-random-secret-string"
+
 # Optional: Override defaults
 azd env set AZURE_LOCATION "swedencentral"  # Default: swedencentral
 ```
@@ -90,14 +103,14 @@ This single command:
 
 ### 5. Register Redirect URI in Entra ID
 
-After deployment, register the consent callback URL in your app registration:
+After deployment, register the Static Web App URL in your app registration:
 
-1. Go to **Azure Portal → App registrations → your app → Authentication → Web → Redirect URIs**
-2. Add the following URIs:
-   - Production: `https://<your-container-app-url>/consent-complete`
-   - Local development: `https://localhost:7265/consent-complete`
+1. Run `azd env get-values` and find `CONSENT_STATIC_URI` (e.g., `https://swa-consent-xxxxx.azurestaticapps.net`)
+2. Go to **Azure Portal → App registrations → your app → Authentication → Web → Redirect URIs**
+3. Add the Static Web App URL (the full URL without a trailing path — Azure AD redirects to `?tenant=...&admin_consent=True` on this domain)
+4. Save
 
-This is required for the admin consent flow — after a tenant admin grants consent, Azure AD redirects them to the `/consent-complete` page.
+This is required for the admin consent flow — after a tenant admin grants consent, Azure AD redirects them to the Static Web App, which calls the consent callback container to auto-register the tenant.
 
 ### 6. Verify deployment
 
@@ -157,9 +170,29 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 - **Fallback**: If unreachable, the Web app falls back to local collection
 - **Identity**: System-Assigned (ACR pull, Key Vault access) + User-Assigned (SQL)
 
+### Container App (Consent Callback)
+
+- **Image**: `mwdashboard-consent:latest`
+- **Port**: 8080 (HTTPS ingress, external)
+- **Scaling**: 0–2 replicas, scales on 10 concurrent HTTP requests
+- **Endpoint**: `POST /consent-callback?tenant={tenantId}&token={hmac}`
+- **Purpose**: Receives consent redirect callbacks from the Static Web App, validates HMAC, calls Graph `/organization` to verify consent and fetch tenant details, then auto-registers the tenant in the database and triggers initial data collection
+- **CORS**: Configured to only accept requests from the Static Web App origin
+- **Identity**: System-Assigned (ACR pull, Key Vault access) + User-Assigned (SQL)
+- **Resources**: 0.25 vCPU, 0.5 GB memory
+
+### Static Web App (Consent Complete Page)
+
+- **SKU**: Free tier
+- **Purpose**: Hosts the consent redirect landing page (`index.html`) — completely isolated from the dashboard, contains no customer data
+- **Flow**: Azure AD redirects here after admin consent → page calls consent callback API → shows success/error
+- **Telemetry**: Application Insights JavaScript SDK for client-side tracking
+- **Security headers**: CSP, X-Frame-Options DENY, nosniff, strict referrer policy
+- **Deploy**: `azd deploy consent-static` with predeploy hook that injects callback URL and shared secret
+
 ### Key Vault
 
-- **Purpose**: Stores Azure AD Client ID, Client Secret, and Redis connection string
+- **Purpose**: Stores Azure AD Client ID, Client Secret, Redis connection string, and Consent Shared Secret
 - **Access**: RBAC-based (Key Vault Secrets User role assigned to container app identities)
 - **Soft delete**: Enabled (7-day retention)
 - Secrets are referenced from Container Apps via `keyVaultUrl` — never stored as plain text in app config
@@ -182,6 +215,7 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 | Web (system) | System-Assigned | ACR image pull, Key Vault secrets reader |
 | Job (system) | System-Assigned | ACR image pull, Key Vault secrets reader |
 | Collector (system) | System-Assigned | ACR image pull, Key Vault secrets reader |
+| Consent (system) | System-Assigned | ACR image pull, Key Vault secrets reader |
 
 ### Role Assignments (automated)
 
@@ -190,9 +224,11 @@ WEB_URI: https://ca-web-xxxxx.azurecontainerapps.io
 | AcrPull | Web system identity | Resource Group |
 | AcrPull | Job system identity | Resource Group |
 | AcrPull | Collector system identity | Resource Group |
+| AcrPull | Consent system identity | Resource Group |
 | Key Vault Secrets User | Web system identity | Resource Group |
 | Key Vault Secrets User | Job system identity | Resource Group |
 | Key Vault Secrets User | Collector system identity | Resource Group |
+| Key Vault Secrets User | Consent system identity | Resource Group |
 
 ## CI/CD with GitHub Actions
 
@@ -252,6 +288,7 @@ Add these as **Repository Secrets**:
 |--------|-------|
 | `AZURE_AD_CLIENT_ID` | App registration Client ID (for Graph API) |
 | `AZURE_AD_CLIENT_SECRET` | App registration Client Secret (for Graph API) |
+| `CONSENT_SHARED_SECRET` | Shared secret for consent callback HMAC validation |
 
 #### 3. Push to deploy
 
@@ -293,9 +330,11 @@ azd deploy
 ### Deploy a single service
 
 ```powershell
-azd deploy web       # Deploy only the web app
-azd deploy collector # Deploy only the scheduled collector job
-azd deploy ondemand  # Deploy only the on-demand collector
+azd deploy web            # Deploy only the web app
+azd deploy collector      # Deploy only the scheduled collector job
+azd deploy ondemand       # Deploy only the on-demand collector
+azd deploy consent        # Deploy only the consent callback API
+azd deploy consent-static # Deploy only the static consent page
 ```
 
 ### Tear down all resources
@@ -344,13 +383,17 @@ These are set automatically by the Bicep templates as Container App env vars and
 
 | Variable | Source | Used by |
 |----------|--------|---------|
-| `ConnectionStrings__DefaultConnection` | Azure SQL connection string (includes UAMI client ID) | Web, Job, Collector |
+| `ConnectionStrings__DefaultConnection` | Azure SQL connection string (includes UAMI client ID) | Web, Job, Collector, Consent |
 | `ConnectionStrings__Redis` | Key Vault secret ref | Web |
-| `AzureAd__ClientId` | Key Vault secret ref | Web, Job, Collector |
-| `AzureAd__ClientSecret` | Key Vault secret ref | Web, Job, Collector |
-| `AzureAd__TenantId` | Plain env var | Web, Job, Collector |
+| `AzureAd__ClientId` | Key Vault secret ref | Web, Job, Collector, Consent |
+| `AzureAd__ClientSecret` | Key Vault secret ref | Web, Job, Collector, Consent |
+| `AzureAd__TenantId` | Plain env var | Web, Job, Collector, Consent |
 | `CollectorBaseUrl` | Internal FQDN of collector container | Web |
-| `ASPNETCORE_ENVIRONMENT` | `Production` | Web, Collector |
+| `ConsentCallback__RedirectUri` | Static Web App URL | Web |
+| `ConsentCallback__SharedSecret` | Key Vault secret ref | Consent |
+| `Cors__AllowedOrigins__0` | Static Web App URL | Consent |
+| `ASPNETCORE_ENVIRONMENT` | `Production` | Web, Collector, Consent |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | Application Insights connection string | Web, Job, Collector, Consent |
 
 ## Troubleshooting
 

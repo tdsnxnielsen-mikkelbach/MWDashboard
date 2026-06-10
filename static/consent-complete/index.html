@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MWDashboard - Consent Complete</title>
+    <script src="https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js"></script>
+    <script>
+        var defined = '%%APPINSIGHTS_CONNECTION_STRING%%';
+        if (defined && !defined.startsWith('%%')) {
+            var cfg = { connectionString: defined };
+            var init = new Microsoft.ApplicationInsights.ApplicationInsights({ config: cfg });
+            var appInsights = init.loadAppInsights();
+            appInsights.trackPageView();
+            window.appInsights = appInsights;
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 48px;
+            max-width: 520px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            text-align: center;
+        }
+        .icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .icon-success { background: #e8f5e9; }
+        .icon-success svg { color: #4caf50; }
+        .icon-error { background: #fbe9e7; }
+        .icon-error svg { color: #f44336; }
+        .icon-loading { background: #e3f2fd; }
+        .icon-loading svg { color: #2196f3; animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        h1 { font-size: 24px; color: #1a1a2e; margin-bottom: 12px; }
+        .subtitle { font-size: 16px; color: #555; margin-bottom: 24px; line-height: 1.5; }
+        .details { background: #f5f5f5; border-radius: 8px; padding: 16px; text-align: left; margin-top: 20px; }
+        .details p { font-size: 14px; color: #666; margin-bottom: 8px; }
+        .details p:last-child { margin-bottom: 0; }
+        .details strong { color: #333; }
+        .status-message { margin-top: 16px; font-size: 14px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div id="content">
+            <div class="icon icon-loading">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+            </div>
+            <h1>Processing consent...</h1>
+            <p class="subtitle">Please wait while we verify your admin consent and register your tenant.</p>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const tenantId = params.get('tenant');
+            const adminConsent = params.get('admin_consent');
+            const error = params.get('error');
+            const errorDescription = params.get('error_description');
+
+            const contentEl = document.getElementById('content');
+
+            if (error) {
+                showError('Consent was not granted', errorDescription || 'The admin consent request was declined or an error occurred.');
+                return;
+            }
+
+            if (!tenantId || adminConsent !== 'True') {
+                showError('Invalid request', 'Missing required parameters. Please use the consent link provided by your administrator.');
+                return;
+            }
+
+            // Compute HMAC token client-side and call the callback API
+            registerTenant(tenantId);
+
+            async function registerTenant(tenantId) {
+                const token = await computeToken(tenantId);
+                const callbackUrl = getCallbackUrl();
+                const url = `${callbackUrl}/consent-callback?tenant=${encodeURIComponent(tenantId)}&token=${encodeURIComponent(token)}`;
+
+                const maxRetries = 3;
+                const baseDelay = 5000; // 5s initial delay between retries (cold start takes ~10-20s)
+
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                        if (attempt > 1) {
+                            updateStatus(`Service is starting up... attempt ${attempt}/${maxRetries}`);
+                        }
+
+                        const controller = new AbortController();
+                        const timeout = setTimeout(() => controller.abort(), 45000); // 45s timeout per attempt
+
+                        const response = await fetch(url, { method: 'POST', signal: controller.signal });
+                        clearTimeout(timeout);
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            showSuccess(data.displayName || tenantId, data.tenantName || '');
+                            return;
+                        } else {
+                            const errData = await response.json().catch(() => ({}));
+                            showError('Registration failed', errData.detail || errData.error || 'Could not register your tenant. Please contact support.');
+                            return;
+                        }
+                    } catch (ex) {
+                        if (attempt < maxRetries) {
+                            const delay = baseDelay * attempt;
+                            updateStatus(`Service is waking up, retrying in ${delay / 1000}s... (${attempt}/${maxRetries})`);
+                            await new Promise(r => setTimeout(r, delay));
+                        } else {
+                            showError('Connection error', 'Could not reach the registration service after multiple attempts. Please try again later or contact support.');
+                        }
+                    }
+                }
+            }
+
+            function updateStatus(message) {
+                const subtitle = contentEl.querySelector('.subtitle');
+                if (subtitle) subtitle.textContent = message;
+            }
+
+            function getCallbackUrl() {
+                // The callback URL is injected at deploy time via staticwebapp.config.json or as a data attribute
+                // Fallback: read from meta tag
+                const meta = document.querySelector('meta[name="callback-url"]');
+                if (meta) return meta.content;
+                // Default for production — replaced during deployment
+                return '%%CONSENT_CALLBACK_URL%%';
+            }
+
+            async function computeToken(tenantId) {
+                const secret = getSharedSecret();
+                const encoder = new TextEncoder();
+                const key = await crypto.subtle.importKey(
+                    'raw',
+                    encoder.encode(secret),
+                    { name: 'HMAC', hash: 'SHA-256' },
+                    false,
+                    ['sign']
+                );
+                const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(tenantId));
+                return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+
+            function getSharedSecret() {
+                // Injected at deploy time — replaced during build/deploy
+                return '%%CONSENT_SHARED_SECRET%%';
+            }
+
+            function showSuccess(displayName, tenantName) {
+                contentEl.innerHTML = `
+                    <div class="icon icon-success">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                    </div>
+                    <h1>Consent granted successfully!</h1>
+                    <p class="subtitle">Your organization has been registered with MWDashboard. Data collection will begin shortly.</p>
+                    <div class="details">
+                        <p><strong>Organization:</strong> ${escapeHtml(displayName)}</p>
+                        ${tenantName ? `<p><strong>Domain:</strong> ${escapeHtml(tenantName)}</p>` : ''}
+                    </div>
+                    <p class="status-message">You can close this window. Your administrator will see the tenant in the dashboard.</p>
+                `;
+            }
+
+            function showError(title, message) {
+                contentEl.innerHTML = `
+                    <div class="icon icon-error">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/>
+                        </svg>
+                    </div>
+                    <h1>${escapeHtml(title)}</h1>
+                    <p class="subtitle">${escapeHtml(message)}</p>
+                    <p class="status-message">If you believe this is an error, please contact your MWDashboard administrator.</p>
+                `;
+            }
+
+            function escapeHtml(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+        })();
+    </script>
+</body>
+</html>

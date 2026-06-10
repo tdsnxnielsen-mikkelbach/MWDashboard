@@ -19,6 +19,29 @@ services:
     project: ./src/MWDashboard.Collector
     host: containerapp
     language: dotnet
+  consent:
+    project: ./src/MWDashboard.Consent
+    host: containerapp
+    language: dotnet
+  consent-static:
+    project: ./static/consent-complete
+    host: staticwebapp
+    language: html
+    hooks:
+      predeploy:
+        shell: pwsh
+        run: |
+          $html = Get-Content ./static/consent-complete/index.html -Raw
+          $callbackUrl = "https://${env:CONSENT_CALLBACK_FQDN}"
+          $secret = $env:CONSENT_SHARED_SECRET
+          $aiConnStr = $env:APPLICATIONINSIGHTS_CONNECTION_STRING
+          if (-not $callbackUrl -or $callbackUrl -eq "https://") { Write-Error "CONSENT_CALLBACK_FQDN not set"; exit 1 }
+          if (-not $secret) { Write-Error "CONSENT_SHARED_SECRET not set"; exit 1 }
+          $html = $html.Replace('%%CONSENT_CALLBACK_URL%%', $callbackUrl)
+          $html = $html.Replace('%%CONSENT_SHARED_SECRET%%', $secret)
+          if ($aiConnStr) { $html = $html.Replace('%%APPINSIGHTS_CONNECTION_STRING%%', $aiConnStr) }
+          Set-Content ./static/consent-complete/index.html -Value $html -NoNewline
+          Write-Host "Injected consent callback URL: $callbackUrl"
 infra:
   provider: bicep
   path: ./infra

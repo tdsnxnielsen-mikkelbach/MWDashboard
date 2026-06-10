@@ -7,7 +7,12 @@ graph TB
     subgraph Azure Container Apps
         Web[Container App: Web<br/>Blazor Dashboard UI]
         Collector[Container App: On-Demand Collector<br/>HTTP API, scales 0→3]
+        Consent[Container App: Consent Callback<br/>Tenant auto-registration]
         Job[Container App Job: Scheduled Collector<br/>Cron daily 2AM UTC]
+    end
+
+    subgraph Static Hosting
+        SWA[Azure Static Web App<br/>Consent Complete Page]
     end
 
     subgraph Shared Services
@@ -36,6 +41,9 @@ graph TB
     Collector --> GraphBeta
     Collector --> MsgCenter
     Collector --> UsersApi
+    Consent --> SQL
+    Consent --> Graph
+    SWA --> Consent
     Job --> SQL
     Job --> Graph
     Job --> GraphBeta
@@ -46,12 +54,16 @@ graph TB
     Graph --> AAD
     GraphBeta --> AAD
     MsgCenter --> AAD
+    AAD --> SWA
     ACR --> Web
     ACR --> Job
     ACR --> Collector
+    ACR --> Consent
     Web --> AppInsights
     Job --> AppInsights
     Collector --> AppInsights
+    Consent --> AppInsights
+    SWA --> AppInsights
     AppInsights --> Logs
 ```
 
@@ -67,9 +79,19 @@ sequenceDiagram
     participant DB as Azure SQL
     participant Cache as Redis Cache
 
-    Note over Admin, Web: Onboarding
+    Note over Admin, Web: Onboarding (Automated via Consent Flow)
     Admin->>AAD: Grant admin consent
-    Web->>DB: Register tenant
+    AAD->>Static: Redirect to Static Web App /consent-complete?tenant={id}
+    Static->>Consent: POST /consent-callback?tenant={id}&token={hmac}
+    Consent->>Graph: GET /organization (verify consent)
+    Graph-->>Consent: Tenant domain + display name
+    Consent->>DB: Upsert TenantInfo (auto-registered)
+    Consent->>Consent: Trigger initial data collection
+    Consent-->>Static: 200 OK (registered)
+    Static-->>Admin: "Consent granted successfully"
+
+    participant Static as Static Web App
+    participant Consent as Consent Container
 
     Note over Job, DB: Scheduled Collection (Container App Job - daily 2AM UTC)
     Job->>DB: Get active tenants
@@ -148,7 +170,7 @@ graph LR
 ```
 MWDashboard/
 ├── azure.yaml                              # azd project definition
-├── MWDashboard.slnx                        # Solution file (3 projects)
+├── MWDashboard.slnx                        # Solution file (4 projects)
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml                      # GitHub Actions CI/CD pipeline
@@ -160,14 +182,21 @@ MWDashboard/
 │       ├── container-registry.bicep        # Azure Container Registry (Basic)
 │       ├── container-apps-environment.bicep # Container Apps Environment
 │       ├── container-app-web.bicep         # Web UI Container App (ingress, scaling)
+│       ├── container-app-collector.bicep   # On-Demand Collector (internal, scales 0→3)
+│       ├── container-app-consent.bicep     # Consent Callback (external, scales 0→2)
 │       ├── container-app-job.bicep         # Scheduled job (cron: 0 2 * * *)
-│       ├── key-vault.bicep                 # Key Vault (secrets for AD + Redis)
+│       ├── static-web-app.bicep            # Static Web App (consent complete page)
+│       ├── key-vault.bicep                 # Key Vault (secrets for AD + Redis + consent)
 │       ├── application-insights.bicep      # Application Insights (OpenTelemetry)
 │       ├── log-analytics.bicep             # Log Analytics workspace
 │       ├── managed-identity.bicep          # User-Assigned Managed Identity (SQL admin)
 │       ├── redis.bicep                     # Azure Managed Redis (Balanced B0)
 │       ├── role-assignment.bicep           # Reusable RBAC role assignment
 │       └── sql-server.bicep               # Azure SQL Serverless (GP_S_Gen5_1)
+├── static/
+│   └── consent-complete/                   # Azure Static Web App source
+│       ├── index.html                      # Consent redirect landing page
+│       └── staticwebapp.config.json        # SWA routing + security headers
 ├── src/
 │   ├── MWDashboard.Shared/                # Shared class library
 │   │   ├── Data/
@@ -200,6 +229,8 @@ MWDashboard/
 │   │   │       ├── Security.razor         # Security sign-in monitoring
 │   │   │       └── Tenants.razor          # Tenant management
 │   │   └── wwwroot/                       # Static assets
+│   ├── MWDashboard.Consent/              # Consent callback → Container App
+│   │   └── Program.cs                     # Minimal API: validates HMAC, calls Graph, upserts tenant
 │   └── MWDashboard.Job/                   # Data collector → Container App Job
 │       └── Program.cs                     # One-shot console app (collects & exits)
 └── docs/
