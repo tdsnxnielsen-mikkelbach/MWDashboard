@@ -4,12 +4,14 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 
 ## Authentication & Access Control
 
-- **Azure AD OpenID Connect** — all dashboard pages require authentication
-- **Multi-tenant sign-in** — users from the home tenant (where the app registration lives) and any consented customer tenant can sign in
+- **Azure AD OpenID Connect** — all dashboard pages require authentication (authorization code flow)
+- **Multi-tenant sign-in** — users from the home tenant (where the app registration lives) and any active customer tenant can sign in
 - **Automatic tenant validation** — on sign-in, the user's tenant ID is checked against the database; only active (consented) tenants are allowed
+- **Immediate access control** — deactivating or removing a tenant immediately blocks login for users from that tenant; adding/activating allows login
 - **Data isolation** — customer-tenant users can only view data from their own tenant; home-tenant users see all registered tenants
+- **Page-level restrictions** — Tenants management page (`/tenants`) is only accessible to home-tenant users; nav link hidden for customer-tenant users
 - **AppBar user controls** — user icon (tooltip shows name) + sign-out button visible when authenticated
-- **Login redirect** — unauthenticated users are automatically redirected to Azure AD sign-in
+- **Login redirect** — unauthenticated users are automatically redirected to Azure AD sign-in (HTTP-level enforcement before Blazor renders)
 
 ## Global Tenant Selector
 
@@ -110,12 +112,13 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 
 ## Tenant Management (`/tenants`)
 
+- **Home-tenant only** — page restricted to home-tenant users; nav link hidden and page guarded for customer-tenant users
 - Register/deregister tenants — form auto-resets after successful registration with auto-dismissing success message
 - **Inline display name editing** — pencil icon next to each tenant name opens an inline text field with save/cancel buttons; updates propagate to the global tenant selector immediately
 - Admin consent URL generator with clipboard copy — redirect URI points to the Static Web App consent-complete page (configured via `ConsentCallback:RedirectUri`)
 - **Collect Now button** — triggers immediate data collection for a specific tenant via the dedicated Collector container app (internal HTTP call); automatically falls back to local collection if the collector is unavailable. Collects MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments, storage, M365 app usage, and consumption score
-- Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants
-- **Auto-refresh** — the global tenant selector polls every 30 seconds for newly registered tenants (e.g., via consent callback); new tenants are auto-selected and all dashboard pages reload data without requiring a manual browser refresh
+- Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants; deactivating blocks login for that tenant's users
+- **Login access tied to tenant status** — adding a tenant allows users from that tenant to sign in; removing/deactivating blocks their access immediately
 
 ## Automated Consent & Tenant Registration
 

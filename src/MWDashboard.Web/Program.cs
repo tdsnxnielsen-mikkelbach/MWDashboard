@@ -34,6 +34,7 @@ builder.Configuration["AzureAdAuth:ClientSecret"] = builder.Configuration["Azure
 builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAdAuth");
 builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
 {
+    options.ResponseType = "code"; // Use authorization code flow (no implicit ID token required)
     options.Events.OnTokenValidated = async context =>
     {
         var tenantId = context.Principal?.FindFirst("http://schemas.microsoft.com/identity/claims/tenantid")?.Value;

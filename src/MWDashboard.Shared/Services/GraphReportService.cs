@@ -237,7 +237,7 @@ public class GraphReportService : IGraphReportService
 
         if (lines.Length < 2) return snapshots;
 
-        var headers = lines[0].Split(',');
+        var headers = lines[0].Split(',').Select(h => h.Trim('\r', ' ', '\uFEFF')).ToArray();
         var dateIndex = Array.IndexOf(headers, "Report Date");
 
         var serviceColumns = new Dictionary<string, int>
@@ -291,7 +291,15 @@ public class GraphReportService : IGraphReportService
             {
                 using var reader = new StreamReader(report);
                 var csv = await reader.ReadToEndAsync();
-                activities.AddRange(ParseTeamsActivity(csv, tenantId));
+                var parsed = ParseTeamsActivity(csv, tenantId);
+                if (parsed.Count == 0)
+                    _logger.LogWarning("Teams activity CSV returned {Lines} lines but parsed 0 activities for tenant {TenantId}. First 200 chars: {Csv}",
+                        csv.Split('\n').Length, tenantId, csv.Length > 200 ? csv[..200] : csv);
+                activities.AddRange(parsed);
+            }
+            else
+            {
+                _logger.LogWarning("Teams activity report returned null for tenant {TenantId}", tenantId);
             }
         }
         catch (Exception ex)
@@ -508,12 +516,16 @@ public class GraphReportService : IGraphReportService
         var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length < 2) return activities;
 
-        var headers = lines[0].Split(',');
+        var headers = lines[0].Split(',').Select(h => h.Trim('\r', ' ', '\uFEFF')).ToArray();
         var dateIndex = Array.IndexOf(headers, "Report Date");
         var meetingsIndex = Array.IndexOf(headers, "Meetings");
         var chatIndex = Array.IndexOf(headers, "Private Chat Messages");
         var channelIndex = Array.IndexOf(headers, "Post Messages");
         var callsIndex = Array.IndexOf(headers, "Calls");
+
+        // Fallback: if "Meetings" matches "Meetings Organized" due to IndexOf, find exact
+        if (meetingsIndex >= 0 && headers[meetingsIndex] != "Meetings")
+            meetingsIndex = Array.FindIndex(headers, h => h == "Meetings");
 
         for (int i = 1; i < lines.Length; i++)
         {
@@ -535,7 +547,7 @@ public class GraphReportService : IGraphReportService
         var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length < 2) return activities;
 
-        var headers = lines[0].Split(',');
+        var headers = lines[0].Split(',').Select(h => h.Trim('\r', ' ', '\uFEFF')).ToArray();
         var dateIndex = Array.IndexOf(headers, "Report Date");
         var viewedIndex = Array.IndexOf(headers, "Viewed Or Edited");
         var sharedIntIndex = Array.IndexOf(headers, "Shared Internally");
@@ -576,7 +588,7 @@ public class GraphReportService : IGraphReportService
         var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length < 2) return activities;
 
-        var headers = lines[0].Split(',');
+        var headers = lines[0].Split(',').Select(h => h.Trim('\r', ' ', '\uFEFF')).ToArray();
         var dateIndex = Array.IndexOf(headers, "Report Date");
         var viewedIndex = Array.IndexOf(headers, "Viewed Or Edited");
         var sharedIntIndex = Array.IndexOf(headers, "Shared Internally");
@@ -615,7 +627,7 @@ public class GraphReportService : IGraphReportService
         var lines = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         if (lines.Length < 2) return activities;
 
-        var headers = lines[0].Split(',');
+        var headers = lines[0].Split(',').Select(h => h.Trim('\r', ' ', '\uFEFF')).ToArray();
         var dateIndex = Array.IndexOf(headers, "Report Date");
         var sentIndex = Array.IndexOf(headers, "Send");
         var receivedIndex = Array.IndexOf(headers, "Receive");

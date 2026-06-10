@@ -73,7 +73,6 @@ azd deploy
 - Check `TenantFilter.IsMultiTenantView` for chart series labeling
 - Dispose event subscription in `Dispose()`
 - Use `@key` on chart components when date ranges change to force re-render
-- **Auto-refresh**: `TenantSelector` polls every 30s for new tenants — pages auto-reload via `OnChangeAsync` when new tenants appear (no manual browser refresh needed after consent callback registration)
 
 ### Background Collection (src/MWDashboard.Job/)
 - One-shot console app: collects all data for active tenants, then exits
@@ -111,11 +110,13 @@ azd deploy
 - DbContext has 12 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
 
 ### Authentication & Authorization (src/MWDashboard.Web/)
-- **OpenID Connect** via `Microsoft.Identity.Web` — multi-tenant (`TenantId: "common"`)
+- **OpenID Connect** via `Microsoft.Identity.Web` — multi-tenant (`TenantId: "common"`), authorization code flow (`ResponseType: "code"`)
 - **ClientSecret reuse**: `AzureAdAuth:ClientSecret` copied from `AzureAd:ClientSecret` at startup (single secret for both Graph API and user auth)
 - **Token validation**: `OnTokenValidated` event allows home tenant unconditionally; other tenants validated against DB (`Tenants.IsActive`)
+- **Access control**: Removing/deactivating a tenant immediately blocks login for users from that tenant; adding/activating allows login
 - **Data scoping**: `TenantFilterService.SetTenantScope()` called in `MainLayout` — home tenant users see all data; customer tenant users are restricted to their own tenant
-- **UI**: Home tenant users see the full `TenantSelector`; customer tenant users see only their tenant name (no selector)
+- **UI**: Home tenant users see the full `TenantSelector` + Tenants page; customer tenant users see only their tenant name (no selector) and cannot access `/tenants`
+- **Route protection**: `.RequireAuthorization()` on `MapRazorComponents` enforces auth at HTTP level (triggers OIDC challenge before Blazor renders)
 - **Redirect URI**: Must register `https://<web-url>/signin-oidc` in app registration
 - **Config section**: `AzureAdAuth` (Instance, TenantId=common, ClientId, CallbackPath, SignedOutCallbackPath)
 
