@@ -150,6 +150,12 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// Trust forwarded headers from Container Apps ingress (TLS termination at proxy)
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost
+});
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 app.UseOutputCache();
