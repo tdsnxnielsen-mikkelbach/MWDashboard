@@ -103,7 +103,12 @@ else
     @* Per-Service Breakdown *@
     <MudItem xs="12" md="6">
         <MudPaper Class="pa-4" Elevation="2">
-            <MudText Typo="Typo.h6" Class="mb-3">Active Users by Service</MudText>
+            <div class="d-flex justify-space-between align-center mb-3">
+                <MudText Typo="Typo.h6">Active Users by Service</MudText>
+                <MudTooltip Text="Green = strong adoption (≥70%), Yellow = moderate (40–69%), Red = low adoption (<40% of licenses actively used)">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Color="Color.Default" />
+                </MudTooltip>
+            </div>
             @if (_serviceBarData.Count > 0)
             {
                 <MudStack Spacing="3">
@@ -284,11 +289,12 @@ else
         return (double)license.ConsumedLicenses / license.TotalLicenses * 100;
     }
 
+    // Adoption interpretation: high usage of licenses = good (users are active)
     private static Color GetKpiColor(double percent) => percent switch
     {
-        >= 70 => Color.Success,
-        >= 40 => Color.Warning,
-        _ => Color.Error
+        >= 70 => Color.Success,  // Strong adoption
+        >= 40 => Color.Warning,  // Moderate adoption
+        _ => Color.Error         // Low adoption — licenses underutilized
     };
 
     public class MauChartPoint
