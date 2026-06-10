@@ -25,6 +25,7 @@ services:
     language: dotnet
   consent-static:
     project: ./static/consent-complete
+    dist: ./static/consent-complete
     host: staticwebapp
     hooks:
       predeploy:
