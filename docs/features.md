@@ -101,9 +101,11 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 ## Tenant Management (`/tenants`)
 
 - Register/deregister tenants — form auto-resets after successful registration with auto-dismissing success message
+- **Inline display name editing** — pencil icon next to each tenant name opens an inline text field with save/cancel buttons; updates propagate to the global tenant selector immediately
 - Admin consent URL generator with clipboard copy — redirect URI points to the Static Web App consent-complete page (configured via `ConsentCallback:RedirectUri`)
 - **Collect Now button** — triggers immediate data collection for a specific tenant via the dedicated Collector container app (internal HTTP call); automatically falls back to local collection if the collector is unavailable. Collects MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments, storage, M365 app usage, and consumption score
 - Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants
+- **Auto-refresh** — the global tenant selector polls every 30 seconds for newly registered tenants (e.g., via consent callback); new tenants are auto-selected and all dashboard pages reload data without requiring a manual browser refresh
 
 ## Automated Consent & Tenant Registration
 

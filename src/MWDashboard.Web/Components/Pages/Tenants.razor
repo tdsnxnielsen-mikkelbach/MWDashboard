@@ -67,7 +67,23 @@
                     <MudTh>Actions</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="Name">@context.DisplayName</MudTd>
+                    <MudTd DataLabel="Name">
+                        @if (_editingTenantId == context.TenantId)
+                        {
+                            <MudTextField @bind-Value="_editDisplayName" Variant="Variant.Outlined" Margin="Margin.Dense" 
+                                          Immediate="true" Style="max-width: 200px; display: inline-block;" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" 
+                                           OnClick="@(() => SaveDisplayName(context))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Default" Size="Size.Small" 
+                                           OnClick="CancelEdit" />
+                        }
+                        else
+                        {
+                            @context.DisplayName
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Size="Size.Small" 
+                                           OnClick="@(() => StartEdit(context))" Class="ml-1" />
+                        }
+                    </MudTd>
                     <MudTd DataLabel="Tenant ID"><MudText Typo="Typo.caption">@context.TenantId</MudText></MudTd>
                     <MudTd DataLabel="Active">
                         <MudSwitch T="bool" Value="context.IsActive" ValueChanged="@(v => ToggleActive(context))" Color="Color.Success" />
@@ -209,6 +225,8 @@
     }
 
     private string? _collectingTenantId;
+    private string? _editingTenantId;
+    private string _editDisplayName = string.Empty;
 
     private async Task CollectNow(TenantInfo tenant)
     {
@@ -230,5 +248,35 @@
         {
             _collectingTenantId = null;
         }
+    }
+
+    private void StartEdit(TenantInfo tenant)
+    {
+        _editingTenantId = tenant.TenantId;
+        _editDisplayName = tenant.DisplayName;
+    }
+
+    private void CancelEdit()
+    {
+        _editingTenantId = null;
+        _editDisplayName = string.Empty;
+    }
+
+    private async Task SaveDisplayName(TenantInfo tenant)
+    {
+        if (string.IsNullOrWhiteSpace(_editDisplayName)) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Tenants.FindAsync(tenant.Id);
+        if (entity != null)
+        {
+            entity.DisplayName = _editDisplayName.Trim();
+            await db.SaveChangesAsync();
+        }
+
+        _editingTenantId = null;
+        _editDisplayName = string.Empty;
+        await LoadTenants();
+        await TenantFilter.LoadTenantsAsync();
     }
 }

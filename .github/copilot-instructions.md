@@ -73,6 +73,7 @@ azd deploy
 - Check `TenantFilter.IsMultiTenantView` for chart series labeling
 - Dispose event subscription in `Dispose()`
 - Use `@key` on chart components when date ranges change to force re-render
+- **Auto-refresh**: `TenantSelector` polls every 30s for new tenants — pages auto-reload via `OnChangeAsync` when new tenants appear (no manual browser refresh needed after consent callback registration)
 
 ### Background Collection (src/MWDashboard.Job/)
 - One-shot console app: collects all data for active tenants, then exits
