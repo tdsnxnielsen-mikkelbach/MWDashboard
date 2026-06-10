@@ -6,6 +6,30 @@ hooks:
   prepackage:
     shell: sh
     run: dotnet build -c Release
+  postdeploy:
+    shell: pwsh
+    run: |
+      Write-Host "Deploying consent-static to Azure Static Web App..."
+      $swaName = $env:CONSENT_STATIC_NAME
+      $rgName = (az group list --tag "azd-env-name=$env:AZURE_ENV_NAME" --query "[0].name" -o tsv)
+      if (-not $swaName -or -not $rgName) { Write-Error "Could not resolve SWA name ($swaName) or resource group ($rgName)"; exit 1 }
+      # Inject placeholders
+      $html = Get-Content ./static/consent-complete/index.html -Raw
+      $callbackUrl = "https://$($env:CONSENT_CALLBACK_FQDN)"
+      $secret = $env:CONSENT_SHARED_SECRET
+      $aiConnStr = $env:APPLICATIONINSIGHTS_CONNECTION_STRING
+      if (-not $env:CONSENT_CALLBACK_FQDN) { Write-Error "CONSENT_CALLBACK_FQDN not set"; exit 1 }
+      if (-not $secret) { Write-Error "CONSENT_SHARED_SECRET not set"; exit 1 }
+      $html = $html.Replace('%%CONSENT_CALLBACK_URL%%', $callbackUrl)
+      $html = $html.Replace('%%CONSENT_SHARED_SECRET%%', $secret)
+      if ($aiConnStr) { $html = $html.Replace('%%APPINSIGHTS_CONNECTION_STRING%%', $aiConnStr) }
+      Set-Content ./static/consent-complete/index.html -Value $html -NoNewline
+      Write-Host "Injected consent callback URL: $callbackUrl"
+      # Get deployment token and deploy
+      $token = (az staticwebapp secrets list --name $swaName --resource-group $rgName --query "properties.apiKey" -o tsv)
+      if (-not $token) { Write-Error "Could not retrieve SWA deployment token"; exit 1 }
+      npx @azure/static-web-apps-cli deploy ./static/consent-complete --deployment-token $token --env production
+      Write-Host "Static Web App deployed successfully"
 services:
   web:
     project: ./src/MWDashboard.Web
@@ -23,34 +47,6 @@ services:
     project: ./src/MWDashboard.Consent
     host: containerapp
     language: dotnet
-  consent-static:
-    project: ./static/consent-complete
-    dist: ./static/consent-complete
-    host: staticwebapp
-    hooks:
-      predeploy:
-        shell: pwsh
-        run: |
-          $html = Get-Content ./index.html -Raw
-          $callbackUrl = "https://${env:CONSENT_CALLBACK_FQDN}"
-          $secret = $env:CONSENT_SHARED_SECRET
-          $aiConnStr = $env:APPLICATIONINSIGHTS_CONNECTION_STRING
-          if (-not $callbackUrl -or $callbackUrl -eq "https://") { Write-Error "CONSENT_CALLBACK_FQDN not set"; exit 1 }
-          if (-not $secret) { Write-Error "CONSENT_SHARED_SECRET not set"; exit 1 }
-          $html = $html.Replace('%%CONSENT_CALLBACK_URL%%', $callbackUrl)
-          $html = $html.Replace('%%CONSENT_SHARED_SECRET%%', $secret)
-          if ($aiConnStr) { $html = $html.Replace('%%APPINSIGHTS_CONNECTION_STRING%%', $aiConnStr) }
-          Set-Content ./index.html -Value $html -NoNewline
-          Write-Host "Injected consent callback URL: $callbackUrl"
-      deploy:
-        shell: pwsh
-        run: |
-          $swaName = $env:CONSENT_STATIC_NAME
-          $rgName = (az group list --tag "azd-env-name=$env:AZURE_ENV_NAME" --query "[0].name" -o tsv)
-          if (-not $swaName -or -not $rgName) { Write-Error "Could not resolve SWA name or resource group"; exit 1 }
-          $token = (az staticwebapp secrets list --name $swaName --resource-group $rgName --query "properties.apiKey" -o tsv)
-          if (-not $token) { Write-Error "Could not retrieve SWA deployment token"; exit 1 }
-          npx @azure/static-web-apps-cli deploy . --deployment-token $token --env production
 infra:
   provider: bicep
   path: ./infra
