@@ -210,7 +210,7 @@ MWDashboard/
 │   │       ├── TenantFilterService.cs     # Scoped state service for tenant selection
 │   │       └── IDataCollectionService.cs  # Interface for on-demand collection
 │   ├── MWDashboard.Web/                   # Blazor Web App → Container App
-│   │   ├── Program.cs                     # Redis + output caching, EF Core (SQL Server)
+│   │   ├── Program.cs                     # Auth + Redis + output caching, EF Core (SQL Server)
 │   │   ├── Services/
 │   │   │   └── OnDemandDataCollectionService.cs  # Web-triggered data collection
 │   │   ├── Components/
@@ -239,7 +239,26 @@ MWDashboard/
     ├── features.md                        # Feature documentation
     └── permissions.md                     # Permissions & consent guide
 ```
+## Authentication & Authorization
 
+```mermaid
+flowchart TD
+    User[User Browser] -->|OpenID Connect| AAD[Azure AD]
+    AAD -->|Token with tenant claim| Web[Web Container App]
+    Web -->|Validate tenant| DB[(Tenants table)]
+    Web -->|Home tenant user| Full[Full access: all tenants]
+    Web -->|Customer tenant user| Scoped[Scoped access: own tenant only]
+```
+
+| Role | Access | TenantSelector |
+|------|--------|----------------|
+| Home tenant user | All registered tenants, full multi-tenant views | Full selector (filter/select all/none) |
+| Customer tenant user | Own tenant data only | Tenant name displayed (no selector) |
+
+- **Protocol**: OpenID Connect via `Microsoft.Identity.Web` (multi-tenant, `TenantId: "common"`)
+- **Tenant validation**: Home tenant ID (from `AzureAd:TenantId` config) always allowed; other tenants must be registered and active in the database (via consent flow)
+- **Data isolation**: `TenantFilterService.SetTenantScope()` restricts all data queries to the user's own tenant for customer-tenant users
+- **Secret reuse**: Single `ClientSecret` shared between Graph API client credentials and OpenID Connect user auth
 ## Key Constraints
 
 | Constraint | Mitigation |

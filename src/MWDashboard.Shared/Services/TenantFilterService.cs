@@ -9,6 +9,7 @@ public class TenantFilterService
     private readonly IDbContextFactory<MauDbContext> _dbFactory;
     private List<TenantInfo> _allTenants = [];
     private HashSet<string> _selectedTenantIds = [];
+    private HashSet<string>? _scopedTenantIds; // null = unrestricted (home tenant user)
 
     public event Func<Task>? OnChangeAsync;
 
@@ -16,6 +17,17 @@ public class TenantFilterService
     {
         _dbFactory = dbFactory;
     }
+
+    /// <summary>
+    /// Restrict this service to only show specific tenants (for customer-tenant users).
+    /// Pass null for unrestricted access (home tenant users).
+    /// </summary>
+    public void SetTenantScope(IEnumerable<string>? tenantIds)
+    {
+        _scopedTenantIds = tenantIds?.ToHashSet();
+    }
+
+    public bool IsHomeTenantUser => _scopedTenantIds == null;
 
     public IReadOnlyList<TenantInfo> AllTenants => _allTenants;
     public IReadOnlySet<string> SelectedTenantIds => _selectedTenantIds;
@@ -29,7 +41,11 @@ public class TenantFilterService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var previousActiveIds = _allTenants.Select(t => t.TenantId).ToHashSet();
 
-        _allTenants = await db.Tenants.Where(t => t.IsActive).OrderBy(t => t.TenantName).ToListAsync();
+        var query = db.Tenants.Where(t => t.IsActive);
+        if (_scopedTenantIds != null)
+            query = query.Where(t => _scopedTenantIds.Contains(t.TenantId));
+
+        _allTenants = await query.OrderBy(t => t.TenantName).ToListAsync();
 
         var currentActiveIds = _allTenants.Select(t => t.TenantId).ToHashSet();
 

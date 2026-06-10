@@ -1,4 +1,9 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject TenantFilterService TenantFilter
+@inject IConfiguration Configuration
+@inject AuthenticationStateProvider AuthStateProvider
 
 <MudThemeProvider Theme="_theme" IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
@@ -10,7 +15,23 @@
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
         <MudText Typo="Typo.h5" Class="ml-3">Modern Workplace Dashboard</MudText>
         <MudSpacer />
-        <TenantSelector />
+        @if (TenantFilter.IsHomeTenantUser)
+        {
+            <TenantSelector />
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Color="Color.Inherit" Class="mr-2">@_scopedTenantName</MudText>
+        }
+        <AuthorizeView>
+            <Authorized>
+                <MudTooltip Text="@context.User.Identity?.Name">
+                    <MudIconButton Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" />
+                </MudTooltip>
+                <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" 
+                               Href="MicrosoftIdentity/Account/SignOut" />
+            </Authorized>
+        </AuthorizeView>
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
                        Color="Color.Inherit" OnClick="ToggleDarkMode" />
     </MudAppBar>
@@ -27,6 +48,25 @@
 @code {
     private bool _drawerOpen = true;
     private bool _isDarkMode = true;
+    private string _scopedTenantName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userTenantId = authState.User.FindFirst("http://schemas.microsoft.com/identity/claims/tenantid")?.Value;
+        var homeTenantId = Configuration["AzureAd:TenantId"];
+
+        if (!string.IsNullOrEmpty(userTenantId) && !userTenantId.Equals(homeTenantId, StringComparison.OrdinalIgnoreCase))
+        {
+            // Customer-tenant user: restrict to their own tenant only
+            TenantFilter.SetTenantScope([userTenantId]);
+            await TenantFilter.LoadTenantsAsync();
+            _scopedTenantName = TenantFilter.AllTenants.FirstOrDefault()?.DisplayName
+                ?? TenantFilter.AllTenants.FirstOrDefault()?.TenantName
+                ?? "My Tenant";
+        }
+        // Home tenant users: no restriction (SetTenantScope not called = null = all data)
+    }
 
     private MudTheme _theme = new()
     {

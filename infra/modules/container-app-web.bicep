@@ -128,6 +128,27 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'ConsentCallback__RedirectUri'
               value: consentRedirectUri
             }
+            {
+              name: 'AzureAdAuth__Instance'
+              value: 'https://login.microsoftonline.com/'
+            }
+            {
+              name: 'AzureAdAuth__TenantId'
+              value: 'common'
+            }
+            {
+              name: 'AzureAdAuth__ClientId'
+              secretRef: 'azuread-client-id'
+            }
+            {
+              name: 'AzureAdAuth__CallbackPath'
+              value: '/signin-oidc'
+            }
+            {
+              name: 'AzureAdAuth__SignedOutCallbackPath'
+              value: '/signout-callback-oidc'
+            }
+
           ]
         }
       ]

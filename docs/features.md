@@ -2,9 +2,19 @@
 
 All charts include axis labels (Y-axis: metric name, X-axis: time/category) and bottom-positioned legends identifying each data series. Chart text (legends, axis labels, titles) automatically adapts to dark/light mode via MudBlazor CSS variables. All pages show a full-page loading state with spinner while loading data (on initial load and when the tenant filter changes).
 
+## Authentication & Access Control
+
+- **Azure AD OpenID Connect** — all dashboard pages require authentication
+- **Multi-tenant sign-in** — users from the home tenant (where the app registration lives) and any consented customer tenant can sign in
+- **Automatic tenant validation** — on sign-in, the user's tenant ID is checked against the database; only active (consented) tenants are allowed
+- **Data isolation** — customer-tenant users can only view data from their own tenant; home-tenant users see all registered tenants
+- **AppBar user controls** — user icon (tooltip shows name) + sign-out button visible when authenticated
+- **Login redirect** — unauthenticated users are automatically redirected to Azure AD sign-in
+
 ## Global Tenant Selector
 
-- **Persistent tenant filter** in the AppBar — visible on every page, uses `MudMenu` with label + dropdown arrow
+- **Persistent tenant filter** in the AppBar — visible only for home-tenant users (admins/MSPs)
+- **Customer-tenant users** see their tenant name displayed in the AppBar (no selector — data is pre-scoped)
 - Select individual tenants, all, or none via dropdown menu with checkboxes
 - **Disabled during data load** — shows a spinner and prevents interaction while pages are fetching data
 - **Multi-tenant attribution** — when multiple tenants are selected, all charts show series labeled `"Service (TenantName)"` and all tables include a Tenant column so data origin is always clear

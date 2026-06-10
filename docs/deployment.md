@@ -101,16 +101,18 @@ This single command:
 3. Pushes images to Azure Container Registry
 4. Deploys the web container app, the on-demand collector, and the scheduled job
 
-### 5. Register Redirect URI in Entra ID
+### 5. Register Redirect URIs in Entra ID
 
-After deployment, register the Static Web App URL in your app registration:
+After deployment, register **two** redirect URIs in your app registration:
 
-1. Run `azd env get-values` and find `CONSENT_STATIC_URI` (e.g., `https://swa-consent-xxxxx.azurestaticapps.net`)
+1. Run `azd env get-values` and find `CONSENT_STATIC_URI` and `WEB_URI`
 2. Go to **Azure Portal → App registrations → your app → Authentication → Web → Redirect URIs**
-3. Add the Static Web App URL (the full URL without a trailing path — Azure AD redirects to `?tenant=...&admin_consent=True` on this domain)
+3. Add both:
+   - **Consent flow**: The Static Web App URL (e.g., `https://swa-consent-xxxxx.azurestaticapps.net`) — for admin consent redirect
+   - **Dashboard login**: `{WEB_URI}/signin-oidc` (e.g., `https://ca-web-xxxxx.azurecontainerapps.io/signin-oidc`) — for user sign-in
 4. Save
 
-This is required for the admin consent flow — after a tenant admin grants consent, Azure AD redirects them to the Static Web App, which calls the consent callback container to auto-register the tenant.
+The consent URI is for the admin consent flow (tenant onboarding). The signin-oidc URI is for dashboard user authentication.
 
 ### 6. Verify deployment
 

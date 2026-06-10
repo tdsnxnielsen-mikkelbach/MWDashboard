@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using MudBlazor.Services;
 using MWDashboard.Shared.Data;
 using MWDashboard.Shared.Services;
@@ -23,6 +26,43 @@ if (!string.IsNullOrEmpty(aiConnectionString))
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Azure AD authentication (restrict dashboard access to allowed tenants)
+// Reuse Graph API client secret for user authentication
+var homeTenantId = builder.Configuration["AzureAd:TenantId"] ?? "";
+builder.Configuration["AzureAdAuth:ClientSecret"] = builder.Configuration["AzureAd:ClientSecret"];
+builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAdAuth")
+    .EnableTokenAcquisitionToCallDownstreamApi()
+    .AddInMemoryTokenCaches();
+builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
+{
+    options.Events.OnTokenValidated = async context =>
+    {
+        var tenantId = context.Principal?.FindFirst("http://schemas.microsoft.com/identity/claims/tenantid")?.Value;
+        if (string.IsNullOrEmpty(tenantId))
+        {
+            context.Fail("No tenant claim found.");
+            return;
+        }
+
+        // Home tenant is always allowed
+        if (tenantId.Equals(homeTenantId, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        // Check if the tenant has been registered (consented) in the database
+        var dbFactory = context.HttpContext.RequestServices.GetRequiredService<IDbContextFactory<MauDbContext>>();
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var isRegistered = await db.Tenants.AnyAsync(t => t.TenantId == tenantId && t.IsActive);
+        if (!isRegistered)
+        {
+            context.Fail($"Tenant {tenantId} is not registered. Please complete the consent flow first.");
+        }
+    };
+});
+builder.Services.AddControllersWithViews()
+    .AddMicrosoftIdentityUI();
+builder.Services.AddAuthorization();
+builder.Services.AddCascadingAuthenticationState();
 
 // MudBlazor
 builder.Services.AddMudServices();
@@ -114,9 +154,12 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 app.UseOutputCache();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapControllers(); // Microsoft Identity UI login/logout endpoints
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
@@ -134,7 +177,7 @@ app.MapGet("/api/export/consumption", async (IMauDataService dataService, HttpCo
         var adoptionPct = c.LicensedUserCount > 0 ? (double)c.ActiveUserCount / c.LicensedUserCount * 100 : 0;
         await writer.WriteLineAsync($"{c.TenantId},{EscapeCsv(c.TenantName)},{c.ReportDate:yyyy-MM-dd},{c.ConsumptionScore:F1},{c.ActiveUserCount},{c.LicensedUserCount},{adoptionPct:F1},{c.StorageUsedBytes / 1073741824.0:F2},{c.AvgWorkloadsPerUser:F2},{c.TotalActivityCount}");
     }
-});
+}).RequireAuthorization();
 
 static string EscapeCsv(string value) => value.Contains(',') ? $"\"{value}\"" : value;
 

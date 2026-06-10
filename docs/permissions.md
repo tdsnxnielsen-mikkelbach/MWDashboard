@@ -46,11 +46,34 @@ This URL is stable after first deployment and does not change unless you recreat
 
 If a tenant doesn't have Entra ID P1/P2, sign-in log collection will gracefully fail and log a warning — all other data collection continues normally.
 
+## Dashboard User Authentication
+
+The dashboard uses Azure AD OpenID Connect for user authentication (same app registration as Graph API access).
+
+| User Type | Access Level | TenantSelector |
+|-----------|-------------|----------------|
+| Home tenant user | All registered tenants | Full multi-tenant selector |
+| Customer tenant user | Own tenant data only | Tenant name shown (no selector) |
+
+### Redirect URI Registration
+
+In addition to the consent redirect URI (Static Web App), register the dashboard sign-in URI:
+
+- **Sign-in**: `https://<web-app-url>/signin-oidc`
+- **Sign-out**: `https://<web-app-url>/signout-callback-oidc`
+
+### Access Control Logic
+
+1. Home tenant (`AzureAd:TenantId`) — always allowed, sees all data
+2. Customer tenants — must be registered and active in the database (via consent flow)
+3. Unregistered tenants — sign-in rejected with error message
+
 ## Consent Troubleshooting
 
 1. **"Insufficient privileges"** — The admin who consented may not be a Global Admin. Only Global Admins can consent to Application permissions.
-2. **Sign-in logs returning 403** — Target tenant doesn't have Entra ID P1/P2 license.
-3. **Message Center returning empty** — Ensure `ServiceMessage.Read.All` is granted and the tenant has M365 services active.
-4. **Department data returning empty** — Ensure `User.Read.All` is granted. Some tenants may not populate the `department` field on user accounts.
-5. **Copilot data returning empty** — Tenant must have Microsoft 365 Copilot licenses assigned. Data appears after users have been active with Copilot.
-6. **Stale consent** — If you add new permissions after initial consent, you must re-consent. Use the consent URL generator on the Tenants page.
+2. **"Tenant is not registered"** on dashboard login — The tenant hasn't completed the consent flow yet. Send the admin the consent URL from the Tenants page.
+3. **Sign-in logs returning 403** — Target tenant doesn't have Entra ID P1/P2 license.
+4. **Message Center returning empty** — Ensure `ServiceMessage.Read.All` is granted and the tenant has M365 services active.
+5. **Department data returning empty** — Ensure `User.Read.All` is granted. Some tenants may not populate the `department` field on user accounts.
+6. **Copilot data returning empty** — Tenant must have Microsoft 365 Copilot licenses assigned. Data appears after users have been active with Copilot.
+7. **Stale consent** — If you add new permissions after initial consent, you must re-consent. Use the consent URL generator on the Tenants page.

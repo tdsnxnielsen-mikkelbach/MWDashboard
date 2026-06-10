@@ -5,7 +5,7 @@
 - **Solution**: Multi-project .NET 10 solution with `MWDashboard.Shared`, `MWDashboard.Web`, `MWDashboard.Collector`, `MWDashboard.Consent`, and `MWDashboard.Job` under `src/`
 - **UI**: Blazor Server with MudBlazor + Blazor-ApexCharts
 - **Data**: EF Core + Azure SQL Serverless (auto-pause), Redis distributed cache
-- **Auth**: Azure AD multi-tenant, app-only (client credentials) per tenant
+- **Auth**: Azure AD multi-tenant — app-only (client credentials) for Graph API, OpenID Connect for user access with tenant-scoped data isolation
 - **Hosting**: Azure Container Apps (web + on-demand collector + consent callback + scheduled job) + Azure Static Web App (consent page)
 - **Infra**: Bicep IaC via Azure Developer CLI (azd)
 - **No test projects** — manual/integration testing only
@@ -110,15 +110,26 @@ azd deploy
 - Auto-migrate on startup in both Web and Job
 - DbContext has 12 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
 
+### Authentication & Authorization (src/MWDashboard.Web/)
+- **OpenID Connect** via `Microsoft.Identity.Web` — multi-tenant (`TenantId: "common"`)
+- **ClientSecret reuse**: `AzureAdAuth:ClientSecret` copied from `AzureAd:ClientSecret` at startup (single secret for both Graph API and user auth)
+- **Token validation**: `OnTokenValidated` event allows home tenant unconditionally; other tenants validated against DB (`Tenants.IsActive`)
+- **Data scoping**: `TenantFilterService.SetTenantScope()` called in `MainLayout` — home tenant users see all data; customer tenant users are restricted to their own tenant
+- **UI**: Home tenant users see the full `TenantSelector`; customer tenant users see only their tenant name (no selector)
+- **Redirect URI**: Must register `https://<web-url>/signin-oidc` in app registration
+- **Config section**: `AzureAdAuth` (Instance, TenantId=common, ClientId, CallbackPath, SignedOutCallbackPath)
+
 ### DI Registration (src/MWDashboard.Web/Program.cs)
 - `MauDataService` registered as Scoped (raw implementation)
 - `IMauDataService` resolves to `CachedMauDataService` (decorator wrapping `MauDataService` + `RedisCacheInvalidationService`)
 - `IGraphReportService` → `GraphReportService` (Scoped)
-- `TenantFilterService` → Scoped (shared state per circuit)
+- `TenantFilterService` → Scoped (shared state per circuit, supports `SetTenantScope` for data isolation)
 - `IDataCollectionService` → `HttpCollectorClient` (typed HttpClient, calls Collector container) / fallback to `OnDemandDataCollectionService` if no `CollectorBaseUrl` configured
 - `RedisCacheInvalidationService` → Singleton (Redis pub/sub for cross-replica invalidation)
 - `CacheWarmupService` → Hosted service (pre-populates cache on startup)
 - `IConnectionMultiplexer` → Singleton (Redis connection for pub/sub, if Redis configured)
+- `AddMicrosoftIdentityWebAppAuthentication` → OpenID Connect with tenant validation
+- `AddCascadingAuthenticationState` → Blazor auth state cascaded to all components
 
 ### Blazor-ApexCharts Usage
 - Import via `@using ApexCharts` in page components
