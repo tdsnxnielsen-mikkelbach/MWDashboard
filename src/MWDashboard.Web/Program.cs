@@ -31,9 +31,7 @@ builder.Services.AddRazorComponents()
 // Reuse Graph API client secret for user authentication
 var homeTenantId = builder.Configuration["AzureAd:TenantId"] ?? "";
 builder.Configuration["AzureAdAuth:ClientSecret"] = builder.Configuration["AzureAd:ClientSecret"];
-builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAdAuth")
-    .EnableTokenAcquisitionToCallDownstreamApi()
-    .AddInMemoryTokenCaches();
+builder.Services.AddMicrosoftIdentityWebAppAuthentication(builder.Configuration, "AzureAdAuth");
 builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
 {
     options.Events.OnTokenValidated = async context =>
@@ -161,7 +159,8 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapControllers(); // Microsoft Identity UI login/logout endpoints
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .RequireAuthorization();
 
 // Export endpoint for consumption data (CSV)
 app.MapGet("/api/export/consumption", async (IMauDataService dataService, HttpContext ctx) =>
