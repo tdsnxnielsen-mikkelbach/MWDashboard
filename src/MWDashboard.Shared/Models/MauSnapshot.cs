@@ -191,3 +191,20 @@ public class M365AppUsageSnapshot
     public int UserCount { get; set; }
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class BrandingSettings
+{
+    public int Id { get; set; }
+    public string? LogoBase64 { get; set; }
+    public string? LogoContentType { get; set; }
+    public string? FaviconBase64 { get; set; }
+    public string? FaviconContentType { get; set; }
+    public string LightPrimary { get; set; } = "#1976d2";
+    public string LightSecondary { get; set; } = "#424242";
+    public string LightAppbar { get; set; } = "#1976d2";
+    public string DarkPrimary { get; set; } = "#90caf9";
+    public string DarkSecondary { get; set; } = "#ce93d8";
+    public string DarkAppbar { get; set; } = "#1e1e2e";
+    public string? AppTitle { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}

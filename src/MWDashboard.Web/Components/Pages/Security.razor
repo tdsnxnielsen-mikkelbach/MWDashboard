@@ -269,7 +269,16 @@ else
         StateHasChanged();
 
         var tenantIds = TenantFilter.GetFilteredTenantIds();
-        _tenantTiers = await MauDataService.GetTenantEntraIdTiersAsync();
+        var allTiers = await MauDataService.GetTenantEntraIdTiersAsync();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToHashSet();
+            _tenantTiers = allTiers.Where(t => ids.Contains(t.TenantId)).ToList();
+        }
+        else
+        {
+            _tenantTiers = allTiers;
+        }
         _summaries = await MauDataService.GetSecuritySummaryAsync(tenantIds, days: 30);
 
         _dailySignIns = _summaries

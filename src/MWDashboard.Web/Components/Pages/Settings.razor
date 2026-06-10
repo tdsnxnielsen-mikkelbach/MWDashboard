@@ -1,0 +1,266 @@
+@page "/settings"
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@using MudBlazor.Utilities
+@inject IDbContextFactory<MauDbContext> DbFactory
+@inject TenantFilterService TenantFilter
+@inject ISnackbar Snackbar
+
+<PageTitle>Settings</PageTitle>
+
+@if (!TenantFilter.IsHomeTenantUser)
+{
+    <MudAlert Severity="Severity.Error">You do not have permission to access this page.</MudAlert>
+    return;
+}
+
+<MudText Typo="Typo.h4" Class="mb-4">Branding & Appearance</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else
+{
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">General</MudText>
+            <MudTextField @bind-Value="_settings.AppTitle" Label="Application Title" Placeholder="Modern Workplace Dashboard"
+                          Variant="Variant.Outlined" Class="mb-4" />
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Logo & Favicon</MudText>
+            
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Logo (AppBar)</MudText>
+            @if (!string.IsNullOrEmpty(_settings.LogoBase64))
+            {
+                <div class="mb-2">
+                    <img src="data:@(_settings.LogoContentType);base64,@(_settings.LogoBase64)" 
+                         style="max-height:40px; max-width:200px;" alt="Current logo" />
+                </div>
+            }
+            <MudFileUpload T="IBrowserFile" Accept=".png,.jpg,.jpeg,.svg,.webp" FilesChanged="OnLogoUpload">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" 
+                               StartIcon="@Icons.Material.Filled.CloudUpload">
+                        Upload Logo
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+            @if (!string.IsNullOrEmpty(_settings.LogoBase64))
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="RemoveLogo" Class="mt-1">Remove</MudButton>
+            }
+
+            <MudDivider Class="my-4" />
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Favicon</MudText>
+            @if (!string.IsNullOrEmpty(_settings.FaviconBase64))
+            {
+                <div class="mb-2">
+                    <img src="data:@(_settings.FaviconContentType);base64,@(_settings.FaviconBase64)" 
+                         style="max-height:32px; max-width:32px;" alt="Current favicon" />
+                </div>
+            }
+            <MudFileUpload T="IBrowserFile" Accept=".png,.ico,.svg" FilesChanged="OnFaviconUpload">
+                <ActivatorContent>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" 
+                               StartIcon="@Icons.Material.Filled.CloudUpload">
+                        Upload Favicon
+                    </MudButton>
+                </ActivatorContent>
+            </MudFileUpload>
+            @if (!string.IsNullOrEmpty(_settings.FaviconBase64))
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="RemoveFavicon" Class="mt-1">Remove</MudButton>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Light Theme</MudText>
+            <div class="d-flex align-center mb-3">
+                <MudText Class="mr-3" Style="min-width:100px;">Primary</MudText>
+                <MudColorPicker @bind-Value="_lightPrimary" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+            </div>
+            <div class="d-flex align-center mb-3">
+                <MudText Class="mr-3" Style="min-width:100px;">Secondary</MudText>
+                <MudColorPicker @bind-Value="_lightSecondary" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+            </div>
+            <div class="d-flex align-center mb-3">
+                <MudText Class="mr-3" Style="min-width:100px;">AppBar</MudText>
+                <MudColorPicker @bind-Value="_lightAppbar" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Dark Theme</MudText>
+            <div class="d-flex align-center mb-3">
+                <MudText Class="mr-3" Style="min-width:100px;">Primary</MudText>
+                <MudColorPicker @bind-Value="_darkPrimary" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+            </div>
+            <div class="d-flex align-center mb-3">
+                <MudText Class="mr-3" Style="min-width:100px;">Secondary</MudText>
+                <MudColorPicker @bind-Value="_darkSecondary" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+            </div>
+            <div class="d-flex align-center mb-3">
+                <MudText Class="mr-3" Style="min-width:100px;">AppBar</MudText>
+                <MudColorPicker @bind-Value="_darkAppbar" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12">
+        <div class="d-flex gap-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSettings" 
+                       StartIcon="@Icons.Material.Filled.Save" Disabled="_saving">
+                @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" /> }
+                Save Changes
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="ResetToDefaults">
+                Reset to Defaults
+            </MudButton>
+        </div>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private BrandingSettings _settings = new();
+    private bool _loading = true;
+    private bool _saving;
+
+    private MudColor _lightPrimary = new("#1976d2");
+    private MudColor _lightSecondary = new("#424242");
+    private MudColor _lightAppbar = new("#1976d2");
+    private MudColor _darkPrimary = new("#90caf9");
+    private MudColor _darkSecondary = new("#ce93d8");
+    private MudColor _darkAppbar = new("#1e1e2e");
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+    }
+
+    private async Task LoadSettings()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _settings = await db.BrandingSettings.FirstOrDefaultAsync() ?? new BrandingSettings();
+        _lightPrimary = new MudColor(_settings.LightPrimary);
+        _lightSecondary = new MudColor(_settings.LightSecondary);
+        _lightAppbar = new MudColor(_settings.LightAppbar);
+        _darkPrimary = new MudColor(_settings.DarkPrimary);
+        _darkSecondary = new MudColor(_settings.DarkSecondary);
+        _darkAppbar = new MudColor(_settings.DarkAppbar);
+        _loading = false;
+    }
+
+    private async Task SaveSettings()
+    {
+        _saving = true;
+        StateHasChanged();
+
+        _settings.LightPrimary = _lightPrimary.ToString(MudColorOutputFormats.Hex);
+        _settings.LightSecondary = _lightSecondary.ToString(MudColorOutputFormats.Hex);
+        _settings.LightAppbar = _lightAppbar.ToString(MudColorOutputFormats.Hex);
+        _settings.DarkPrimary = _darkPrimary.ToString(MudColorOutputFormats.Hex);
+        _settings.DarkSecondary = _darkSecondary.ToString(MudColorOutputFormats.Hex);
+        _settings.DarkAppbar = _darkAppbar.ToString(MudColorOutputFormats.Hex);
+        _settings.UpdatedAt = DateTime.UtcNow;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var existing = await db.BrandingSettings.FirstOrDefaultAsync();
+        if (existing != null)
+        {
+            existing.LogoBase64 = _settings.LogoBase64;
+            existing.LogoContentType = _settings.LogoContentType;
+            existing.FaviconBase64 = _settings.FaviconBase64;
+            existing.FaviconContentType = _settings.FaviconContentType;
+            existing.LightPrimary = _settings.LightPrimary;
+            existing.LightSecondary = _settings.LightSecondary;
+            existing.LightAppbar = _settings.LightAppbar;
+            existing.DarkPrimary = _settings.DarkPrimary;
+            existing.DarkSecondary = _settings.DarkSecondary;
+            existing.DarkAppbar = _settings.DarkAppbar;
+            existing.AppTitle = _settings.AppTitle;
+            existing.UpdatedAt = _settings.UpdatedAt;
+        }
+        else
+        {
+            db.BrandingSettings.Add(_settings);
+        }
+        await db.SaveChangesAsync();
+
+        _saving = false;
+        Snackbar.Add("Branding settings saved. Refresh the page to see changes.", Severity.Success);
+    }
+
+    private void ResetToDefaults()
+    {
+        _settings.LightPrimary = "#1976d2";
+        _settings.LightSecondary = "#424242";
+        _settings.LightAppbar = "#1976d2";
+        _settings.DarkPrimary = "#90caf9";
+        _settings.DarkSecondary = "#ce93d8";
+        _settings.DarkAppbar = "#1e1e2e";
+        _settings.AppTitle = null;
+        _lightPrimary = new MudColor(_settings.LightPrimary);
+        _lightSecondary = new MudColor(_settings.LightSecondary);
+        _lightAppbar = new MudColor(_settings.LightAppbar);
+        _darkPrimary = new MudColor(_settings.DarkPrimary);
+        _darkSecondary = new MudColor(_settings.DarkSecondary);
+        _darkAppbar = new MudColor(_settings.DarkAppbar);
+    }
+
+    private async Task OnLogoUpload(IBrowserFile file)
+    {
+        if (file.Size > 512_000) // 512KB max
+        {
+            Snackbar.Add("Logo must be under 512KB.", Severity.Warning);
+            return;
+        }
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(512_000).CopyToAsync(ms);
+        _settings.LogoBase64 = Convert.ToBase64String(ms.ToArray());
+        _settings.LogoContentType = file.ContentType;
+    }
+
+    private async Task OnFaviconUpload(IBrowserFile file)
+    {
+        if (file.Size > 128_000) // 128KB max
+        {
+            Snackbar.Add("Favicon must be under 128KB.", Severity.Warning);
+            return;
+        }
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(128_000).CopyToAsync(ms);
+        _settings.FaviconBase64 = Convert.ToBase64String(ms.ToArray());
+        _settings.FaviconContentType = file.ContentType;
+    }
+
+    private void RemoveLogo()
+    {
+        _settings.LogoBase64 = null;
+        _settings.LogoContentType = null;
+    }
+
+    private void RemoveFavicon()
+    {
+        _settings.FaviconBase64 = null;
+        _settings.FaviconContentType = null;
+    }
+}

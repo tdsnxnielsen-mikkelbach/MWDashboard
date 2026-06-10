@@ -200,7 +200,7 @@ MWDashboard/
 ├── src/
 │   ├── MWDashboard.Shared/                # Shared class library
 │   │   ├── Data/
-│   │   │   └── MauDbContext.cs            # EF Core context — 12 DbSets
+│   │   │   └── MauDbContext.cs            # EF Core context — 13 DbSets
 │   │   ├── Models/
 │   │   │   ├── MauSnapshot.cs             # All entity models + TenantEntraTier
 │   │   │   └── M365Services.cs            # Service constants, SKU-to-service mapping, service plan auto-detection
@@ -227,6 +227,7 @@ MWDashboard/
 │   │   │       ├── Segmentation.razor     # User segmentation (heavy/light/inactive)
 │   │   │       ├── Departments.razor      # Department-level adoption
 │   │   │       ├── Security.razor         # Security sign-in monitoring
+│   │   │       ├── Settings.razor         # Branding & whitelabeling (home tenant only)
 │   │   │       └── Tenants.razor          # Tenant management
 │   │   └── wwwroot/                       # Static assets
 │   ├── MWDashboard.Consent/              # Consent callback → Container App

@@ -48,6 +48,7 @@
 - [x] Redis pub/sub cross-replica cache invalidation — `RedisCacheInvalidationService`
 - [x] Automated consent flow with tenant auto-registration — Static Web App + Consent Callback container (HMAC-validated, Graph `/organization` verification, initial data collection trigger)
 - [x] Azure AD authentication — OpenID Connect multi-tenant login with home tenant (full access) + customer tenant (scoped to own data) isolation
+- [x] Branding / whitelabeling settings page — logo, favicon, light/dark theme colors, app title (home-tenant only)
 - [ ] Consumption score threshold alerts (email/Teams notification when score drops)
 - [x] Historical comparison: month-over-month score change indicators — delta chips on all KPI cards
 - [ ] Per-department consumption scoring (combine department usage + segmentation)

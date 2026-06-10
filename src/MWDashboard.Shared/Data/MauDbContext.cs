@@ -19,6 +19,7 @@ public class MauDbContext : DbContext
     public DbSet<StorageSnapshot> StorageSnapshots => Set<StorageSnapshot>();
     public DbSet<ConsumptionSnapshot> ConsumptionSnapshots => Set<ConsumptionSnapshot>();
     public DbSet<M365AppUsageSnapshot> M365AppUsageSnapshots => Set<M365AppUsageSnapshot>();
+    public DbSet<BrandingSettings> BrandingSettings => Set<BrandingSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -118,6 +119,19 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.AppName).HasMaxLength(100);
             entity.Property(e => e.Platform).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<BrandingSettings>(entity =>
+        {
+            entity.Property(e => e.LightPrimary).HasMaxLength(20);
+            entity.Property(e => e.LightSecondary).HasMaxLength(20);
+            entity.Property(e => e.LightAppbar).HasMaxLength(20);
+            entity.Property(e => e.DarkPrimary).HasMaxLength(20);
+            entity.Property(e => e.DarkSecondary).HasMaxLength(20);
+            entity.Property(e => e.DarkAppbar).HasMaxLength(20);
+            entity.Property(e => e.LogoContentType).HasMaxLength(50);
+            entity.Property(e => e.FaviconContentType).HasMaxLength(50);
+            entity.Property(e => e.AppTitle).HasMaxLength(100);
         });
     }
 }

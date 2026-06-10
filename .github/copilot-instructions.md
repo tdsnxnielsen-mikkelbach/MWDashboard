@@ -37,7 +37,8 @@ azd deploy
 - All snapshot models follow: `Id`, `TenantId`, `TenantName`, `ReportDate`, metric fields, `CollectedAt`
 - Composite unique indexes on `(TenantId, ServiceName/SkuId/Workload+ActivityType/AppName/Department, ReportDate)` for upsert deduplication
 - Use `DateTime` for dates (UTC everywhere)
-- 12 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots, M365AppUsageSnapshots
+- 13 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots, M365AppUsageSnapshots, BrandingSettings
+- `BrandingSettings` is a singleton row: logo/favicon (Base64 + content type), 6 theme colors (light/dark × primary/secondary/appbar), app title
 - `LicenseSnapshot.IncludedServices` stores comma-separated service names auto-detected from Graph API service plans (e.g. `"Exchange,Office365,OneDrive,SharePoint,Teams"`)
 
 ### Data Services (src/MWDashboard.Shared/Services/)
@@ -107,14 +108,14 @@ azd deploy
 ### EF Core Migrations (src/MWDashboard.Shared/Migrations/)
 - Add migrations from the Web project: `dotnet ef migrations add <Name> --project ../MWDashboard.Shared`
 - Auto-migrate on startup in both Web and Job
-- DbContext has 12 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
+- DbContext has 13 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
 
 ### Authentication & Authorization (src/MWDashboard.Web/)
 - **OpenID Connect** via `Microsoft.Identity.Web` — multi-tenant (`TenantId: "common"`), authorization code flow (`ResponseType: "code"`)
 - **ClientSecret reuse**: `AzureAdAuth:ClientSecret` copied from `AzureAd:ClientSecret` at startup (single secret for both Graph API and user auth)
 - **Token validation**: `OnTokenValidated` event allows home tenant unconditionally; other tenants validated against DB (`Tenants.IsActive`)
 - **Access control**: Removing/deactivating a tenant immediately blocks login for users from that tenant; adding/activating allows login
-- **Access denied**: `OnRemoteFailure` redirects rejected tenants to `/access-denied` (anonymous endpoint) with error message and sign-out link
+- **Access denied**: `OnRemoteFailure` redirects rejected tenants to `/access-denied` (anonymous endpoint) with user-friendly message (internal OIDC errors never exposed)
 - **Data scoping**: `TenantFilterService.SetTenantScope()` called in `MainLayout` — home tenant users see all data; customer tenant users are restricted to their own tenant
 - **Data isolation enforcement**: `GetFilteredTenantIds()` never returns `null` for scoped users — always passes tenant ID filter to queries
 - **UI**: Home tenant users see the full `TenantSelector` + Tenants page; customer tenant users see only their tenant name (no selector) and cannot access `/tenants`

@@ -59,8 +59,9 @@ builder.Services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.Authentic
     };
     options.Events.OnRemoteFailure = context =>
     {
-        // Redirect to access-denied page instead of looping back to sign-in
-        context.Response.Redirect("/access-denied?message=" + Uri.EscapeDataString(context.Failure?.Message ?? "Access denied"));
+        // Show user-friendly message regardless of internal error details
+        var userMessage = "Your organization is not authorized to access this application. Please contact your administrator to complete the consent process.";
+        context.Response.Redirect("/access-denied?message=" + Uri.EscapeDataString(userMessage));
         context.HandleResponse();
         return Task.CompletedTask;
     };

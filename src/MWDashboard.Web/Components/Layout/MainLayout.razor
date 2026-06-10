@@ -1,19 +1,33 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
 @using System.Security.Claims
 @inject TenantFilterService TenantFilter
 @inject IConfiguration Configuration
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IDbContextFactory<MWDashboard.Shared.Data.MauDbContext> DbFactory
 
 <MudThemeProvider Theme="_theme" IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+@if (!string.IsNullOrEmpty(_branding?.FaviconBase64))
+{
+    <HeadContent>
+        <link rel="icon" href="data:@(_branding.FaviconContentType);base64,@(_branding.FaviconBase64)" />
+    </HeadContent>
+}
+
 <MudLayout>
     <MudAppBar Elevation="1" Fixed="true" Dense="true">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h5" Class="ml-3">Modern Workplace Dashboard</MudText>
+        @if (!string.IsNullOrEmpty(_branding?.LogoBase64))
+        {
+            <img src="data:@(_branding.LogoContentType);base64,@(_branding.LogoBase64)" 
+                 style="max-height:32px; max-width:160px; margin-left:12px;" alt="Logo" />
+        }
+        <MudText Typo="Typo.h5" Class="ml-3">@(_branding?.AppTitle ?? "Modern Workplace Dashboard")</MudText>
         <MudSpacer />
         @if (TenantFilter.IsHomeTenantUser)
         {
@@ -49,9 +63,32 @@
     private bool _drawerOpen = true;
     private bool _isDarkMode = true;
     private string _scopedTenantName = "";
+    private MWDashboard.Shared.Models.BrandingSettings? _branding;
 
     protected override async Task OnInitializedAsync()
     {
+        // Load branding settings
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _branding = await db.BrandingSettings.AsNoTracking().FirstOrDefaultAsync();
+        if (_branding != null)
+        {
+            _theme = new MudTheme
+            {
+                PaletteLight = new PaletteLight
+                {
+                    Primary = _branding.LightPrimary,
+                    Secondary = _branding.LightSecondary,
+                    AppbarBackground = _branding.LightAppbar
+                },
+                PaletteDark = new PaletteDark
+                {
+                    Primary = _branding.DarkPrimary,
+                    Secondary = _branding.DarkSecondary,
+                    AppbarBackground = _branding.DarkAppbar
+                }
+            };
+        }
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var userTenantId = authState.User.FindFirst("http://schemas.microsoft.com/identity/claims/tenantid")?.Value;
         var homeTenantId = Configuration["AzureAd:TenantId"];

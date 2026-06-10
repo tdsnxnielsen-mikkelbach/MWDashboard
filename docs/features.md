@@ -8,7 +8,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Multi-tenant sign-in** — users from the home tenant (where the app registration lives) and any active customer tenant can sign in
 - **Automatic tenant validation** — on sign-in, the user's tenant ID is checked against the database; only active (consented) tenants are allowed
 - **Immediate access control** — deactivating or removing a tenant immediately blocks login for users from that tenant; adding/activating allows login
-- **Access denied page** — rejected tenants see a styled "Access Denied" page (`/access-denied`) with error message and "Sign Out & Try Another Account" link (no redirect loop)
+- **Access denied page** — rejected tenants see a styled "Access Denied" page (`/access-denied`) with user-friendly message ("Your organization is not authorized...") and "Sign Out & Try Another Account" link; internal OIDC errors are never exposed to users
 - **Data isolation** — customer-tenant users can only view data from their own tenant; queries always filter by scoped tenant ID (never fetches all data)
 - **Page-level restrictions** — Tenants management page (`/tenants`) is only accessible to home-tenant users; nav link hidden for customer-tenant users
 - **AppBar user controls** — user icon (tooltip shows name) + sign-out button visible when authenticated
@@ -106,11 +106,25 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 ## Security Services (`/security`)
 
 - **Tenant Entra ID License Levels table** — auto-detects P1/P2/Free tier from stored license SKUs per tenant, shows which tenants can provide sign-in and MFA data
+- **Tenant-scoped** — Entra ID tier table and sign-in data filtered to selected/scoped tenants (customer-tenant users see only their own tenant)
 - **Sign-in activity chart** (30 days) — success vs failure area chart with axis labels and legend
 - **Per-service breakdown** — Defender, Entra ID, Intune, Sentinel cards with failure rates
 - **MFA adoption rate** — gauge with percentage and actionable recommendations
 - **True MFA data** — uses Microsoft Graph Beta API `AuthenticationDetails` (counts non-password auth methods that succeeded). Only available from tenants with Entra ID P1/P2
 - **Clear data availability notes** — explains exactly what's available per license tier and that Free-tier tenants cannot expose audit log data via Graph
+
+## Branding & Appearance (`/settings`)
+
+- **Home-tenant only** — page restricted to home-tenant users (same guard pattern as Tenants page)
+- **Custom app title** — override "Modern Workplace Dashboard" text in the AppBar
+- **Logo upload** — displayed in AppBar next to the title (max 512KB; PNG, JPG, SVG, WebP)
+- **Favicon upload** — custom browser tab icon (max 128KB; PNG, ICO, SVG)
+- **Light theme colors** — Primary, Secondary, and AppBar background color pickers
+- **Dark theme colors** — Primary, Secondary, and AppBar background color pickers
+- **Live preview** — branding applied on next page load (stored in DB as singleton row)
+- **Reset to defaults** — one-click restore of default MudBlazor theme colors
+- **Whitelabeling** — enables CSP partners to match their corporate branding across the dashboard for all users (including customer-tenant users)
+- Data model: `BrandingSettings` (single row, stores Base64 images + hex colors + app title)
 
 ## Tenant Management (`/tenants`)
 
