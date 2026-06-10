@@ -31,7 +31,7 @@ services:
       predeploy:
         shell: pwsh
         run: |
-          $html = Get-Content ./static/consent-complete/index.html -Raw
+          $html = Get-Content ./index.html -Raw
           $callbackUrl = "https://${env:CONSENT_CALLBACK_FQDN}"
           $secret = $env:CONSENT_SHARED_SECRET
           $aiConnStr = $env:APPLICATIONINSIGHTS_CONNECTION_STRING
@@ -40,7 +40,7 @@ services:
           $html = $html.Replace('%%CONSENT_CALLBACK_URL%%', $callbackUrl)
           $html = $html.Replace('%%CONSENT_SHARED_SECRET%%', $secret)
           if ($aiConnStr) { $html = $html.Replace('%%APPINSIGHTS_CONNECTION_STRING%%', $aiConnStr) }
-          Set-Content ./static/consent-complete/index.html -Value $html -NoNewline
+          Set-Content ./index.html -Value $html -NoNewline
           Write-Host "Injected consent callback URL: $callbackUrl"
 infra:
   provider: bicep
