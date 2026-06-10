@@ -189,7 +189,7 @@ public static class M365Services
 public static class ActivityTypes
 {
     // Teams
-    public const string TeamsMeetings = "Meetings Organized";
+    public const string TeamsMeetings = "Meetings";
     public const string TeamsChatMessages = "Chat Messages";
     public const string TeamsChannelMessages = "Channel Messages";
     public const string TeamsCalls = "Calls";

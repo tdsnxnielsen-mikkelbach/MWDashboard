@@ -510,8 +510,8 @@ public class GraphReportService : IGraphReportService
 
         var headers = lines[0].Split(',');
         var dateIndex = Array.IndexOf(headers, "Report Date");
-        var meetingsIndex = Array.IndexOf(headers, "Meetings Organized");
-        var chatIndex = Array.IndexOf(headers, "Team Chat Messages");
+        var meetingsIndex = Array.IndexOf(headers, "Meetings");
+        var chatIndex = Array.IndexOf(headers, "Private Chat Messages");
         var channelIndex = Array.IndexOf(headers, "Post Messages");
         var callsIndex = Array.IndexOf(headers, "Calls");
 
