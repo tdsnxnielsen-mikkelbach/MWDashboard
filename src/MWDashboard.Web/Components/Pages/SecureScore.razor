@@ -1,0 +1,364 @@
+@page "/securescore"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Secure Score</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Microsoft Secure Score</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Security posture score and prioritized remediation actions from Microsoft Defender.
+    Requires <code>SecurityEvents.Read.All</code> permission.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading secure score data...</MudText>
+    </div>
+}
+else if (!_hasData)
+{
+    <MudAlert Severity="Severity.Info">
+        No secure score data available for the selected tenant(s). Collect data from the Tenants page first.
+        Secure Score requires the <code>SecurityEvents.Read.All</code> Graph permission to be consented.
+    </MudAlert>
+}
+else
+{
+<MudGrid>
+    @* KPI cards *@
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Secure Score</MudText>
+            <MudText Typo="Typo.h4" Color="@GetScoreColor(_scorePercent)">@_scorePercent.ToString("0")%</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@_currentScore.ToString("0") / @_maxScore.ToString("0") points</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">vs. Global Average</MudText>
+            <MudText Typo="Typo.h4" Color="@(_vsComparative >= 0 ? Color.Success : Color.Error)">
+                @(_vsComparative >= 0 ? "+" : "")@_vsComparative.ToString("0")%
+            </MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Global avg @_comparativePercent.ToString("0")%</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Actions to Improve</MudText>
+            <MudText Typo="Typo.h4" Color="Color.Primary">@_actionableCount</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">controls not fully implemented</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Licensed Users</MudText>
+            <MudText Typo="Typo.h4" Color="Color.Primary">@_licensedUsers.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@_activeUsers.ToString("N0") active</MudText>
+        </MudPaper>
+    </MudItem>
+
+    @* Score trend chart *@
+    <MudItem xs="12" md="7">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Secure Score Trend (90 days)</MudText>
+            @if (_trendSeries.Count > 0)
+            {
+                <ApexChart TItem="ScorePoint" Options="_trendOptions" Height="350" @key="_chartKey">
+                    @foreach (var series in _trendSeries)
+                    {
+                        <ApexPointSeries TItem="ScorePoint"
+                                         Items="series.Value"
+                                         Name="@series.Key"
+                                         SeriesType="SeriesType.Line"
+                                         XValue="@(e => e.Date.ToString("MMM dd"))"
+                                         YValue="@(e => (decimal?)e.Percent)" />
+                    }
+                </ApexChart>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No trend data available.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Category breakdown *@
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Score by Category</MudText>
+            @if (_categoryData.Count > 0)
+            {
+                <ApexChart TItem="CategoryPoint" Options="_categoryOptions" Height="350" @key="_chartKey">
+                    <ApexPointSeries TItem="CategoryPoint"
+                                     Items="_categoryData"
+                                     Name="Achieved Points"
+                                     SeriesType="SeriesType.Donut"
+                                     XValue="@(e => e.Category)"
+                                     YValue="@(e => (decimal?)e.Score)" />
+                </ApexChart>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No category data available.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Remediation actions table *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Recommended Remediation Actions</MudText>
+            @if (_actions.Count > 0)
+            {
+                <MudTable Items="_actions" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                          SortLabel="Sort By" FixedHeader="true" Filter="FilterAction">
+                    <ToolBarContent>
+                        <MudTextField @bind-Value="_searchString" Placeholder="Search controls" Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
+                    </ToolBarContent>
+                    <HeaderContent>
+                        <MudTh><MudTableSortLabel SortBy="new Func<ActionRow, object>(x => x.ControlName)">Control</MudTableSortLabel></MudTh>
+                        @if (TenantFilter.IsMultiTenantView)
+                        {
+                            <MudTh><MudTableSortLabel SortBy="new Func<ActionRow, object>(x => x.TenantName)">Tenant</MudTableSortLabel></MudTh>
+                        }
+                        <MudTh><MudTableSortLabel SortBy="new Func<ActionRow, object>(x => x.Category)">Category</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<ActionRow, object>(x => x.ScorePercent)" InitialDirection="SortDirection.Ascending">Progress</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<ActionRow, object>(x => x.Status)">Status</MudTableSortLabel></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Control">
+                            <MudText Typo="Typo.body2"><b>@context.ControlName</b></MudText>
+                            @if (!string.IsNullOrWhiteSpace(context.Description))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Description</MudText>
+                            }
+                        </MudTd>
+                        @if (TenantFilter.IsMultiTenantView)
+                        {
+                            <MudTd DataLabel="Tenant">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.TenantName</MudChip>
+                            </MudTd>
+                        }
+                        <MudTd DataLabel="Category">@context.Category</MudTd>
+                        <MudTd DataLabel="Progress">
+                            <div class="d-flex align-center" style="gap:8px; min-width:140px;">
+                                <MudProgressLinear Color="@GetScoreColor(context.ScorePercent)" Value="@context.ScorePercent" Class="flex-grow-1" />
+                                <MudText Typo="Typo.caption" Style="min-width:38px; text-align:right;">@context.ScorePercent.ToString("0")%</MudText>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.ScorePercent)">@GetStatusLabel(context.ScorePercent)</MudChip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Success" Dense="true">All tracked controls are fully implemented. No outstanding remediation actions.</MudAlert>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _hasData;
+    private string _chartKey = Guid.NewGuid().ToString();
+    private string _searchString = string.Empty;
+
+    private double _currentScore;
+    private double _maxScore;
+    private double _scorePercent;
+    private double _comparativePercent;
+    private double _vsComparative;
+    private int _actionableCount;
+    private int _activeUsers;
+    private int _licensedUsers;
+
+    private Dictionary<string, List<ScorePoint>> _trendSeries = [];
+    private List<CategoryPoint> _categoryData = [];
+    private List<ActionRow> _actions = [];
+
+    private readonly ApexChartOptions<ScorePoint> _trendOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        Yaxis = [new YAxis { Min = 0, Max = 100, Title = new AxisTitle { Text = "Score %" } }],
+        Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 }
+    };
+
+    private readonly ApexChartOptions<CategoryPoint> _categoryOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        var scores = await MauDataService.GetSecureScoresAsync(tenantIds, days: 90);
+        var controls = await MauDataService.GetSecureScoreControlsAsync(tenantIds);
+
+        _hasData = scores.Count > 0;
+
+        // KPIs based on the latest score per tenant (aggregated across selected tenants)
+        var latestPerTenant = scores
+            .GroupBy(s => s.TenantId)
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToList();
+
+        _currentScore = latestPerTenant.Sum(s => s.CurrentScore);
+        _maxScore = latestPerTenant.Sum(s => s.MaxScore);
+        _scorePercent = _maxScore > 0 ? _currentScore / _maxScore * 100 : 0;
+        _activeUsers = latestPerTenant.Sum(s => s.ActiveUserCount);
+        _licensedUsers = latestPerTenant.Sum(s => s.LicensedUserCount);
+
+        // Comparative is a percentage benchmark; average it across tenants (weighted by max score)
+        var comparativeWeighted = latestPerTenant.Sum(s => s.ComparativeScoreAllTenants * s.MaxScore);
+        _comparativePercent = _maxScore > 0 ? comparativeWeighted / _maxScore : 0;
+        _vsComparative = _scorePercent - _comparativePercent;
+
+        // Trend: score % per report date, per-tenant series in multi-tenant view
+        _trendSeries = [];
+        if (TenantFilter.IsMultiTenantView)
+        {
+            foreach (var group in scores.GroupBy(s => s.TenantId))
+            {
+                var points = group
+                    .OrderBy(s => s.ReportDate)
+                    .Select(s => new ScorePoint { Date = s.ReportDate, Percent = s.MaxScore > 0 ? Math.Round(s.CurrentScore / s.MaxScore * 100, 1) : 0 })
+                    .ToList();
+                _trendSeries[TenantFilter.GetTenantName(group.Key)] = points;
+            }
+        }
+        else
+        {
+            var points = scores
+                .GroupBy(s => s.ReportDate)
+                .OrderBy(g => g.Key)
+                .Select(g => new ScorePoint
+                {
+                    Date = g.Key,
+                    Percent = g.Sum(s => s.MaxScore) > 0 ? Math.Round(g.Sum(s => s.CurrentScore) / g.Sum(s => s.MaxScore) * 100, 1) : 0
+                })
+                .ToList();
+            if (points.Count > 0)
+                _trendSeries["Secure Score"] = points;
+        }
+
+        // Category breakdown: achieved points per control category (aggregated)
+        _categoryData = controls
+            .Where(c => !string.IsNullOrEmpty(c.ControlCategory))
+            .GroupBy(c => c.ControlCategory)
+            .Select(g => new CategoryPoint { Category = g.Key, Score = Math.Round(g.Sum(c => c.Score), 1) })
+            .Where(c => c.Score > 0)
+            .OrderByDescending(c => c.Score)
+            .ToList();
+
+        // Remediation actions: controls not fully implemented, lowest progress first
+        _actions = controls
+            .Where(c => c.ScoreInPercentage < 100)
+            .Select(c => new ActionRow
+            {
+                ControlName = c.ControlName,
+                TenantName = TenantFilter.GetTenantName(c.TenantId),
+                Category = c.ControlCategory,
+                Description = c.Description,
+                ScorePercent = c.ScoreInPercentage,
+                Status = c.ImplementationStatus
+            })
+            .OrderBy(a => a.ScorePercent)
+            .ToList();
+        _actionableCount = _actions.Count;
+
+        _chartKey = Guid.NewGuid().ToString();
+        _loading = false;
+    }
+
+    private bool FilterAction(ActionRow row)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return row.ControlName.Contains(_searchString, StringComparison.OrdinalIgnoreCase)
+            || row.Category.Contains(_searchString, StringComparison.OrdinalIgnoreCase)
+            || row.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Color GetScoreColor(double percent) => percent switch
+    {
+        >= 70 => Color.Success,
+        >= 40 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private static Color GetStatusColor(double percent) => percent switch
+    {
+        >= 70 => Color.Success,
+        > 0 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private static string GetStatusLabel(double percent) => percent switch
+    {
+        >= 100 => "Complete",
+        > 0 => "Partial",
+        _ => "Not started"
+    };
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    public class ScorePoint
+    {
+        public DateTime Date { get; set; }
+        public double Percent { get; set; }
+    }
+
+    public class CategoryPoint
+    {
+        public string Category { get; set; } = string.Empty;
+        public double Score { get; set; }
+    }
+
+    public class ActionRow
+    {
+        public string ControlName { get; set; } = string.Empty;
+        public string TenantName { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public double ScorePercent { get; set; }
+        public string Status { get; set; } = string.Empty;
+    }
+}

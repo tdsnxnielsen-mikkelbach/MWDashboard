@@ -7,8 +7,10 @@ The app registration needs the following **Application** permissions (not Delega
 | `Reports.Read.All` | MAU usage reports, workload activity, user detail | Core functionality + Activity + Segmentation pages |
 | `Organization.Read.All` | Subscribed SKUs / license data, organization info | License page + Consent callback (verify tenant domain) |
 | `ServiceMessage.Read.All` | M365 Message Center posts | License page — Message Center section |
-| `AuditLog.Read.All` | Entra sign-in logs | Security page — requires Entra ID P1/P2 on target tenant |
-| `User.Read.All` | User department attribute | Department Adoption page — maps users to departments |
+| `AuditLog.Read.All` | Entra sign-in logs; MFA/auth method registration (`/reports/authenticationMethods/userRegistrationDetails`); inactive-account `signInActivity` | Security page — sign-in logs require Entra ID P1/P2 on target tenant; MFA registration & inactive accounts work on all tiers |
+| `User.Read.All` | User department attribute; licensed/enabled member accounts & `signInActivity` for inactive-account analysis | Department Adoption page; Inactive Accounts on Security page |
+| `SecurityEvents.Read.All` | Microsoft Secure Score + control profiles | Secure Score page — security posture score, trend, and remediation actions |
+| `ServiceHealth.Read.All` | M365 service health overviews + active issues | Service Health page — per-service status and active incidents/advisories |
 
 ## Granting Consent
 

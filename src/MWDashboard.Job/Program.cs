@@ -128,6 +128,49 @@ try
                 await dataService.SaveM365AppUsageAsync(appUsage);
             }
 
+            // Microsoft Secure Score (daily score trend + per-control remediation actions)
+            var (secureScores, secureControls) = await graphService.GetSecureScoreAsync(tenant.TenantId);
+            if (secureScores.Count > 0)
+            {
+                foreach (var s in secureScores)
+                    s.TenantName = tenant.TenantName;
+                await dataService.SaveSecureScoresAsync(secureScores);
+            }
+            if (secureControls.Count > 0)
+            {
+                foreach (var c in secureControls)
+                    c.TenantName = tenant.TenantName;
+                await dataService.SaveSecureScoreControlsAsync(secureControls);
+            }
+
+            // MFA / authentication method registration (tenant-level adoption counts)
+            var mfa = await graphService.GetMfaRegistrationAsync(tenant.TenantId);
+            if (mfa != null)
+            {
+                mfa.TenantName = tenant.TenantName;
+                await dataService.SaveMfaRegistrationAsync(mfa);
+            }
+
+            // Inactive / stale licensed accounts (tenant-level staleness counts)
+            var inactive = await graphService.GetInactiveAccountsAsync(tenant.TenantId);
+            if (inactive != null)
+            {
+                inactive.TenantName = tenant.TenantName;
+                await dataService.SaveInactiveAccountsAsync(inactive);
+            }
+
+            // Service health overview + active issues
+            var (healthServices, healthIssues) = await graphService.GetServiceHealthAsync(tenant.TenantId);
+            if (healthServices.Count > 0)
+            {
+                foreach (var s in healthServices)
+                    s.TenantName = tenant.TenantName;
+                await dataService.SaveServiceHealthAsync(healthServices);
+            }
+            foreach (var i in healthIssues)
+                i.TenantName = tenant.TenantName;
+            await dataService.SaveServiceHealthIssuesAsync(healthIssues);
+
             // Compute consumption score
             {
                 var totalLicenses = licenses.Sum(l => l.TotalLicenses);

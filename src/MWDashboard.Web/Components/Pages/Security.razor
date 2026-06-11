@@ -90,6 +90,116 @@ else
     }
 </MudPaper>
 
+@* MFA / Authentication Method Registration *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Class="mr-2" />
+        MFA & Authentication Method Registration
+    </MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+        Tenant-wide adoption of strong authentication for member accounts (guests excluded). Available on all tiers — uses <code>AuditLog.Read.All</code>.
+    </MudText>
+    @if (_mfaTotalUsers == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No MFA registration data available yet. Collect data from the Tenants page first.</MudText>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudProgressCircular Color="@GetRateColor(_mfaRegisteredRate)" Value="@_mfaRegisteredRate" Size="Size.Large" Class="mb-2">
+                        <MudText Typo="Typo.body2">@_mfaRegisteredRate.ToString("0")%</MudText>
+                    </MudProgressCircular>
+                    <MudText Typo="Typo.subtitle2" Align="MudBlazor.Align.Center">MFA Registered</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_mfaRegistered.ToString("N0") of @_mfaTotalUsers.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudProgressCircular Color="@GetRateColor(_mfaCapableRate)" Value="@_mfaCapableRate" Size="Size.Large" Class="mb-2">
+                        <MudText Typo="Typo.body2">@_mfaCapableRate.ToString("0")%</MudText>
+                    </MudProgressCircular>
+                    <MudText Typo="Typo.subtitle2" Align="MudBlazor.Align.Center">MFA Capable</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_mfaCapable.ToString("N0") of @_mfaTotalUsers.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudProgressCircular Color="@GetRateColor(_passwordlessRate)" Value="@_passwordlessRate" Size="Size.Large" Class="mb-2">
+                        <MudText Typo="Typo.body2">@_passwordlessRate.ToString("0")%</MudText>
+                    </MudProgressCircular>
+                    <MudText Typo="Typo.subtitle2" Align="MudBlazor.Align.Center">Passwordless Capable</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_passwordlessCapable.ToString("N0") of @_mfaTotalUsers.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudProgressCircular Color="@GetRateColor(_ssprRate)" Value="@_ssprRate" Size="Size.Large" Class="mb-2">
+                        <MudText Typo="Typo.body2">@_ssprRate.ToString("0")%</MudText>
+                    </MudProgressCircular>
+                    <MudText Typo="Typo.subtitle2" Align="MudBlazor.Align.Center">SSPR Registered</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_ssprRegistered.ToString("N0") of @_mfaTotalUsers.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
+
+@* Inactive / Stale Licensed Accounts *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.PersonOff" Class="mr-2" />
+        Inactive / Stale Licensed Accounts
+    </MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+        Enabled, licensed member accounts with no interactive sign-in (license-waste signal). Available on all tiers via <code>AuditLog.Read.All</code>.
+    </MudText>
+    @if (_inactiveTotalLicensed == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No inactive account data available yet. Collect data from the Tenants page first.</MudText>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">Licensed Users</MudText>
+                    <MudText Typo="Typo.h4">@_inactiveTotalLicensed.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Enabled member accounts</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.subtitle2" Color="Color.Warning">Inactive 30+ days</MudText>
+                    <MudText Typo="Typo.h4">@_inactive30.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@GetPercent(_inactive30).ToString("0")% of licensed</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.subtitle2" Color="Color.Warning">Inactive 90+ days</MudText>
+                    <MudText Typo="Typo.h4">@_inactive90.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@GetPercent(_inactive90).ToString("0")% of licensed</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.subtitle2" Color="Color.Error">Never Signed In</MudText>
+                    <MudText Typo="Typo.h4">@_inactiveNever.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@GetPercent(_inactiveNever).ToString("0")% of licensed</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        @if (_inactive90 > 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                <strong>@_inactive90.ToString("N0")</strong> licensed account(s) have not signed in for 90+ days. Review these for license reclamation to reduce spend.
+            </MudAlert>
+        }
+    }
+</MudPaper>
+
 @if (_summaries.Count == 0)
 {
     <MudAlert Severity="Severity.Info" Class="mb-4">
@@ -236,6 +346,23 @@ else
     private List<TenantEntraTier> _tenantTiers = [];
     private bool _loading = true;
 
+    // MFA registration aggregates (across selected tenants)
+    private int _mfaTotalUsers;
+    private int _mfaRegistered;
+    private int _mfaCapable;
+    private int _passwordlessCapable;
+    private int _ssprRegistered;
+    private double _mfaRegisteredRate;
+    private double _mfaCapableRate;
+    private double _passwordlessRate;
+    private double _ssprRate;
+
+    // Inactive account aggregates (across selected tenants)
+    private int _inactiveTotalLicensed;
+    private int _inactive30;
+    private int _inactive90;
+    private int _inactiveNever;
+
     private ApexChartOptions<DailySignIn> _signInChartOptions = new()
     {
         Yaxis = [new YAxis { Title = new AxisTitle { Text = "Sign-in Count" } }],
@@ -281,6 +408,25 @@ else
         }
         _summaries = await MauDataService.GetSecuritySummaryAsync(tenantIds, days: 30);
 
+        // MFA registration aggregates (latest snapshot per tenant, summed)
+        var mfaSnapshots = await MauDataService.GetMfaRegistrationAsync(tenantIds);
+        _mfaTotalUsers = mfaSnapshots.Sum(m => m.TotalUsers);
+        _mfaRegistered = mfaSnapshots.Sum(m => m.MfaRegistered);
+        _mfaCapable = mfaSnapshots.Sum(m => m.MfaCapable);
+        _passwordlessCapable = mfaSnapshots.Sum(m => m.PasswordlessCapable);
+        _ssprRegistered = mfaSnapshots.Sum(m => m.SsprRegistered);
+        _mfaRegisteredRate = _mfaTotalUsers > 0 ? (double)_mfaRegistered / _mfaTotalUsers * 100 : 0;
+        _mfaCapableRate = _mfaTotalUsers > 0 ? (double)_mfaCapable / _mfaTotalUsers * 100 : 0;
+        _passwordlessRate = _mfaTotalUsers > 0 ? (double)_passwordlessCapable / _mfaTotalUsers * 100 : 0;
+        _ssprRate = _mfaTotalUsers > 0 ? (double)_ssprRegistered / _mfaTotalUsers * 100 : 0;
+
+        // Inactive account aggregates (latest snapshot per tenant, summed)
+        var inactiveSnapshots = await MauDataService.GetInactiveAccountsAsync(tenantIds);
+        _inactiveTotalLicensed = inactiveSnapshots.Sum(s => s.TotalLicensedUsers);
+        _inactive30 = inactiveSnapshots.Sum(s => s.Inactive30);
+        _inactive90 = inactiveSnapshots.Sum(s => s.Inactive90);
+        _inactiveNever = inactiveSnapshots.Sum(s => s.NeverSignedIn);
+
         _dailySignIns = _summaries
             .GroupBy(s => s.ReportDate.ToString("MM-dd"))
             .Select(g => new DailySignIn
@@ -317,6 +463,21 @@ else
             "P1" => Color.Info,
             _ => Color.Warning
         };
+    }
+
+    private Color GetRateColor(double rate)
+    {
+        return rate switch
+        {
+            >= 80 => Color.Success,
+            >= 50 => Color.Warning,
+            _ => Color.Error
+        };
+    }
+
+    private double GetPercent(int count)
+    {
+        return _inactiveTotalLicensed > 0 ? (double)count / _inactiveTotalLicensed * 100 : 0;
     }
 
     private double GetFailureRate(List<SecuritySignInSummary> items)

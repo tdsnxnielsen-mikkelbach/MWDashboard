@@ -52,3 +52,54 @@
 - [ ] Consumption score threshold alerts (email/Teams notification when score drops)
 - [x] Historical comparison: month-over-month score change indicators — delta chips on all KPI cards
 - [ ] Per-department consumption scoring (combine department usage + segmentation)
+
+---
+
+## Additional Graph Data Sources
+
+**Context**: Beyond the Partner Center billing integration above, Microsoft Graph (and sister APIs) expose more data that increases the dashboard's value for CSPs to present to their customers. Ordered by ROI (value vs. effort). Each item follows the existing scaffolding pattern: new `*Snapshot` model + DbSet + migration, a `GraphReportService` method, a cached `MauDataService` save/query pair, and a page (or tab on an existing page). Gate premium-SKU data behind the existing P1/P2 detection used on the Security page.
+
+### Tier 1 — High value (security & governance story)
+
+- [x] **Microsoft Secure Score** — single 0–100 security posture score per tenant + prioritized remediation actions and score trend (strongest QBR metric)
+  - Endpoints: `GET /security/secureScores`, `GET /security/secureScoreControlProfiles`
+  - Permission: `SecurityEvents.Read.All` (new)
+  - Implemented: `/securescore` page (KPIs, 90-day trend, category breakdown, remediation table), `SecureScoreSnapshot` + `SecureScoreControlSnapshot` models, collection pipeline (Job + on-demand), Redis caching
+- [x] **MFA / auth method registration** — % registered for MFA, passwordless/FIDO2 adoption, SSPR-capable users (member accounts only; surfaced on Security page; uses `AuditLog.Read.All` — no new permission)
+  - Endpoint: `GET /reports/authenticationMethods/userRegistrationDetails`
+  - Permission: `AuditLog.Read.All` (already granted) or `Reports.Read.All` — **no new consent needed**
+- [x] **Service health & incidents** — proactive per-tenant M365 incident/advisory awareness — implemented as `/servicehealth` page (KPIs, active-issues table, per-service status overview), `ServiceHealthSnapshot` + `ServiceHealthIssueSnapshot` models, collection pipeline (Job + on-demand), Redis caching
+  - Endpoints: `GET /admin/serviceAnnouncement/healthOverviews`, `GET /admin/serviceAnnouncement/issues`
+  - Permission: `ServiceHealth.Read.All` (new)
+- [x] **Inactive / stale accounts** — licensed accounts with no sign-in in 30/60/90 days (license-waste $ story; pairs with Partner Center cost data) — surfaced on Security page; uses `AuditLog.Read.All` + `User.Read.All`
+  - Endpoint: `GET /users?$select=signInActivity,assignedLicenses`
+  - Permission: `AuditLog.Read.All` (already granted) + Entra ID P1 on target tenant
+
+### Tier 2 — Endpoint & identity governance
+
+- [ ] **Intune device compliance** — compliant vs. non-compliant devices, OS/encryption breakdown, unmanaged devices
+  - Endpoints: `GET /deviceManagement/managedDevices`, `GET /deviceManagement/deviceCompliancePolicyDeviceStateSummary`
+  - Permission: `DeviceManagementManagedDevices.Read.All` (new)
+- [ ] **Conditional Access coverage** — count of CA policies + gaps (e.g. legacy auth not blocked)
+  - Endpoint: `GET /identity/conditionalAccess/policies`
+  - Permission: `Policy.Read.All` (new)
+- [ ] **Guest / external users** — guest sprawl + stale guest accounts (governance/data-exfil risk)
+  - Endpoint: `GET /users?$filter=userType eq 'Guest'`
+  - Permission: `User.Read.All` (already granted)
+- [ ] **Risky users (Identity Protection)** — compromised/at-risk accounts; gate behind P2 like existing Security page logic
+  - Endpoints: `GET /identityProtection/riskyUsers`, `GET /identityProtection/riskDetections`
+  - Permission: `IdentityRiskyUser.Read.All` (new, **Entra ID P2 only**)
+
+### Tier 3 — Deeper usage/adoption detail (no new consent — uses existing `Reports.Read.All`)
+
+- [ ] **Mailbox usage detail** — mailbox sizes, over-quota and inactive mailboxes
+  - Endpoints: `getMailboxUsageDetail`, `getMailboxUsageQuotaStatusMailboxCounts`
+- [ ] **Teams device usage** — desktop vs. mobile vs. web Teams split
+  - Endpoint: `getTeamsDeviceUsageUserCounts`
+- [ ] **SharePoint / OneDrive site detail** — per-site/per-account storage and activity drill-down (totals already collected)
+  - Endpoints: `getSharePointSiteUsageDetail`, `getOneDriveUsageAccountDetail`
+- [ ] **Viva Engage / Yammer activity** — completes workload coverage alongside Teams/Exchange/SharePoint
+  - Endpoint: `getYammerActivityUserCounts`
+- [ ] **Groups & Teams sprawl** — count of M365 groups/Teams + ownerless groups (governance hygiene)
+  - Endpoints: `GET /groups`, `GET /groups/{id}/owners`
+  - Permission: `Group.Read.All` (new)

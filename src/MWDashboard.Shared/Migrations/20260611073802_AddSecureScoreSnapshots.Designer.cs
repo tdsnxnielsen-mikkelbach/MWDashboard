@@ -4,6 +4,7 @@ using MWDashboard.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MWDashboard.Shared.Migrations
 {
     [DbContext(typeof(MauDbContext))]
-    partial class MauDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260611073802_AddSecureScoreSnapshots")]
+    partial class AddSecureScoreSnapshots
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -225,53 +228,6 @@ namespace MWDashboard.Shared.Migrations
                     b.ToTable("DepartmentUsageSnapshots");
                 });
 
-            modelBuilder.Entity("MWDashboard.Shared.Models.InactiveAccountSnapshot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CollectedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("Inactive30")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Inactive60")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Inactive90")
-                        .HasColumnType("int");
-
-                    b.Property<int>("NeverSignedIn")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("ReportDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("TenantName")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<int>("TotalLicensedUsers")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "ReportDate")
-                        .IsUnique();
-
-                    b.ToTable("InactiveAccountSnapshots");
-                });
-
             modelBuilder.Entity("MWDashboard.Shared.Models.LicenseSnapshot", b =>
                 {
                     b.Property<int>("Id")
@@ -455,56 +411,6 @@ namespace MWDashboard.Shared.Migrations
                     b.ToTable("MessageCenterPosts");
                 });
 
-            modelBuilder.Entity("MWDashboard.Shared.Models.MfaRegistrationSnapshot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CollectedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("MfaCapable")
-                        .HasColumnType("int");
-
-                    b.Property<int>("MfaRegistered")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PasswordlessCapable")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("ReportDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("SsprCapable")
-                        .HasColumnType("int");
-
-                    b.Property<int>("SsprRegistered")
-                        .HasColumnType("int");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("TenantName")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<int>("TotalUsers")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "ReportDate")
-                        .IsUnique();
-
-                    b.ToTable("MfaRegistrationSnapshots");
-                });
-
             modelBuilder.Entity("MWDashboard.Shared.Models.SecureScoreControlSnapshot", b =>
                 {
                     b.Property<int>("Id")
@@ -652,116 +558,6 @@ namespace MWDashboard.Shared.Migrations
                         .IsUnique();
 
                     b.ToTable("SecuritySignInSummaries");
-                });
-
-            modelBuilder.Entity("MWDashboard.Shared.Models.ServiceHealthIssueSnapshot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Classification")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("CollectedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Feature")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<bool>("IsResolved")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("IssueId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime>("ReportDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ServiceName")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<DateTime?>("StartDateTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("TenantName")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "IssueId", "ReportDate")
-                        .IsUnique();
-
-                    b.ToTable("ServiceHealthIssueSnapshots");
-                });
-
-            modelBuilder.Entity("MWDashboard.Shared.Models.ServiceHealthSnapshot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CollectedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("ReportDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("ServiceName")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("TenantName")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "ServiceName", "ReportDate")
-                        .IsUnique();
-
-                    b.ToTable("ServiceHealthSnapshots");
                 });
 
             modelBuilder.Entity("MWDashboard.Shared.Models.StorageSnapshot", b =>

@@ -93,6 +93,49 @@ public class OnDemandDataCollectionService : IDataCollectionService
             await _dataService.SaveM365AppUsageAsync(appUsage);
         }
 
+        // Microsoft Secure Score (daily score trend + per-control remediation actions)
+        var (secureScores, secureControls) = await _graphService.GetSecureScoreAsync(tenantId);
+        if (secureScores.Count > 0)
+        {
+            foreach (var s in secureScores)
+                s.TenantName = tenantName;
+            await _dataService.SaveSecureScoresAsync(secureScores);
+        }
+        if (secureControls.Count > 0)
+        {
+            foreach (var c in secureControls)
+                c.TenantName = tenantName;
+            await _dataService.SaveSecureScoreControlsAsync(secureControls);
+        }
+
+        // MFA / authentication method registration (tenant-level adoption counts)
+        var mfa = await _graphService.GetMfaRegistrationAsync(tenantId);
+        if (mfa != null)
+        {
+            mfa.TenantName = tenantName;
+            await _dataService.SaveMfaRegistrationAsync(mfa);
+        }
+
+        // Inactive / stale licensed accounts (tenant-level staleness counts)
+        var inactive = await _graphService.GetInactiveAccountsAsync(tenantId);
+        if (inactive != null)
+        {
+            inactive.TenantName = tenantName;
+            await _dataService.SaveInactiveAccountsAsync(inactive);
+        }
+
+        // Service health overview + active issues
+        var (healthServices, healthIssues) = await _graphService.GetServiceHealthAsync(tenantId);
+        if (healthServices.Count > 0)
+        {
+            foreach (var s in healthServices)
+                s.TenantName = tenantName;
+            await _dataService.SaveServiceHealthAsync(healthServices);
+        }
+        foreach (var i in healthIssues)
+            i.TenantName = tenantName;
+        await _dataService.SaveServiceHealthIssuesAsync(healthIssues);
+
         // Compute and save consumption score
         await ComputeConsumptionScoreAsync(tenantId, tenantName, storage, activities, segments, licenses);
 

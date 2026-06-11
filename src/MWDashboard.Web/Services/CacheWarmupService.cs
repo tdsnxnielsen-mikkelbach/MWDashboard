@@ -40,6 +40,12 @@ public class CacheWarmupService : BackgroundService
             await dataService.GetCopilotUsageAsync(null);
             await dataService.GetUserSegmentsAsync(null, months: 6);
             await dataService.GetDepartmentUsageAsync(null);
+            await dataService.GetSecureScoresAsync(null, days: 90);
+            await dataService.GetSecureScoreControlsAsync(null);
+            await dataService.GetMfaRegistrationAsync(null);
+            await dataService.GetInactiveAccountsAsync(null);
+            await dataService.GetServiceHealthAsync(null);
+            await dataService.GetServiceHealthIssuesAsync(null);
 
             _logger.LogInformation("Cache warm-up completed successfully");
         }

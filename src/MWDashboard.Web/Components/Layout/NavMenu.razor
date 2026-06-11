@@ -1,4 +1,5 @@
 ﻿@inject TenantFilterService TenantFilter
+@implements IDisposable
 
 <MudNavMenu>
     <MudText Typo="Typo.h6" Class="px-4 py-3">MW Dashboard</MudText>
@@ -13,10 +14,28 @@
     <MudNavLink Href="/consumption" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Speed">Consumption</MudNavLink>
     <MudNavLink Href="/m365apps" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Apps">M365 Apps</MudNavLink>
     <MudNavLink Href="/security" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Security">Security</MudNavLink>
+    <MudNavLink Href="/securescore" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Shield">Secure Score</MudNavLink>
+    <MudNavLink Href="/servicehealth" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.MonitorHeart">Service Health</MudNavLink>
     @if (TenantFilter.IsHomeTenantUser)
     {
         <MudNavLink Href="/tenants" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Business">Tenants</MudNavLink>
         <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Palette">Settings</MudNavLink>
     }
 </MudNavMenu>
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Re-render when the tenant scope is established (set asynchronously by MainLayout
+        // after login). This hides the home-tenant-only links for customer-tenant users.
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+    }
+
+    private Task OnTenantFilterChangedAsync() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+}
 

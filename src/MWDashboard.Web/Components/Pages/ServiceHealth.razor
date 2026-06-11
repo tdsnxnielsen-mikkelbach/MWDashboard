@@ -1,0 +1,327 @@
+@page "/servicehealth"
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Service Health</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Microsoft 365 Service Health</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Current operational status of Microsoft 365 services and active incidents/advisories.
+    Requires <code>ServiceHealth.Read.All</code> permission.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading service health data...</MudText>
+    </div>
+}
+else if (!_hasData)
+{
+    <MudAlert Severity="Severity.Info">
+        No service health data available for the selected tenant(s). Collect data from the Tenants page first.
+        Service Health requires the <code>ServiceHealth.Read.All</code> Graph permission to be consented.
+    </MudAlert>
+}
+else
+{
+<MudGrid>
+    @* KPI cards *@
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Services Healthy</MudText>
+            <MudText Typo="Typo.h4" Color="Color.Success">@_healthyCount</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">of @_totalServices monitored</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Services Affected</MudText>
+            <MudText Typo="Typo.h4" Color="@(_affectedCount > 0 ? Color.Warning : Color.Success)">@_affectedCount</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">degraded or interrupted</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Active Incidents</MudText>
+            <MudText Typo="Typo.h4" Color="@(_incidentCount > 0 ? Color.Error : Color.Success)">@_incidentCount</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">unresolved incidents</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Active Advisories</MudText>
+            <MudText Typo="Typo.h4" Color="@(_advisoryCount > 0 ? Color.Warning : Color.Success)">@_advisoryCount</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">unresolved advisories</MudText>
+        </MudPaper>
+    </MudItem>
+
+    @* Active issues table *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Active Service Issues</MudText>
+            @if (_issues.Count > 0)
+            {
+                <MudTable Items="_issues" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                          SortLabel="Sort By" FixedHeader="true" Filter="FilterIssue">
+                    <ToolBarContent>
+                        <MudTextField @bind-Value="_searchString" Placeholder="Search issues" Adornment="Adornment.Start"
+                                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
+                    </ToolBarContent>
+                    <HeaderContent>
+                        <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.Title)">Issue</MudTableSortLabel></MudTh>
+                        @if (TenantFilter.IsMultiTenantView)
+                        {
+                            <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.TenantName)">Tenant</MudTableSortLabel></MudTh>
+                        }
+                        <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.ServiceName)">Service</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.Classification)">Type</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.Status)">Status</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.StartDateTime ?? DateTime.MaxValue)" InitialDirection="SortDirection.Descending">Started</MudTableSortLabel></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Issue">
+                            <MudText Typo="Typo.body2"><b>@context.Title</b></MudText>
+                            @if (!string.IsNullOrWhiteSpace(context.Feature))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Feature</MudText>
+                            }
+                        </MudTd>
+                        @if (TenantFilter.IsMultiTenantView)
+                        {
+                            <MudTd DataLabel="Tenant">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.TenantName</MudChip>
+                            </MudTd>
+                        }
+                        <MudTd DataLabel="Service">@context.ServiceName</MudTd>
+                        <MudTd DataLabel="Type">
+                            <MudChip T="string" Size="Size.Small" Color="@GetClassificationColor(context.Classification)">@GetClassificationLabel(context.Classification)</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Status">@FormatStatus(context.Status)</MudTd>
+                        <MudTd DataLabel="Started">@(context.StartDateTime?.ToString("MMM dd, HH:mm") ?? "—")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Success" Dense="true">No active service issues. All monitored services are operating normally.</MudAlert>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Per-service status table *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Service Status Overview</MudText>
+            @if (_services.Count > 0)
+            {
+                <MudTable Items="_services" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" SortLabel="Sort By">
+                    <HeaderContent>
+                        @if (TenantFilter.IsMultiTenantView)
+                        {
+                            <MudTh><MudTableSortLabel SortBy="new Func<ServiceRow, object>(x => x.TenantName)">Tenant</MudTableSortLabel></MudTh>
+                        }
+                        <MudTh><MudTableSortLabel SortBy="new Func<ServiceRow, object>(x => x.ServiceName)">Service</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<ServiceRow, object>(x => x.Status)">Status</MudTableSortLabel></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @if (TenantFilter.IsMultiTenantView)
+                        {
+                            <MudTd DataLabel="Tenant">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.TenantName</MudChip>
+                            </MudTd>
+                        }
+                        <MudTd DataLabel="Service">@context.ServiceName</MudTd>
+                        <MudTd DataLabel="Status">
+                            <div class="d-flex align-center" style="gap:8px;">
+                                <MudIcon Icon="@GetStatusIcon(context.Status)" Color="@GetStatusColor(context.Status)" Size="Size.Small" />
+                                <MudText Typo="Typo.body2">@FormatStatus(context.Status)</MudText>
+                            </div>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No service status data available.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _hasData;
+    private string _searchString = string.Empty;
+
+    private int _totalServices;
+    private int _healthyCount;
+    private int _affectedCount;
+    private int _incidentCount;
+    private int _advisoryCount;
+
+    private List<ServiceRow> _services = [];
+    private List<IssueRow> _issues = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        var services = await MauDataService.GetServiceHealthAsync(tenantIds);
+        var issues = await MauDataService.GetServiceHealthIssuesAsync(tenantIds);
+
+        _hasData = services.Count > 0 || issues.Count > 0;
+
+        _services = services
+            .Select(s => new ServiceRow
+            {
+                TenantName = TenantFilter.GetTenantName(s.TenantId),
+                ServiceName = s.ServiceName,
+                Status = s.Status
+            })
+            .OrderByDescending(s => IsAffected(s.Status))
+            .ThenBy(s => s.ServiceName)
+            .ToList();
+
+        _totalServices = _services.Count;
+        _affectedCount = _services.Count(s => IsAffected(s.Status));
+        _healthyCount = _totalServices - _affectedCount;
+
+        _issues = issues
+            .Select(i => new IssueRow
+            {
+                TenantName = TenantFilter.GetTenantName(i.TenantId),
+                Title = i.Title,
+                ServiceName = i.ServiceName,
+                Classification = i.Classification,
+                Status = i.Status,
+                Feature = i.Feature,
+                StartDateTime = i.StartDateTime
+            })
+            .OrderByDescending(i => i.StartDateTime ?? DateTime.MinValue)
+            .ToList();
+
+        _incidentCount = _issues.Count(i => string.Equals(i.Classification, "incident", StringComparison.OrdinalIgnoreCase));
+        _advisoryCount = _issues.Count(i => string.Equals(i.Classification, "advisory", StringComparison.OrdinalIgnoreCase));
+
+        _loading = false;
+    }
+
+    private static bool IsAffected(string status)
+    {
+        return status switch
+        {
+            "ServiceOperational" => false,
+            "ServiceRestored" => false,
+            "FalsePositive" => false,
+            "Unknown" => false,
+            _ => true
+        };
+    }
+
+    private bool FilterIssue(IssueRow row)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        return row.Title.Contains(_searchString, StringComparison.OrdinalIgnoreCase)
+            || row.ServiceName.Contains(_searchString, StringComparison.OrdinalIgnoreCase)
+            || row.Feature.Contains(_searchString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private Color GetStatusColor(string status)
+    {
+        return status switch
+        {
+            "ServiceOperational" or "ServiceRestored" or "FalsePositive" => Color.Success,
+            "ServiceDegradation" or "Investigating" or "RestoringService" or "VerifyingService" or "PostIncidentReviewPublished" or "InformationUnavailable" => Color.Warning,
+            "ServiceInterruption" or "ExtendedRecovery" => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStatusIcon(string status)
+    {
+        return status switch
+        {
+            "ServiceOperational" or "ServiceRestored" or "FalsePositive" => Icons.Material.Filled.CheckCircle,
+            "ServiceInterruption" or "ExtendedRecovery" => Icons.Material.Filled.Error,
+            _ => Icons.Material.Filled.Warning
+        };
+    }
+
+    private Color GetClassificationColor(string classification)
+    {
+        return classification.ToLowerInvariant() switch
+        {
+            "incident" => Color.Error,
+            "advisory" => Color.Warning,
+            _ => Color.Default
+        };
+    }
+
+    private string GetClassificationLabel(string classification)
+    {
+        return classification.ToLowerInvariant() switch
+        {
+            "incident" => "Incident",
+            "advisory" => "Advisory",
+            _ => string.IsNullOrEmpty(classification) ? "—" : classification
+        };
+    }
+
+    // Split PascalCase status into spaced words (e.g. "ServiceDegradation" -> "Service Degradation")
+    private static string FormatStatus(string status)
+    {
+        if (string.IsNullOrEmpty(status)) return "—";
+        return System.Text.RegularExpressions.Regex.Replace(status, "(?<=[a-z])(?=[A-Z])", " ");
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    public class ServiceRow
+    {
+        public string TenantName { get; set; } = string.Empty;
+        public string ServiceName { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+    }
+
+    public class IssueRow
+    {
+        public string TenantName { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string ServiceName { get; set; } = string.Empty;
+        public string Classification { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string Feature { get; set; } = string.Empty;
+        public DateTime? StartDateTime { get; set; }
+    }
+}

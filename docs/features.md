@@ -119,7 +119,26 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Per-service breakdown** — Defender, Entra ID, Intune, Sentinel cards with failure rates
 - **MFA adoption rate** — gauge with percentage and actionable recommendations
 - **True MFA data** — uses Microsoft Graph Beta API `AuthenticationDetails` (counts non-password auth methods that succeeded). Only available from tenants with Entra ID P1/P2
+- **MFA & Authentication Method Registration** — tenant-wide registration gauges for member accounts (guests excluded): MFA registered, MFA capable, passwordless capable, SSPR registered (with raw counts). Available on **all tiers** via `AuditLog.Read.All` — does not require P1/P2. Data source: Microsoft Graph `GET /reports/authenticationMethods/userRegistrationDetails`
+- **Inactive / Stale Licensed Accounts** — KPI cards for enabled, licensed member accounts: total licensed, inactive 30+ days, inactive 90+ days, never signed in (each with % of licensed). Surfaces license-reclamation opportunities. Available on **all tiers** via `AuditLog.Read.All` + `User.Read.All`. Data source: Microsoft Graph `GET /users` with `signInActivity`
 - **Clear data availability notes** — explains exactly what's available per license tier and that Free-tier tenants cannot expose audit log data via Graph
+
+## Secure Score (`/securescore`)
+
+- **KPI cards** — current secure score % (points achieved / max), delta vs. global average benchmark, count of actions to improve, licensed/active users
+- **Score trend chart** — secure score % over the last 90 days; per-tenant series in multi-tenant view
+- **Score by category** — donut chart of achieved points per control category (Identity, Data, Device, Apps, Infrastructure)
+- **Recommended remediation actions** — searchable/sortable table of controls not fully implemented, ordered by lowest progress first, with progress bar, category, and implementation status (Complete/Partial/Not started); Tenant column in multi-tenant view
+- **Tenant-scoped** — customer-tenant users see only their own tenant's score
+- Data source: Microsoft Graph `GET /security/secureScores` (90-day trend + embedded control scores); requires `SecurityEvents.Read.All`
+
+## Service Health (`/servicehealth`)
+
+- **KPI cards** — services healthy (of total monitored), services affected (degraded/interrupted), active incidents, active advisories
+- **Active service issues** — searchable/sortable table of unresolved incidents and advisories with service, type (Incident/Advisory), status, feature, and start time; Tenant column in multi-tenant view
+- **Service status overview** — per-service operational status with color-coded icon (operational/degraded/interrupted), affected services sorted to the top
+- **Tenant-scoped** — customer-tenant users see only their own tenant's service health
+- Data source: Microsoft Graph `GET /admin/serviceAnnouncement/healthOverviews` (per-service status) + `GET /admin/serviceAnnouncement/issues` (active issues); requires `ServiceHealth.Read.All`
 
 ## Branding & Appearance (`/settings`)
 

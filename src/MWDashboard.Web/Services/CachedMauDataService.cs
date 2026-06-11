@@ -140,6 +140,100 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("m365app", null));
     }
 
+    // --- Secure Score (cached 60 min — daily-changing data) ---
+    public Task<List<SecureScoreSnapshot>> GetSecureScoresAsync(IEnumerable<string>? tenantIds, int days = 90)
+    {
+        var key = BuildKey("securescore", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetSecureScoresAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveSecureScoresAsync(IEnumerable<SecureScoreSnapshot> snapshots)
+    {
+        await _inner.SaveSecureScoresAsync(snapshots);
+        var tenantIds = snapshots.Select(s => s.TenantId).Distinct().ToArray();
+        foreach (var tid in tenantIds)
+            await InvalidateAsync(BuildKey("securescore", new[] { tid }));
+        await InvalidateAsync(BuildKey("securescore", null));
+    }
+
+    public Task<List<SecureScoreControlSnapshot>> GetSecureScoreControlsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("securescore-controls", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetSecureScoreControlsAsync(tenantIds), options);
+    }
+
+    public async Task SaveSecureScoreControlsAsync(IEnumerable<SecureScoreControlSnapshot> snapshots)
+    {
+        await _inner.SaveSecureScoreControlsAsync(snapshots);
+        var tenantIds = snapshots.Select(s => s.TenantId).Distinct().ToArray();
+        foreach (var tid in tenantIds)
+            await InvalidateAsync(BuildKey("securescore-controls", new[] { tid }));
+        await InvalidateAsync(BuildKey("securescore-controls", null));
+    }
+
+    // --- MFA Registration (cached 60 min — daily-changing data) ---
+    public Task<List<MfaRegistrationSnapshot>> GetMfaRegistrationAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("mfa-registration", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetMfaRegistrationAsync(tenantIds), options);
+    }
+
+    public async Task SaveMfaRegistrationAsync(MfaRegistrationSnapshot snapshot)
+    {
+        await _inner.SaveMfaRegistrationAsync(snapshot);
+        await InvalidateAsync(BuildKey("mfa-registration", new[] { snapshot.TenantId }), BuildKey("mfa-registration", null));
+    }
+
+    // --- Inactive Accounts (cached 60 min — daily-changing data) ---
+    public Task<List<InactiveAccountSnapshot>> GetInactiveAccountsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("inactive-accounts", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetInactiveAccountsAsync(tenantIds), options);
+    }
+
+    public async Task SaveInactiveAccountsAsync(InactiveAccountSnapshot snapshot)
+    {
+        await _inner.SaveInactiveAccountsAsync(snapshot);
+        await InvalidateAsync(BuildKey("inactive-accounts", new[] { snapshot.TenantId }), BuildKey("inactive-accounts", null));
+    }
+
+    // --- Service Health (cached 15 min — operational status changes more often) ---
+    public Task<List<ServiceHealthSnapshot>> GetServiceHealthAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("service-health", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions15Min;
+        return GetOrSetAsync(key, () => _inner.GetServiceHealthAsync(tenantIds), options);
+    }
+
+    public async Task SaveServiceHealthAsync(IEnumerable<ServiceHealthSnapshot> snapshots)
+    {
+        await _inner.SaveServiceHealthAsync(snapshots);
+        var tenantIds = snapshots.Select(s => s.TenantId).Distinct().ToArray();
+        foreach (var tid in tenantIds)
+            await InvalidateAsync(BuildKey("service-health", new[] { tid }));
+        await InvalidateAsync(BuildKey("service-health", null));
+    }
+
+    public Task<List<ServiceHealthIssueSnapshot>> GetServiceHealthIssuesAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("service-health-issues", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions15Min;
+        return GetOrSetAsync(key, () => _inner.GetServiceHealthIssuesAsync(tenantIds), options);
+    }
+
+    public async Task SaveServiceHealthIssuesAsync(IEnumerable<ServiceHealthIssueSnapshot> snapshots)
+    {
+        await _inner.SaveServiceHealthIssuesAsync(snapshots);
+        var tenantIds = snapshots.Select(s => s.TenantId).Distinct().ToArray();
+        foreach (var tid in tenantIds)
+            await InvalidateAsync(BuildKey("service-health-issues", new[] { tid }));
+        await InvalidateAsync(BuildKey("service-health-issues", null));
+    }
+
     // --- Pass-through for write operations; cached reads below ---
 
     // --- MAU History (15 min — dashboard-level, queried frequently) ---

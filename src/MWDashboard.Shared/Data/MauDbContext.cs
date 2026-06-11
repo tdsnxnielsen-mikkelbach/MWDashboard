@@ -19,6 +19,12 @@ public class MauDbContext : DbContext
     public DbSet<StorageSnapshot> StorageSnapshots => Set<StorageSnapshot>();
     public DbSet<ConsumptionSnapshot> ConsumptionSnapshots => Set<ConsumptionSnapshot>();
     public DbSet<M365AppUsageSnapshot> M365AppUsageSnapshots => Set<M365AppUsageSnapshot>();
+    public DbSet<SecureScoreSnapshot> SecureScoreSnapshots => Set<SecureScoreSnapshot>();
+    public DbSet<SecureScoreControlSnapshot> SecureScoreControlSnapshots => Set<SecureScoreControlSnapshot>();
+    public DbSet<MfaRegistrationSnapshot> MfaRegistrationSnapshots => Set<MfaRegistrationSnapshot>();
+    public DbSet<InactiveAccountSnapshot> InactiveAccountSnapshots => Set<InactiveAccountSnapshot>();
+    public DbSet<ServiceHealthSnapshot> ServiceHealthSnapshots => Set<ServiceHealthSnapshot>();
+    public DbSet<ServiceHealthIssueSnapshot> ServiceHealthIssueSnapshots => Set<ServiceHealthIssueSnapshot>();
     public DbSet<BrandingSettings> BrandingSettings => Set<BrandingSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -119,6 +125,60 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.AppName).HasMaxLength(100);
             entity.Property(e => e.Platform).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<SecureScoreSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<SecureScoreControlSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ControlName, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.ControlName).HasMaxLength(250);
+            entity.Property(e => e.ControlCategory).HasMaxLength(100);
+            entity.Property(e => e.Description).HasMaxLength(2000);
+            entity.Property(e => e.ImplementationStatus).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<MfaRegistrationSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<InactiveAccountSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<ServiceHealthSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ServiceName, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.ServiceName).HasMaxLength(250);
+            entity.Property(e => e.Status).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<ServiceHealthIssueSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.IssueId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.IssueId).HasMaxLength(100);
+            entity.Property(e => e.Title).HasMaxLength(500);
+            entity.Property(e => e.ServiceName).HasMaxLength(250);
+            entity.Property(e => e.Classification).HasMaxLength(100);
+            entity.Property(e => e.Status).HasMaxLength(100);
+            entity.Property(e => e.Feature).HasMaxLength(250);
         });
 
         modelBuilder.Entity<BrandingSettings>(entity =>
