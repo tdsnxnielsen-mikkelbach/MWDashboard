@@ -290,6 +290,108 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("risky-users", new[] { snapshot.TenantId }), BuildKey("risky-users", null));
     }
 
+    // --- Mailbox Usage (Tier 3, cached 60 min — daily-changing data) ---
+    public Task<List<MailboxUsageSnapshot>> GetMailboxUsageAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("mailbox-usage", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetMailboxUsageAsync(tenantIds), options);
+    }
+
+    public async Task SaveMailboxUsageAsync(MailboxUsageSnapshot snapshot)
+    {
+        await _inner.SaveMailboxUsageAsync(snapshot);
+        await InvalidateAsync(BuildKey("mailbox-usage", new[] { snapshot.TenantId }), BuildKey("mailbox-usage", null));
+    }
+
+    public Task<List<TopMailboxSnapshot>> GetTopMailboxesAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("top-mailboxes", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetTopMailboxesAsync(tenantIds), options);
+    }
+
+    public async Task SaveTopMailboxesAsync(IEnumerable<TopMailboxSnapshot> snapshots)
+    {
+        await _inner.SaveTopMailboxesAsync(snapshots);
+        var tenantId = snapshots.Select(s => s.TenantId).FirstOrDefault();
+        if (tenantId != null)
+            await InvalidateAsync(BuildKey("top-mailboxes", new[] { tenantId }), BuildKey("top-mailboxes", null));
+    }
+
+    // --- Teams Device Usage (Tier 3, cached 60 min) ---
+    public Task<List<TeamsDeviceUsageSnapshot>> GetTeamsDeviceUsageAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("teams-device-usage", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetTeamsDeviceUsageAsync(tenantIds), options);
+    }
+
+    public async Task SaveTeamsDeviceUsageAsync(TeamsDeviceUsageSnapshot snapshot)
+    {
+        await _inner.SaveTeamsDeviceUsageAsync(snapshot);
+        await InvalidateAsync(BuildKey("teams-device-usage", new[] { snapshot.TenantId }), BuildKey("teams-device-usage", null));
+    }
+
+    // --- SharePoint / OneDrive Site Usage (Tier 3, cached 60 min) ---
+    public Task<List<SiteUsageSnapshot>> GetSiteUsageAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("site-usage", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetSiteUsageAsync(tenantIds), options);
+    }
+
+    public async Task SaveSiteUsageAsync(IEnumerable<SiteUsageSnapshot> snapshots)
+    {
+        await _inner.SaveSiteUsageAsync(snapshots);
+        var tenantId = snapshots.Select(s => s.TenantId).FirstOrDefault();
+        if (tenantId != null)
+            await InvalidateAsync(BuildKey("site-usage", new[] { tenantId }), BuildKey("site-usage", null));
+    }
+
+    public Task<List<SiteUsageDetailSnapshot>> GetSiteUsageDetailAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("site-usage-detail", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetSiteUsageDetailAsync(tenantIds), options);
+    }
+
+    public async Task SaveSiteUsageDetailAsync(IEnumerable<SiteUsageDetailSnapshot> snapshots)
+    {
+        await _inner.SaveSiteUsageDetailAsync(snapshots);
+        var tenantId = snapshots.Select(s => s.TenantId).FirstOrDefault();
+        if (tenantId != null)
+            await InvalidateAsync(BuildKey("site-usage-detail", new[] { tenantId }), BuildKey("site-usage-detail", null));
+    }
+
+    // --- Viva Engage / Yammer (Tier 3, cached 60 min) ---
+    public Task<List<YammerActivitySnapshot>> GetYammerActivityAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("yammer-activity", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetYammerActivityAsync(tenantIds), options);
+    }
+
+    public async Task SaveYammerActivityAsync(YammerActivitySnapshot snapshot)
+    {
+        await _inner.SaveYammerActivityAsync(snapshot);
+        await InvalidateAsync(BuildKey("yammer-activity", new[] { snapshot.TenantId }), BuildKey("yammer-activity", null));
+    }
+
+    // --- Groups & Teams sprawl (Tier 3, cached 60 min) ---
+    public Task<List<GroupSnapshot>> GetGroupSprawlAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("group-sprawl", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetGroupSprawlAsync(tenantIds), options);
+    }
+
+    public async Task SaveGroupSprawlAsync(GroupSnapshot snapshot)
+    {
+        await _inner.SaveGroupSprawlAsync(snapshot);
+        await InvalidateAsync(BuildKey("group-sprawl", new[] { snapshot.TenantId }), BuildKey("group-sprawl", null));
+    }
+
     // --- Tenant consent health (no caching — written during collection, read directly from DB) ---
     public Task UpdateTenantPermissionStatusAsync(string tenantId, IEnumerable<string> missingPermissions)
         => _inner.UpdateTenantPermissionStatusAsync(tenantId, missingPermissions);

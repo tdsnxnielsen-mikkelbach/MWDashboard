@@ -27,6 +27,11 @@ public interface IGraphReportService
     Task<ConditionalAccessSnapshot?> GetConditionalAccessAsync(string tenantId);
     Task<GuestUserSnapshot?> GetGuestUsersAsync(string tenantId);
     Task<RiskyUserSnapshot?> GetRiskyUsersAsync(string tenantId);
+    Task<(MailboxUsageSnapshot? Aggregate, List<TopMailboxSnapshot> Top)> GetMailboxUsageAsync(string tenantId);
+    Task<TeamsDeviceUsageSnapshot?> GetTeamsDeviceUsageAsync(string tenantId);
+    Task<(List<SiteUsageSnapshot> Aggregates, List<SiteUsageDetailSnapshot> Details)> GetSiteUsageAsync(string tenantId);
+    Task<YammerActivitySnapshot?> GetYammerActivityAsync(string tenantId);
+    Task<GroupSnapshot?> GetGroupSprawlAsync(string tenantId);
     Task<List<string>> CheckMissingPermissionsAsync(string tenantId);
 }
 
@@ -1547,6 +1552,372 @@ public class GraphReportService : IGraphReportService
         }
     }
 
+    // ---- Tier 3: Usage & Governance ----
+
+    private const int TopN = 20;
+
+    // Mailbox usage — tenant aggregate (detail + quota-status counts) plus top-N largest mailboxes.
+    public async Task<(MailboxUsageSnapshot? Aggregate, List<TopMailboxSnapshot> Top)> GetMailboxUsageAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var reportDate = DateTime.UtcNow.Date;
+        MailboxUsageSnapshot? aggregate = null;
+        var top = new List<TopMailboxSnapshot>();
+
+        // Per-mailbox detail → totals + top-N
+        try
+        {
+            var report = await client.Reports.GetMailboxUsageDetailWithPeriod("D30").GetAsync();
+            if (report != null)
+            {
+                using var reader = new StreamReader(report);
+                var csv = await reader.ReadToEndAsync();
+                var rows = ParseCsv(csv);
+                if (rows.Count > 1)
+                {
+                    var h = rows[0];
+                    int iName = Array.IndexOf(h, "Display Name");
+                    int iStorage = Array.IndexOf(h, "Storage Used (Byte)");
+                    int iItems = Array.IndexOf(h, "Item Count");
+                    int iLast = Array.IndexOf(h, "Last Activity Date");
+
+                    aggregate = new MailboxUsageSnapshot { TenantId = tenantId, ReportDate = reportDate, CollectedAt = DateTime.UtcNow };
+                    var cutoff = DateTime.UtcNow.AddDays(-30);
+                    var mailboxes = new List<TopMailboxSnapshot>();
+
+                    for (int r = 1; r < rows.Count; r++)
+                    {
+                        var v = rows[r];
+                        aggregate.TotalMailboxes++;
+                        long.TryParse(GetValue(v, iStorage), out var storage);
+                        long.TryParse(GetValue(v, iItems), out var items);
+                        aggregate.TotalStorageUsedBytes += storage;
+
+                        var hasActivity = DateTime.TryParse(GetValue(v, iLast), out var last);
+                        if (hasActivity && last >= cutoff) aggregate.ActiveMailboxes++;
+                        else aggregate.InactiveMailboxes++;
+
+                        mailboxes.Add(new TopMailboxSnapshot
+                        {
+                            TenantId = tenantId,
+                            ReportDate = reportDate,
+                            DisplayName = GetValue(v, iName) ?? "(unknown)",
+                            StorageUsedBytes = storage,
+                            ItemCount = items,
+                            LastActivityDate = hasActivity ? last : null,
+                            CollectedAt = DateTime.UtcNow
+                        });
+                    }
+
+                    top = mailboxes.OrderByDescending(m => m.StorageUsedBytes).Take(TopN).ToList();
+                    for (int rank = 0; rank < top.Count; rank++) top[rank].Rank = rank + 1;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get mailbox usage detail for tenant {TenantId}", tenantId);
+        }
+
+        // Quota-status counts → latest report date
+        try
+        {
+            var report = await client.Reports.GetMailboxUsageQuotaStatusMailboxCountsWithPeriod("D30").GetAsync();
+            if (report != null)
+            {
+                using var reader = new StreamReader(report);
+                var csv = await reader.ReadToEndAsync();
+                var rows = ParseCsv(csv);
+                if (rows.Count > 1)
+                {
+                    var h = rows[0];
+                    int iDate = Array.IndexOf(h, "Report Date");
+                    int iUnder = Array.IndexOf(h, "Under Limit");
+                    int iWarn = Array.IndexOf(h, "Warning Issued");
+                    int iSend = Array.IndexOf(h, "Send Prohibited");
+                    int iSendRecv = Array.IndexOf(h, "Send/Receive Prohibited");
+
+                    var latest = LatestByDate(rows, iDate);
+                    if (latest != null)
+                    {
+                        aggregate ??= new MailboxUsageSnapshot { TenantId = tenantId, ReportDate = reportDate, CollectedAt = DateTime.UtcNow };
+                        int.TryParse(GetValue(latest, iUnder), out var under); aggregate.UnderLimitCount = under;
+                        int.TryParse(GetValue(latest, iWarn), out var warn); aggregate.WarningCount = warn;
+                        int.TryParse(GetValue(latest, iSend), out var send); aggregate.SendProhibitedCount = send;
+                        int.TryParse(GetValue(latest, iSendRecv), out var sr); aggregate.SendReceiveProhibitedCount = sr;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get mailbox quota-status counts for tenant {TenantId}", tenantId);
+        }
+
+        return (aggregate, top);
+    }
+
+    // Teams device usage — latest per-device-type user counts.
+    public async Task<TeamsDeviceUsageSnapshot?> GetTeamsDeviceUsageAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        try
+        {
+            var report = await client.Reports.GetTeamsDeviceUsageUserCountsWithPeriod("D30").GetAsync();
+            if (report == null) return null;
+
+            using var reader = new StreamReader(report);
+            var csv = await reader.ReadToEndAsync();
+            var rows = ParseCsv(csv);
+            if (rows.Count < 2) return null;
+
+            var h = rows[0];
+            int iDate = Array.IndexOf(h, "Report Date");
+            var latest = LatestByDate(rows, iDate);
+            if (latest == null) return null;
+
+            int Col(string name) { int idx = Array.IndexOf(h, name); int.TryParse(GetValue(latest, idx), out var c); return c; }
+
+            return new TeamsDeviceUsageSnapshot
+            {
+                TenantId = tenantId,
+                ReportDate = DateTime.UtcNow.Date,
+                WindowsCount = Col("Windows"),
+                MacCount = Col("Mac"),
+                WebCount = Col("Web"),
+                IosCount = Col("iOS"),
+                AndroidPhoneCount = Col("Android Phone"),
+                WindowsPhoneCount = Col("Windows Phone"),
+                ChromeOsCount = Col("Chrome OS"),
+                LinuxCount = Col("Linux"),
+                CollectedAt = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get Teams device usage for tenant {TenantId}", tenantId);
+            return null;
+        }
+    }
+
+    // SharePoint sites + OneDrive accounts — per-workload aggregate plus top-N by storage.
+    public async Task<(List<SiteUsageSnapshot> Aggregates, List<SiteUsageDetailSnapshot> Details)> GetSiteUsageAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var aggregates = new List<SiteUsageSnapshot>();
+        var details = new List<SiteUsageDetailSnapshot>();
+        var reportDate = DateTime.UtcNow.Date;
+
+        async Task CollectAsync(string workload, Func<Task<Stream?>> fetch, string nameColumn)
+        {
+            try
+            {
+                var report = await fetch();
+                if (report == null) return;
+                using var reader = new StreamReader(report);
+                var csv = await reader.ReadToEndAsync();
+                var rows = ParseCsv(csv);
+                if (rows.Count < 2) return;
+
+                var h = rows[0];
+                int iName = Array.IndexOf(h, nameColumn);
+                int iStorage = Array.IndexOf(h, "Storage Used (Byte)");
+                int iFiles = Array.IndexOf(h, "File Count");
+                int iActive = Array.IndexOf(h, "Active File Count");
+                int iLast = Array.IndexOf(h, "Last Activity Date");
+
+                var agg = new SiteUsageSnapshot { TenantId = tenantId, ReportDate = reportDate, Workload = workload, CollectedAt = DateTime.UtcNow };
+                var items = new List<SiteUsageDetailSnapshot>();
+
+                for (int r = 1; r < rows.Count; r++)
+                {
+                    var v = rows[r];
+                    agg.TotalSites++;
+                    long.TryParse(GetValue(v, iStorage), out var storage);
+                    long.TryParse(GetValue(v, iFiles), out var files);
+                    long.TryParse(GetValue(v, iActive), out var active);
+                    agg.TotalStorageUsedBytes += storage;
+                    agg.TotalFileCount += files;
+                    agg.ActiveFileCount += active;
+                    var hasActivity = DateTime.TryParse(GetValue(v, iLast), out var last);
+                    if (active > 0) agg.ActiveSites++;
+
+                    items.Add(new SiteUsageDetailSnapshot
+                    {
+                        TenantId = tenantId,
+                        ReportDate = reportDate,
+                        Workload = workload,
+                        Name = GetValue(v, iName) ?? "(unknown)",
+                        StorageUsedBytes = storage,
+                        FileCount = files,
+                        ActiveFileCount = active,
+                        LastActivityDate = hasActivity ? last : null,
+                        CollectedAt = DateTime.UtcNow
+                    });
+                }
+
+                aggregates.Add(agg);
+                var topItems = items.OrderByDescending(i => i.StorageUsedBytes).Take(TopN).ToList();
+                for (int rank = 0; rank < topItems.Count; rank++) topItems[rank].Rank = rank + 1;
+                details.AddRange(topItems);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get {Workload} site usage detail for tenant {TenantId}", workload, tenantId);
+            }
+        }
+
+        await CollectAsync(M365Services.SharePoint,
+            () => client.Reports.GetSharePointSiteUsageDetailWithPeriod("D30").GetAsync(), "Site URL");
+        await CollectAsync(M365Services.OneDrive,
+            () => client.Reports.GetOneDriveUsageAccountDetailWithPeriod("D30").GetAsync(), "Owner Display Name");
+
+        return (aggregates, details);
+    }
+
+    // Viva Engage (Yammer) activity — latest posted/read/liked user counts.
+    public async Task<YammerActivitySnapshot?> GetYammerActivityAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        try
+        {
+            var report = await client.Reports.GetYammerActivityUserCountsWithPeriod("D30").GetAsync();
+            if (report == null) return null;
+
+            using var reader = new StreamReader(report);
+            var csv = await reader.ReadToEndAsync();
+            var rows = ParseCsv(csv);
+            if (rows.Count < 2) return null;
+
+            var h = rows[0];
+            int iDate = Array.IndexOf(h, "Report Date");
+            var latest = LatestByDate(rows, iDate);
+            if (latest == null) return null;
+
+            int Col(string name) { int idx = Array.IndexOf(h, name); int.TryParse(GetValue(latest, idx), out var c); return c; }
+
+            return new YammerActivitySnapshot
+            {
+                TenantId = tenantId,
+                ReportDate = DateTime.UtcNow.Date,
+                PostedCount = Col("Posted"),
+                ReadCount = Col("Read"),
+                LikedCount = Col("Liked"),
+                CollectedAt = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get Yammer activity for tenant {TenantId}", tenantId);
+            return null;
+        }
+    }
+
+    // Groups & Teams sprawl — counts of group types and ownerless M365 groups. Requires Group.Read.All.
+    public async Task<GroupSnapshot?> GetGroupSprawlAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        try
+        {
+            var page = await client.Groups.GetAsync(c =>
+            {
+                c.QueryParameters.Select = ["id", "groupTypes", "resourceProvisioningOptions", "securityEnabled"];
+                c.QueryParameters.Expand = ["owners($select=id)"];
+                c.QueryParameters.Top = 999;
+            });
+
+            if (page?.Value == null) return null;
+
+            var snapshot = new GroupSnapshot { TenantId = tenantId, ReportDate = DateTime.UtcNow.Date, CollectedAt = DateTime.UtcNow };
+
+            void Accumulate(Microsoft.Graph.Models.Group g)
+            {
+                snapshot.TotalGroups++;
+                var isUnified = g.GroupTypes != null && g.GroupTypes.Contains("Unified");
+                var isTeam = g.AdditionalData != null
+                    && g.AdditionalData.TryGetValue("resourceProvisioningOptions", out var rpo)
+                    && rpo?.ToString()?.Contains("Team", StringComparison.OrdinalIgnoreCase) == true;
+
+                if (isUnified)
+                {
+                    snapshot.M365Groups++;
+                    if (g.Owners == null || g.Owners.Count == 0) snapshot.OwnerlessGroups++;
+                }
+                else if (g.SecurityEnabled == true)
+                {
+                    snapshot.SecurityGroups++;
+                }
+
+                if (isTeam) snapshot.TeamsConnectedGroups++;
+            }
+
+            var iterator = Microsoft.Graph.PageIterator<Microsoft.Graph.Models.Group, Microsoft.Graph.Models.GroupCollectionResponse>
+                .CreatePageIterator(client, page, g => { Accumulate(g); return true; });
+            await iterator.IterateAsync();
+
+            return snapshot;
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            _logger.LogWarning("Group sprawl data unavailable for tenant {TenantId}: insufficient permissions. Requires Group.Read.All.", tenantId);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get group sprawl for tenant {TenantId}", tenantId);
+            return null;
+        }
+    }
+
+    // Returns the data row with the most recent parseable date in the given column.
+    private static string[]? LatestByDate(List<string[]> rows, int dateIndex)
+    {
+        string[]? best = null;
+        var bestDate = DateTime.MinValue;
+        for (int r = 1; r < rows.Count; r++)
+        {
+            if (DateTime.TryParse(GetValue(rows[r], dateIndex), out var d) && d >= bestDate)
+            {
+                bestDate = d;
+                best = rows[r];
+            }
+        }
+        return best;
+    }
+
+    // Quote-aware CSV parser (usage-detail reports may contain quoted fields with embedded commas).
+    private static List<string[]> ParseCsv(string csv)
+    {
+        var result = new List<string[]>();
+        foreach (var rawLine in csv.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0) continue;
+
+            var fields = new List<string>();
+            var sb = new System.Text.StringBuilder();
+            bool inQuotes = false;
+            for (int i = 0; i < line.Length; i++)
+            {
+                var ch = line[i];
+                if (ch == '"')
+                {
+                    if (inQuotes && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                    else inQuotes = !inQuotes;
+                }
+                else if (ch == ',' && !inQuotes)
+                {
+                    fields.Add(sb.ToString());
+                    sb.Clear();
+                }
+                else sb.Append(ch);
+            }
+            fields.Add(sb.ToString());
+            result.Add(fields.ToArray());
+        }
+        return result;
+    }
+
     // Consent health — probes each required Graph application permission with a minimal call.
     // Returns the display names of permissions that are NOT consented in the target tenant
     // (i.e. the tenant admin needs to re-consent). An empty list means all permissions are present.
@@ -1573,6 +1944,8 @@ public class GraphReportService : IGraphReportService
             () => client.DeviceManagement.ManagedDevices.GetAsync(c => c.QueryParameters.Top = 1));
         await ProbePermissionAsync(missing, "Policy.Read.All",
             () => client.Identity.ConditionalAccess.Policies.GetAsync(c => c.QueryParameters.Top = 1));
+        await ProbePermissionAsync(missing, "Group.Read.All",
+            () => client.Groups.GetAsync(c => c.QueryParameters.Top = 1));
         // IdentityRiskyUser.Read.All is intentionally NOT probed here: it is Entra ID P2-gated,
         // so a 403 on a non-P2 tenant is a licensing limit, not a consent gap, and would produce
         // a false "re-consent" flag. The risky-user collection logs that case on its own.

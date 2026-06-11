@@ -233,6 +233,58 @@ try
                     tenant.TenantName, entraTier.Tier);
             }
 
+            // --- Tier 3: Usage & Governance (all tiers) ---
+
+            // Mailbox usage (aggregate + top-N largest mailboxes)
+            var (mailboxAgg, topMailboxes) = await graphService.GetMailboxUsageAsync(tenant.TenantId);
+            if (mailboxAgg != null)
+            {
+                mailboxAgg.TenantName = tenant.TenantName;
+                await dataService.SaveMailboxUsageAsync(mailboxAgg);
+            }
+            if (topMailboxes.Count > 0)
+            {
+                foreach (var m in topMailboxes) m.TenantName = tenant.TenantName;
+                await dataService.SaveTopMailboxesAsync(topMailboxes);
+            }
+
+            // Teams device usage
+            var teamsDevices = await graphService.GetTeamsDeviceUsageAsync(tenant.TenantId);
+            if (teamsDevices != null)
+            {
+                teamsDevices.TenantName = tenant.TenantName;
+                await dataService.SaveTeamsDeviceUsageAsync(teamsDevices);
+            }
+
+            // SharePoint / OneDrive site usage (aggregate + top-N detail)
+            var (siteAggs, siteDetails) = await graphService.GetSiteUsageAsync(tenant.TenantId);
+            if (siteAggs.Count > 0)
+            {
+                foreach (var s in siteAggs) s.TenantName = tenant.TenantName;
+                await dataService.SaveSiteUsageAsync(siteAggs);
+            }
+            if (siteDetails.Count > 0)
+            {
+                foreach (var s in siteDetails) s.TenantName = tenant.TenantName;
+                await dataService.SaveSiteUsageDetailAsync(siteDetails);
+            }
+
+            // Viva Engage (Yammer) activity
+            var yammer = await graphService.GetYammerActivityAsync(tenant.TenantId);
+            if (yammer != null)
+            {
+                yammer.TenantName = tenant.TenantName;
+                await dataService.SaveYammerActivityAsync(yammer);
+            }
+
+            // Groups & Teams sprawl (requires Group.Read.All)
+            var groups = await graphService.GetGroupSprawlAsync(tenant.TenantId);
+            if (groups != null)
+            {
+                groups.TenantName = tenant.TenantName;
+                await dataService.SaveGroupSprawlAsync(groups);
+            }
+
             // Compute consumption score
             {
                 var totalLicenses = licenses.Sum(l => l.TotalLicenses);

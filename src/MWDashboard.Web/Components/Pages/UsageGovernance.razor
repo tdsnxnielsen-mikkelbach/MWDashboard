@@ -1,0 +1,626 @@
+@page "/usage"
+@using ApexCharts
+@using MWDashboard.Shared.Models
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Usage & Governance</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Usage &amp; Governance</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Mailbox storage, Teams device adoption, SharePoint &amp; OneDrive usage, Viva Engage activity, and Microsoft 365 group sprawl.
+    Requires <code>Reports.Read.All</code> and (for group governance) <code>Group.Read.All</code>.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading usage &amp; governance data...</MudText>
+    </div>
+}
+else if (!_hasAnyData)
+{
+    <MudAlert Severity="Severity.Info">
+        No usage or governance data available for the selected tenant(s). Collect data from the Tenants page first.
+        These insights require <code>Reports.Read.All</code>; group governance additionally requires <code>Group.Read.All</code>.
+    </MudAlert>
+}
+else
+{
+<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+
+    @* ---------------- Mailbox Usage ---------------- *@
+    <MudTabPanel Text="Mailbox Usage" Icon="@Icons.Material.Filled.Email">
+        @if (_mailboxes.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No mailbox usage data available. Requires <code>Reports.Read.All</code>.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Mailboxes</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_totalMailboxes.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Active</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_activeMailboxes.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">activity in last 30 days</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Storage Used</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@FormatBytes(_mailboxStorageBytes)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">At / Over Quota</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_mailboxOverQuota > 0 ? Color.Warning : Color.Success)">@_mailboxOverQuota.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">warning or prohibited</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Quota Status</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_quotaBreakdown" Name="Mailboxes"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Active vs Inactive</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_mailboxActivityBreakdown" Name="Mailboxes"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            @if (_topMailboxes.Count > 0)
+            {
+                <MudItem xs="12">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.h6" Class="mb-3">Largest Mailboxes (Top @_topMailboxes.Count)</MudText>
+                        <MudTable Items="_topMailboxes" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                            <HeaderContent>
+                                <MudTh Style="text-align:right">#</MudTh>
+                                @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                                <MudTh>Mailbox</MudTh>
+                                <MudTh Style="text-align:right">Storage</MudTh>
+                                <MudTh Style="text-align:right">Items</MudTh>
+                                <MudTh Style="text-align:right">Last Activity</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="#" Style="text-align:right">@context.Rank</MudTd>
+                                @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                                <MudTd DataLabel="Mailbox">@context.DisplayName</MudTd>
+                                <MudTd DataLabel="Storage" Style="text-align:right">@FormatBytes(context.StorageUsedBytes)</MudTd>
+                                <MudTd DataLabel="Items" Style="text-align:right">@context.ItemCount.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Last Activity" Style="text-align:right">@(context.LastActivityDate?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Teams Devices ---------------- *@
+    <MudTabPanel Text="Teams Devices" Icon="@Icons.Material.Filled.Groups">
+        @if (_teamsDevices.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No Teams device usage data available. Requires <code>Reports.Read.All</code>.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Desktop</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_teamsDesktop.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Windows + Mac</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Mobile</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_teamsMobile.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">iOS + Android</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Web</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Secondary">@_teamsWeb.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Users</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_teamsTotal.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Users by Device Type</MudText>
+                    <ApexChart TItem="LabelValue" Options="_barOptions" Height="340" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_teamsDeviceBreakdown" Name="Users"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Platform Mix</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="340" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_teamsDeviceBreakdown" Name="Users"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- SharePoint & OneDrive ---------------- *@
+    <MudTabPanel Text="SharePoint &amp; OneDrive" Icon="@Icons.Material.Filled.Storage">
+        @if (_siteUsage.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No SharePoint / OneDrive usage data available. Requires <code>Reports.Read.All</code>.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">SharePoint Sites</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_spSites.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@FormatBytes(_spStorageBytes)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">OneDrive Accounts</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_odSites.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@FormatBytes(_odStorageBytes)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Storage</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@FormatBytes(_spStorageBytes + _odStorageBytes)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Files</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Secondary">@(_spFiles + _odFiles).ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Storage by Workload</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_storageBreakdown" Name="GB"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Sites / Accounts by Workload</MudText>
+                    <ApexChart TItem="LabelValue" Options="_barOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_siteCountBreakdown" Name="Count"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            @if (_siteDetails.Count > 0)
+            {
+                <MudItem xs="12">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.h6" Class="mb-3">Largest Sites &amp; Accounts (Top @_siteDetails.Count)</MudText>
+                        <MudTable Items="_siteDetails" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                            <HeaderContent>
+                                <MudTh Style="text-align:right">#</MudTh>
+                                @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                                <MudTh>Workload</MudTh>
+                                <MudTh>Name</MudTh>
+                                <MudTh Style="text-align:right">Storage</MudTh>
+                                <MudTh Style="text-align:right">Files</MudTh>
+                                <MudTh Style="text-align:right">Last Activity</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="#" Style="text-align:right">@context.Rank</MudTd>
+                                @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                                <MudTd DataLabel="Workload">@context.Workload</MudTd>
+                                <MudTd DataLabel="Name">@context.Name</MudTd>
+                                <MudTd DataLabel="Storage" Style="text-align:right">@FormatBytes(context.StorageUsedBytes)</MudTd>
+                                <MudTd DataLabel="Files" Style="text-align:right">@context.FileCount.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Last Activity" Style="text-align:right">@(context.LastActivityDate?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Viva Engage ---------------- *@
+    <MudTabPanel Text="Viva Engage" Icon="@Icons.Material.Filled.Forum">
+        @if (_yammer.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No Viva Engage (Yammer) activity data available. Requires <code>Reports.Read.All</code> and an active Viva Engage deployment.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Posted</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_yammerPosted.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">users who posted</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Read</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_yammerRead.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">users who read</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Liked</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_yammerLiked.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">users who liked</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Engagement Mix</MudText>
+                    <ApexChart TItem="LabelValue" Options="_barOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_yammerBreakdown" Name="Users"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Groups & Teams ---------------- *@
+    <MudTabPanel Text="Groups &amp; Teams" Icon="@Icons.Material.Filled.AccountTree">
+        @if (_groups.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No group governance data available. Requires <code>Group.Read.All</code> to be consented.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Groups</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_totalGroups.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Microsoft 365 Groups</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_m365Groups.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Teams-Connected</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Secondary">@_teamsGroups.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Ownerless M365 Groups</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_ownerlessGroups > 0 ? Color.Error : Color.Success)">@_ownerlessGroups.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">governance risk</MudText>
+                </MudPaper>
+            </MudItem>
+
+            @if (_ownerlessGroups > 0)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Warning" Class="mb-2">
+                        @_ownerlessGroups ownerless Microsoft 365 group(s) detected. Ownerless groups accumulate as sprawl and have no one accountable for membership or lifecycle — assign owners or apply an expiration policy.
+                    </MudAlert>
+                </MudItem>
+            }
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Groups by Type</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_groupBreakdown" Name="Groups"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            @if (TenantFilter.IsMultiTenantView)
+            {
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.h6" Class="mb-3">By Tenant</MudText>
+                        <MudTable Items="_groups" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                            <HeaderContent>
+                                <MudTh>Tenant</MudTh>
+                                <MudTh Style="text-align:right">Total</MudTh>
+                                <MudTh Style="text-align:right">M365</MudTh>
+                                <MudTh Style="text-align:right">Teams</MudTh>
+                                <MudTh Style="text-align:right">Ownerless</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd>
+                                <MudTd DataLabel="Total" Style="text-align:right">@context.TotalGroups.ToString("N0")</MudTd>
+                                <MudTd DataLabel="M365" Style="text-align:right">@context.M365Groups.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Teams" Style="text-align:right">@context.TeamsConnectedGroups.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Ownerless" Style="text-align:right">@context.OwnerlessGroups.ToString("N0")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+</MudTabs>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _hasAnyData;
+    private int _chartKey;
+
+    private List<MailboxUsageSnapshot> _mailboxes = [];
+    private List<TopMailboxSnapshot> _topMailboxes = [];
+    private List<TeamsDeviceUsageSnapshot> _teamsDevices = [];
+    private List<SiteUsageSnapshot> _siteUsage = [];
+    private List<SiteUsageDetailSnapshot> _siteDetails = [];
+    private List<YammerActivitySnapshot> _yammer = [];
+    private List<GroupSnapshot> _groups = [];
+
+    // Mailbox KPIs
+    private int _totalMailboxes, _activeMailboxes, _mailboxOverQuota;
+    private long _mailboxStorageBytes;
+    private List<LabelValue> _quotaBreakdown = [];
+    private List<LabelValue> _mailboxActivityBreakdown = [];
+
+    // Teams device KPIs
+    private int _teamsDesktop, _teamsMobile, _teamsWeb, _teamsTotal;
+    private List<LabelValue> _teamsDeviceBreakdown = [];
+
+    // SharePoint / OneDrive KPIs
+    private int _spSites, _odSites;
+    private long _spStorageBytes, _odStorageBytes, _spFiles, _odFiles;
+    private List<LabelValue> _storageBreakdown = [];
+    private List<LabelValue> _siteCountBreakdown = [];
+
+    // Yammer KPIs
+    private int _yammerPosted, _yammerRead, _yammerLiked;
+    private List<LabelValue> _yammerBreakdown = [];
+
+    // Group KPIs
+    private int _totalGroups, _m365Groups, _securityGroups, _teamsGroups, _ownerlessGroups;
+    private List<LabelValue> _groupBreakdown = [];
+
+    private readonly ApexChartOptions<LabelValue> _donutOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private readonly ApexChartOptions<LabelValue> _barOptions = new()
+    {
+        Legend = new Legend { Show = false },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = true } },
+        DataLabels = new DataLabels { Enabled = true }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+
+        _mailboxes = await MauDataService.GetMailboxUsageAsync(tenantIds);
+        _topMailboxes = await MauDataService.GetTopMailboxesAsync(tenantIds);
+        _teamsDevices = await MauDataService.GetTeamsDeviceUsageAsync(tenantIds);
+        _siteUsage = await MauDataService.GetSiteUsageAsync(tenantIds);
+        _siteDetails = await MauDataService.GetSiteUsageDetailAsync(tenantIds);
+        _yammer = await MauDataService.GetYammerActivityAsync(tenantIds);
+        _groups = await MauDataService.GetGroupSprawlAsync(tenantIds);
+
+        _hasAnyData = _mailboxes.Count > 0 || _teamsDevices.Count > 0 || _siteUsage.Count > 0
+            || _yammer.Count > 0 || _groups.Count > 0;
+
+        // When multiple tenants are selected, present the highest-storage mailboxes/sites overall.
+        _topMailboxes = _topMailboxes.OrderByDescending(m => m.StorageUsedBytes).Take(20).ToList();
+        _siteDetails = _siteDetails.OrderByDescending(s => s.StorageUsedBytes).Take(20).ToList();
+
+        BuildMailboxMetrics();
+        BuildTeamsDeviceMetrics();
+        BuildSiteMetrics();
+        BuildYammerMetrics();
+        BuildGroupMetrics();
+
+        _chartKey++;
+        _loading = false;
+    }
+
+    private void BuildMailboxMetrics()
+    {
+        _totalMailboxes = _mailboxes.Sum(m => m.TotalMailboxes);
+        _activeMailboxes = _mailboxes.Sum(m => m.ActiveMailboxes);
+        _mailboxStorageBytes = _mailboxes.Sum(m => m.TotalStorageUsedBytes);
+        _mailboxOverQuota = _mailboxes.Sum(m => m.WarningCount + m.SendProhibitedCount + m.SendReceiveProhibitedCount);
+
+        _quotaBreakdown =
+        [
+            new("Under Limit", _mailboxes.Sum(m => m.UnderLimitCount)),
+            new("Warning", _mailboxes.Sum(m => m.WarningCount)),
+            new("Send Prohibited", _mailboxes.Sum(m => m.SendProhibitedCount)),
+            new("Send/Receive Prohibited", _mailboxes.Sum(m => m.SendReceiveProhibitedCount))
+        ];
+        _quotaBreakdown = _quotaBreakdown.Where(x => x.Value > 0).ToList();
+
+        _mailboxActivityBreakdown =
+        [
+            new("Active", _activeMailboxes),
+            new("Inactive", _mailboxes.Sum(m => m.InactiveMailboxes))
+        ];
+        _mailboxActivityBreakdown = _mailboxActivityBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private void BuildTeamsDeviceMetrics()
+    {
+        _teamsDesktop = _teamsDevices.Sum(t => t.WindowsCount + t.MacCount + t.LinuxCount + t.ChromeOsCount);
+        _teamsMobile = _teamsDevices.Sum(t => t.IosCount + t.AndroidPhoneCount + t.WindowsPhoneCount);
+        _teamsWeb = _teamsDevices.Sum(t => t.WebCount);
+        _teamsTotal = _teamsDesktop + _teamsMobile + _teamsWeb;
+
+        _teamsDeviceBreakdown =
+        [
+            new("Windows", _teamsDevices.Sum(t => t.WindowsCount)),
+            new("Mac", _teamsDevices.Sum(t => t.MacCount)),
+            new("Web", _teamsDevices.Sum(t => t.WebCount)),
+            new("iOS", _teamsDevices.Sum(t => t.IosCount)),
+            new("Android", _teamsDevices.Sum(t => t.AndroidPhoneCount)),
+            new("Linux", _teamsDevices.Sum(t => t.LinuxCount)),
+            new("Chrome OS", _teamsDevices.Sum(t => t.ChromeOsCount))
+        ];
+        _teamsDeviceBreakdown = _teamsDeviceBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private void BuildSiteMetrics()
+    {
+        var sp = _siteUsage.Where(s => s.Workload == M365Services.SharePoint).ToList();
+        var od = _siteUsage.Where(s => s.Workload == M365Services.OneDrive).ToList();
+
+        _spSites = sp.Sum(s => s.TotalSites);
+        _odSites = od.Sum(s => s.TotalSites);
+        _spStorageBytes = sp.Sum(s => s.TotalStorageUsedBytes);
+        _odStorageBytes = od.Sum(s => s.TotalStorageUsedBytes);
+        _spFiles = sp.Sum(s => s.TotalFileCount);
+        _odFiles = od.Sum(s => s.TotalFileCount);
+
+        _storageBreakdown =
+        [
+            new("SharePoint (GB)", (int)(_spStorageBytes / 1_073_741_824)),
+            new("OneDrive (GB)", (int)(_odStorageBytes / 1_073_741_824))
+        ];
+        _storageBreakdown = _storageBreakdown.Where(x => x.Value > 0).ToList();
+
+        _siteCountBreakdown =
+        [
+            new("SharePoint Sites", _spSites),
+            new("OneDrive Accounts", _odSites)
+        ];
+        _siteCountBreakdown = _siteCountBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private void BuildYammerMetrics()
+    {
+        _yammerPosted = _yammer.Sum(y => y.PostedCount);
+        _yammerRead = _yammer.Sum(y => y.ReadCount);
+        _yammerLiked = _yammer.Sum(y => y.LikedCount);
+
+        _yammerBreakdown =
+        [
+            new("Posted", _yammerPosted),
+            new("Read", _yammerRead),
+            new("Liked", _yammerLiked)
+        ];
+        _yammerBreakdown = _yammerBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private void BuildGroupMetrics()
+    {
+        _totalGroups = _groups.Sum(g => g.TotalGroups);
+        _m365Groups = _groups.Sum(g => g.M365Groups);
+        _securityGroups = _groups.Sum(g => g.SecurityGroups);
+        _teamsGroups = _groups.Sum(g => g.TeamsConnectedGroups);
+        _ownerlessGroups = _groups.Sum(g => g.OwnerlessGroups);
+
+        var other = _totalGroups - _m365Groups - _securityGroups;
+        _groupBreakdown =
+        [
+            new("Microsoft 365", _m365Groups),
+            new("Security", _securityGroups),
+            new("Other", other > 0 ? other : 0)
+        ];
+        _groupBreakdown = _groupBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0) return "0 B";
+        string[] units = ["B", "KB", "MB", "GB", "TB", "PB"];
+        double size = bytes;
+        int unit = 0;
+        while (size >= 1024 && unit < units.Length - 1) { size /= 1024; unit++; }
+        return $"{size:0.#} {units[unit]}";
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    private record LabelValue(string Label, int Value);
+}

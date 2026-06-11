@@ -197,6 +197,58 @@ public class OnDemandDataCollectionService : IDataCollectionService
                 tenantName, entraTier.Tier);
         }
 
+        // --- Tier 3: Usage & Governance (all tiers) ---
+
+        // Mailbox usage (aggregate + top-N largest mailboxes)
+        var (mailboxAgg, topMailboxes) = await _graphService.GetMailboxUsageAsync(tenantId);
+        if (mailboxAgg != null)
+        {
+            mailboxAgg.TenantName = tenantName;
+            await _dataService.SaveMailboxUsageAsync(mailboxAgg);
+        }
+        if (topMailboxes.Count > 0)
+        {
+            foreach (var m in topMailboxes) m.TenantName = tenantName;
+            await _dataService.SaveTopMailboxesAsync(topMailboxes);
+        }
+
+        // Teams device usage
+        var teamsDevices = await _graphService.GetTeamsDeviceUsageAsync(tenantId);
+        if (teamsDevices != null)
+        {
+            teamsDevices.TenantName = tenantName;
+            await _dataService.SaveTeamsDeviceUsageAsync(teamsDevices);
+        }
+
+        // SharePoint / OneDrive site usage (aggregate + top-N detail)
+        var (siteAggs, siteDetails) = await _graphService.GetSiteUsageAsync(tenantId);
+        if (siteAggs.Count > 0)
+        {
+            foreach (var s in siteAggs) s.TenantName = tenantName;
+            await _dataService.SaveSiteUsageAsync(siteAggs);
+        }
+        if (siteDetails.Count > 0)
+        {
+            foreach (var s in siteDetails) s.TenantName = tenantName;
+            await _dataService.SaveSiteUsageDetailAsync(siteDetails);
+        }
+
+        // Viva Engage (Yammer) activity
+        var yammer = await _graphService.GetYammerActivityAsync(tenantId);
+        if (yammer != null)
+        {
+            yammer.TenantName = tenantName;
+            await _dataService.SaveYammerActivityAsync(yammer);
+        }
+
+        // Groups & Teams sprawl (requires Group.Read.All)
+        var groups = await _graphService.GetGroupSprawlAsync(tenantId);
+        if (groups != null)
+        {
+            groups.TenantName = tenantName;
+            await _dataService.SaveGroupSprawlAsync(groups);
+        }
+
         // Compute and save consumption score
         await ComputeConsumptionScoreAsync(tenantId, tenantName, storage, activities, segments, licenses);
 

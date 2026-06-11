@@ -50,6 +50,13 @@ public class CacheWarmupService : BackgroundService
             await dataService.GetConditionalAccessAsync(null);
             await dataService.GetGuestUsersAsync(null);
             await dataService.GetRiskyUsersAsync(null);
+            await dataService.GetMailboxUsageAsync(null);
+            await dataService.GetTopMailboxesAsync(null);
+            await dataService.GetTeamsDeviceUsageAsync(null);
+            await dataService.GetSiteUsageAsync(null);
+            await dataService.GetSiteUsageDetailAsync(null);
+            await dataService.GetYammerActivityAsync(null);
+            await dataService.GetGroupSprawlAsync(null);
 
             _logger.LogInformation("Cache warm-up completed successfully");
         }

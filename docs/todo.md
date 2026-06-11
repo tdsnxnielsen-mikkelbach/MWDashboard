@@ -94,16 +94,17 @@
   - Permission: `IdentityRiskyUser.Read.All` (new, **Entra ID P2 only**)
   - Surfaced on the **Identity & Devices** page (`/identity`) with tabs for all four features
 
-### Tier 3 — Deeper usage/adoption detail (no new consent — uses existing `Reports.Read.All`)
+### Tier 3 — Deeper usage/adoption detail (adds `Group.Read.All`; rest use existing `Reports.Read.All`)
 
-- [ ] **Mailbox usage detail** — mailbox sizes, over-quota and inactive mailboxes
+- [x] **Mailbox usage detail** — mailbox sizes, over-quota and inactive mailboxes
   - Endpoints: `getMailboxUsageDetail`, `getMailboxUsageQuotaStatusMailboxCounts`
-- [ ] **Teams device usage** — desktop vs. mobile vs. web Teams split
+- [x] **Teams device usage** — desktop vs. mobile vs. web Teams split
   - Endpoint: `getTeamsDeviceUsageUserCounts`
-- [ ] **SharePoint / OneDrive site detail** — per-site/per-account storage and activity drill-down (totals already collected)
+- [x] **SharePoint / OneDrive site detail** — per-site/per-account storage and activity drill-down (totals already collected)
   - Endpoints: `getSharePointSiteUsageDetail`, `getOneDriveUsageAccountDetail`
-- [ ] **Viva Engage / Yammer activity** — completes workload coverage alongside Teams/Exchange/SharePoint
+- [x] **Viva Engage / Yammer activity** — completes workload coverage alongside Teams/Exchange/SharePoint
   - Endpoint: `getYammerActivityUserCounts`
-- [ ] **Groups & Teams sprawl** — count of M365 groups/Teams + ownerless groups (governance hygiene)
+- [x] **Groups & Teams sprawl** — count of M365 groups/Teams + ownerless groups (governance hygiene)
   - Endpoints: `GET /groups`, `GET /groups/{id}/owners`
   - Permission: `Group.Read.All` (new)
+  - Surfaced on the **Usage & Governance** page (`/usage`) with tabs for all five features

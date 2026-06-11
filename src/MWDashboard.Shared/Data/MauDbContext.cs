@@ -29,6 +29,13 @@ public class MauDbContext : DbContext
     public DbSet<ConditionalAccessSnapshot> ConditionalAccessSnapshots => Set<ConditionalAccessSnapshot>();
     public DbSet<GuestUserSnapshot> GuestUserSnapshots => Set<GuestUserSnapshot>();
     public DbSet<RiskyUserSnapshot> RiskyUserSnapshots => Set<RiskyUserSnapshot>();
+    public DbSet<MailboxUsageSnapshot> MailboxUsageSnapshots => Set<MailboxUsageSnapshot>();
+    public DbSet<TopMailboxSnapshot> TopMailboxSnapshots => Set<TopMailboxSnapshot>();
+    public DbSet<TeamsDeviceUsageSnapshot> TeamsDeviceUsageSnapshots => Set<TeamsDeviceUsageSnapshot>();
+    public DbSet<SiteUsageSnapshot> SiteUsageSnapshots => Set<SiteUsageSnapshot>();
+    public DbSet<SiteUsageDetailSnapshot> SiteUsageDetailSnapshots => Set<SiteUsageDetailSnapshot>();
+    public DbSet<YammerActivitySnapshot> YammerActivitySnapshots => Set<YammerActivitySnapshot>();
+    public DbSet<GroupSnapshot> GroupSnapshots => Set<GroupSnapshot>();
     public DbSet<BrandingSettings> BrandingSettings => Set<BrandingSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -207,6 +214,59 @@ public class MauDbContext : DbContext
         });
 
         modelBuilder.Entity<RiskyUserSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<MailboxUsageSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<TopMailboxSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate, e.Rank }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.DisplayName).HasMaxLength(320);
+        });
+
+        modelBuilder.Entity<TeamsDeviceUsageSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<SiteUsageSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.Workload, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.Workload).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<SiteUsageDetailSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.Workload, e.ReportDate, e.Rank }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.Workload).HasMaxLength(50);
+            entity.Property(e => e.Name).HasMaxLength(450);
+        });
+
+        modelBuilder.Entity<YammerActivitySnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<GroupSnapshot>(entity =>
         {
             entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
             entity.Property(e => e.TenantId).HasMaxLength(100);
