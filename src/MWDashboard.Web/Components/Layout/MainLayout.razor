@@ -28,6 +28,13 @@
                  style="max-height:32px; max-width:160px; margin-left:12px;" alt="Logo" />
         }
         <MudText Typo="Typo.h5" Class="ml-3">@(_branding?.AppTitle ?? "Modern Workplace Dashboard")</MudText>
+        @* TD SYNNEX attribution — centered, theme-aware, served from static files.
+           This is intentionally independent of the customer-configurable branding
+           settings and MUST remain visible regardless of any rebranding (see LICENSE). *@
+        <div class="tds-attribution" aria-label="Powered by TD SYNNEX">
+            <img src="@(_isDarkMode ? "tds-logo-dark.svg" : "tds-logo-light.svg")"
+                 alt="TD SYNNEX" />
+        </div>
         <MudSpacer />
         @if (TenantFilter.IsHomeTenantUser)
         {

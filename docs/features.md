@@ -177,6 +177,7 @@ A single page with five tabs covering workload adoption and Microsoft 365 govern
 - **Reset to defaults** — one-click restore of default MudBlazor theme colors
 - **Whitelabeling** — enables CSP partners to match their corporate branding across the dashboard for all users (including customer-tenant users)
 - Data model: `BrandingSettings` (single row, stores Base64 images + hex colors + app title)
+- **TD SYNNEX attribution (non-removable)** — a theme-aware TD SYNNEX logo is centered in the top app bar, served from static files (`wwwroot/tds-logo-light.svg` for light mode, `wwwroot/tds-logo-dark.svg` for dark mode). It is rendered **independently of `BrandingSettings`**, so customer/CSP rebranding cannot change or hide it. Per the [LICENSE](../LICENSE), this attribution must remain visible and unaltered in all deployments. It is hidden only on narrow (<960px) viewports to avoid colliding with the title/controls
 
 ## Tenant Management (`/tenants`)
 

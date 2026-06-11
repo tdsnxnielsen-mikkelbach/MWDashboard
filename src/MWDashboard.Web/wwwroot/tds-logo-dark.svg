@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60">
+<rect width="240" height="60" fill="none"/>
+<g fill="#FFFFFF">
+  <rect x="10" y="15" width="30" height="30" rx="6"/>
+  <text x="50" y="38" font-family="Segoe UI, Arial" font-weight="600" font-size="20">TD SYNNEX</text>
+</g>
+</svg>

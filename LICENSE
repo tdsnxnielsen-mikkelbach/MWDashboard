@@ -12,6 +12,15 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
 
+TD SYNNEX ATTRIBUTION (additional condition):
+Notwithstanding the permission to modify the Software granted above, the
+TD SYNNEX name and logo attribution displayed in the application's top
+navigation bar (served from "tds-logo-light.svg" / "tds-logo-dark.svg" and
+rendered independently of the customer-configurable branding settings) must
+remain visible and unaltered in all copies, distributions, and deployments of
+the Software, including any rebranded or white-labeled deployment. Removing,
+obscuring, replacing, or disabling this attribution is not permitted.
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE

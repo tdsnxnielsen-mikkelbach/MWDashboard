@@ -96,3 +96,28 @@ main {
         right: 0.75rem;
         top: 0.5rem;
     }
+
+/* TD SYNNEX attribution: horizontally centered in the app bar, independent of
+   the left-hand title and right-hand controls. Pointer-events disabled so it
+   never blocks the controls beneath it. */
+.tds-attribution {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+}
+
+    .tds-attribution img {
+        height: 26px;
+        max-width: 200px;
+    }
+
+/* Hide on narrow screens to avoid colliding with the title / controls. */
+@media (max-width: 959.98px) {
+    .tds-attribution {
+        display: none;
+    }
+}
