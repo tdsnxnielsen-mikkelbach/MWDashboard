@@ -37,8 +37,9 @@ azd deploy
 - All snapshot models follow: `Id`, `TenantId`, `TenantName`, `ReportDate`, metric fields, `CollectedAt`
 - Composite unique indexes on `(TenantId, ServiceName/SkuId/Workload+ActivityType/AppName/Department, ReportDate)` for upsert deduplication
 - Use `DateTime` for dates (UTC everywhere)
-- 13 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots, M365AppUsageSnapshots, BrandingSettings
+- 19 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots, M365AppUsageSnapshots, SecureScoreSnapshots, SecureScoreControlSnapshots, MfaRegistrationSnapshots, InactiveAccountSnapshots, ServiceHealthSnapshots, ServiceHealthIssueSnapshots, BrandingSettings
 - `BrandingSettings` is a singleton row: logo/favicon (Base64 + content type), 6 theme colors (light/dark × primary/secondary/appbar), app title
+- `TenantInfo` tracks consent health: `MissingPermissions` (comma-separated Graph permissions that failed a consent probe; empty = all consented) + `PermissionsCheckedAt` (last probe time). Populated on every collection run
 - `LicenseSnapshot.IncludedServices` stores comma-separated service names auto-detected from Graph API service plans (e.g. `"Exchange,Office365,OneDrive,SharePoint,Teams"`)
 
 ### Data Services (src/MWDashboard.Shared/Services/)
@@ -54,6 +55,8 @@ azd deploy
 - Always handle `ServiceException` gracefully (tenant may not have required license)
 - License collection auto-detects included services from `sku.ServicePlans` via `M365Services.DetectServicesFromPlans()`
 - New endpoints: Teams/SharePoint/OneDrive/Exchange activity counts, Copilot user detail, Office365 active user detail (segmentation), /users (departments), SharePoint/OneDrive/Exchange storage usage, M365 App user counts
+- **Premium-tier gating**: `signInActivity`-based features (inactive accounts, sign-in summary) require Entra ID P1/P2. Both collection pipelines derive the tier via `TenantEntraTier.FromLicenses(...)` (from the already-collected SKUs, no extra Graph call) and skip these calls on free-tier tenants instead of issuing a guaranteed-403 request. `IsPremiumLicenseError(...)` distinguishes a premium-license 403 from a true permission 403 so logs/UI don't mislabel it
+- **Consent health probe**: `CheckMissingPermissionsAsync(tenantId)` makes a minimal call per required permission (using non-premium endpoints) and returns the display names of permissions that fail with a genuine consent error (403 / "Invalid permission" / "S2SUnauthorized" / "Authorization_RequestDenied"); premium-license 403s are excluded. Results persist to `TenantInfo` via `UpdateTenantPermissionStatusAsync(...)` at the end of every collection run
 
 ### Caching Strategy
 - **Redis distributed cache** (`IDistributedCache`): `CachedMauDataService` decorator wraps `MauDataService` — all read methods cached
@@ -108,7 +111,7 @@ azd deploy
 ### EF Core Migrations (src/MWDashboard.Shared/Migrations/)
 - Add migrations from the Web project: `dotnet ef migrations add <Name> --project ../MWDashboard.Shared`
 - Auto-migrate on startup in both Web and Job
-- DbContext has 13 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
+- DbContext has 19 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
 
 ### Authentication & Authorization (src/MWDashboard.Web/)
 - **OpenID Connect** via `Microsoft.Identity.Web` — multi-tenant (`TenantId: "common"`), authorization code flow (`ResponseType: "code"`)

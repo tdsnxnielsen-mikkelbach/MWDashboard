@@ -1,6 +1,6 @@
 # Modern Workplace Dashboard (MWDashboard)
 
-A Blazor Web App that visualizes Monthly Active Users (MAU) across Microsoft 365 and Modern Workplace services, pulling data from the Microsoft Graph Reports API. Includes license adoption analytics, feature-level activity tracking, Copilot adoption monitoring, user segmentation, department-level adoption, security sign-in monitoring, and M365 Message Center integration.
+A Blazor Web App that visualizes Monthly Active Users (MAU) across Microsoft 365 and Modern Workplace services, pulling data from the Microsoft Graph Reports API. Includes license adoption analytics, feature-level activity tracking, Copilot adoption monitoring, user segmentation, department-level adoption, security sign-in monitoring, Microsoft Secure Score, MFA/auth-method registration, inactive/stale account analysis, M365 service health, and M365 Message Center integration. Multi-tenant aware with per-tenant consent-health monitoring and Entra ID tier detection.
 
 ## Tech Stack
 

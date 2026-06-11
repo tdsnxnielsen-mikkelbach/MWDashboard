@@ -118,10 +118,22 @@ else
             @if (_actions.Count > 0)
             {
                 <MudTable Items="_actions" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
-                          SortLabel="Sort By" FixedHeader="true" Filter="FilterAction">
+                          SortLabel="Sort By" FixedHeader="true" Filter="FilterAction"
+                          GroupBy="_groupDefinition" GroupHeaderStyle="background-color:var(--mud-palette-background-grey);">
                     <ToolBarContent>
                         <MudTextField @bind-Value="_searchString" Placeholder="Search controls" Adornment="Adornment.Start"
                                       AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
+                        <MudSpacer />
+                        <MudSelect T="string" Value="_groupMode" ValueChanged="OnGroupModeChanged" Label="Group by"
+                                   Dense="true" Margin="Margin.Dense" Style="max-width:220px;">
+                            <MudSelectItem Value="@("none")">None</MudSelectItem>
+                            <MudSelectItem Value="@("category")">Category</MudSelectItem>
+                            @if (TenantFilter.IsMultiTenantView)
+                            {
+                                <MudSelectItem Value="@("tenant")">Tenant</MudSelectItem>
+                                <MudSelectItem Value="@("tenant-category")">Tenant, then Category</MudSelectItem>
+                            }
+                        </MudSelect>
                     </ToolBarContent>
                     <HeaderContent>
                         <MudTh><MudTableSortLabel SortBy="new Func<ActionRow, object>(x => x.ControlName)">Control</MudTableSortLabel></MudTh>
@@ -133,6 +145,16 @@ else
                         <MudTh><MudTableSortLabel SortBy="new Func<ActionRow, object>(x => x.ScorePercent)" InitialDirection="SortDirection.Ascending">Progress</MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<ActionRow, object>(x => x.Status)">Status</MudTableSortLabel></MudTh>
                     </HeaderContent>
+                    <GroupHeaderTemplate>
+                        <MudTh Class="mud-table-cell-custom-group" colspan="@_groupColspan">
+                            <div class="d-flex align-center" style="gap:8px;">
+                                <MudText Typo="Typo.body2"><b>@context.GroupName:</b> @context.Key</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">
+                                    @context.Items.Count() action@(context.Items.Count() == 1 ? "" : "s")
+                                </MudChip>
+                            </div>
+                        </MudTh>
+                    </GroupHeaderTemplate>
                     <RowTemplate>
                         <MudTd DataLabel="Control">
                             <MudText Typo="Typo.body2"><b>@context.ControlName</b></MudText>
@@ -187,6 +209,11 @@ else
     private Dictionary<string, List<ScorePoint>> _trendSeries = [];
     private List<CategoryPoint> _categoryData = [];
     private List<ActionRow> _actions = [];
+
+    private string _groupMode = "category";
+    private bool _groupModeUserSet;
+    private TableGroupDefinition<ActionRow>? _groupDefinition;
+    private int _groupColspan = 5;
 
     private readonly ApexChartOptions<ScorePoint> _trendOptions = new()
     {
@@ -302,8 +329,57 @@ else
             .ToList();
         _actionableCount = _actions.Count;
 
+        // Default grouping depends on the view (unless the user picked a mode explicitly):
+        // multi-tenant -> group by tenant then category; single-tenant -> group by category.
+        if (!_groupModeUserSet)
+            _groupMode = TenantFilter.IsMultiTenantView ? "tenant-category" : "category";
+        else if (!TenantFilter.IsMultiTenantView && (_groupMode is "tenant" or "tenant-category"))
+            _groupMode = "category"; // tenant grouping is meaningless in single-tenant view
+        BuildGroupDefinition();
+
         _chartKey = Guid.NewGuid().ToString();
         _loading = false;
+    }
+
+    private void OnGroupModeChanged(string mode)
+    {
+        _groupMode = mode;
+        _groupModeUserSet = true;
+        BuildGroupDefinition();
+    }
+
+    private void BuildGroupDefinition()
+    {
+        _groupColspan = TenantFilter.IsMultiTenantView ? 5 : 4;
+
+        var categoryGroup = new TableGroupDefinition<ActionRow>
+        {
+            GroupName = "Category",
+            Expandable = true,
+            IsInitiallyExpanded = true,
+            Selector = x => string.IsNullOrWhiteSpace(x.Category) ? "Uncategorized" : x.Category
+        };
+
+        _groupDefinition = _groupMode switch
+        {
+            "category" => categoryGroup,
+            "tenant" => new TableGroupDefinition<ActionRow>
+            {
+                GroupName = "Tenant",
+                Expandable = true,
+                IsInitiallyExpanded = false,
+                Selector = x => x.TenantName
+            },
+            "tenant-category" => new TableGroupDefinition<ActionRow>
+            {
+                GroupName = "Tenant",
+                Expandable = true,
+                IsInitiallyExpanded = false,
+                Selector = x => x.TenantName,
+                InnerGroup = categoryGroup
+            },
+            _ => null
+        };
     }
 
     private bool FilterAction(ActionRow row)

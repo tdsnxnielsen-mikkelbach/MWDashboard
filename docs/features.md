@@ -120,8 +120,8 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **MFA adoption rate** — gauge with percentage and actionable recommendations
 - **True MFA data** — uses Microsoft Graph Beta API `AuthenticationDetails` (counts non-password auth methods that succeeded). Only available from tenants with Entra ID P1/P2
 - **MFA & Authentication Method Registration** — tenant-wide registration gauges for member accounts (guests excluded): MFA registered, MFA capable, passwordless capable, SSPR registered (with raw counts). Available on **all tiers** via `AuditLog.Read.All` — does not require P1/P2. Data source: Microsoft Graph `GET /reports/authenticationMethods/userRegistrationDetails`
-- **Inactive / Stale Licensed Accounts** — KPI cards for enabled, licensed member accounts: total licensed, inactive 30+ days, inactive 90+ days, never signed in (each with % of licensed). Surfaces license-reclamation opportunities. Available on **all tiers** via `AuditLog.Read.All` + `User.Read.All`. Data source: Microsoft Graph `GET /users` with `signInActivity`
-- **Clear data availability notes** — explains exactly what's available per license tier and that Free-tier tenants cannot expose audit log data via Graph
+- **Inactive / Stale Licensed Accounts** — KPI cards for enabled, licensed member accounts: total licensed, inactive 30+ days, inactive 90+ days, never signed in (each with % of licensed). Surfaces license-reclamation opportunities. **Requires Microsoft Entra ID P1/P2** — the underlying `signInActivity` property is premium-gated and returns 403 on the free tier even when `AuditLog.Read.All` + `User.Read.All` are consented. The dashboard detects the tenant tier from its SKUs and **skips this collection entirely on free-tier tenants** (logged at Information, not as a permission error). Data source: Microsoft Graph `GET /users` with `signInActivity`
+- **Clear data availability notes** — explains exactly what's available per license tier and that Free-tier tenants cannot expose sign-in/audit-derived data via Graph
 
 ## Secure Score (`/securescore`)
 
@@ -129,14 +129,15 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Score trend chart** — secure score % over the last 90 days; per-tenant series in multi-tenant view
 - **Score by category** — donut chart of achieved points per control category (Identity, Data, Device, Apps, Infrastructure)
 - **Recommended remediation actions** — searchable/sortable table of controls not fully implemented, ordered by lowest progress first, with progress bar, category, and implementation status (Complete/Partial/Not started); Tenant column in multi-tenant view
+- **Collapsible grouping** — "Group by" selector groups remediation actions into expandable/collapsible sections by Category, Tenant, or Tenant → Category (nested). Defaults to Tenant → Category in multi-tenant view and Category in single-tenant view; tenant-based modes auto-fall back to Category when a single tenant is selected. Each group header shows an action count for quick scanning across many tenants
 - **Tenant-scoped** — customer-tenant users see only their own tenant's score
 - Data source: Microsoft Graph `GET /security/secureScores` (90-day trend + embedded control scores); requires `SecurityEvents.Read.All`
 
 ## Service Health (`/servicehealth`)
 
 - **KPI cards** — services healthy (of total monitored), services affected (degraded/interrupted), active incidents, active advisories
-- **Active service issues** — searchable/sortable table of unresolved incidents and advisories with service, type (Incident/Advisory), status, feature, and start time; Tenant column in multi-tenant view
-- **Service status overview** — per-service operational status with color-coded icon (operational/degraded/interrupted), affected services sorted to the top
+- **Active service issues** — searchable/sortable table of unresolved incidents and advisories with service, type (Incident/Advisory), status, feature, and start time; Tenant column in multi-tenant view. **Collapsible grouping** via a "Group by" selector: None, Service, Type (incident/advisory), Tenant, or Tenant → Service (nested). Defaults to Tenant in multi-tenant view, Service in single-tenant view
+- **Service status overview** — per-service operational status with color-coded icon (operational/degraded/interrupted), affected services sorted to the top. **Collapsible grouping** via a "Group by" selector: None, Status, Tenant, or Tenant → Status (nested). Defaults to Tenant in multi-tenant view. Group headers show a service count
 - **Tenant-scoped** — customer-tenant users see only their own tenant's service health
 - Data source: Microsoft Graph `GET /admin/serviceAnnouncement/healthOverviews` (per-service status) + `GET /admin/serviceAnnouncement/issues` (active issues); requires `ServiceHealth.Read.All`
 
@@ -162,6 +163,8 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Collect Now button** — triggers immediate data collection for a specific tenant via the dedicated Collector container app (internal HTTP call); automatically falls back to local collection if the collector is unavailable. Collects MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments, storage, M365 app usage, and consumption score
 - Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants; deactivating blocks login for that tenant's users
 - **Login access tied to tenant status** — adding a tenant allows users from that tenant to sign in; removing/deactivating blocks their access immediately
+- **Consent health indicator** — a per-tenant "Consent" column shows a green check when all required Graph permissions are consented, or a "Re-consent" warning chip (with tooltip listing the missing permissions) when a tenant admin needs to re-approve. A warning banner at the top of the page lists all affected tenants with direct re-consent links. Status is refreshed automatically on every data collection and on-demand via a per-row "Check permissions" button. The probe distinguishes genuine consent gaps from premium-license limitations (e.g. `signInActivity` needing P1/P2) so consented permissions are never falsely flagged
+- **Entra ID plan column** — a per-tenant "Plan" chip (Free / P1 / P2) derived from the tenant's license SKUs, making it clear at a glance which tenants support sign-in-based features (inactive accounts, sign-in summary) and which don't
 
 ## Automated Consent & Tenant Registration
 

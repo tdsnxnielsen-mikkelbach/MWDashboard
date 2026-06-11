@@ -68,10 +68,23 @@ else
             @if (_issues.Count > 0)
             {
                 <MudTable Items="_issues" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
-                          SortLabel="Sort By" FixedHeader="true" Filter="FilterIssue">
+                          SortLabel="Sort By" FixedHeader="true" Filter="FilterIssue"
+                          GroupBy="_issueGroupDefinition" GroupHeaderStyle="background-color:var(--mud-palette-background-grey);">
                     <ToolBarContent>
                         <MudTextField @bind-Value="_searchString" Placeholder="Search issues" Adornment="Adornment.Start"
                                       AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Immediate="true" />
+                        <MudSpacer />
+                        <MudSelect T="string" Value="_issueGroupMode" ValueChanged="OnIssueGroupModeChanged" Label="Group by"
+                                   Dense="true" Margin="Margin.Dense" Style="max-width:220px;">
+                            <MudSelectItem Value="@("none")">None</MudSelectItem>
+                            <MudSelectItem Value="@("service")">Service</MudSelectItem>
+                            <MudSelectItem Value="@("type")">Type</MudSelectItem>
+                            @if (TenantFilter.IsMultiTenantView)
+                            {
+                                <MudSelectItem Value="@("tenant")">Tenant</MudSelectItem>
+                                <MudSelectItem Value="@("tenant-service")">Tenant, then Service</MudSelectItem>
+                            }
+                        </MudSelect>
                     </ToolBarContent>
                     <HeaderContent>
                         <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.Title)">Issue</MudTableSortLabel></MudTh>
@@ -84,6 +97,16 @@ else
                         <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.Status)">Status</MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<IssueRow, object>(x => x.StartDateTime ?? DateTime.MaxValue)" InitialDirection="SortDirection.Descending">Started</MudTableSortLabel></MudTh>
                     </HeaderContent>
+                    <GroupHeaderTemplate>
+                        <MudTh Class="mud-table-cell-custom-group" colspan="@_issueGroupColspan">
+                            <div class="d-flex align-center" style="gap:8px;">
+                                <MudText Typo="Typo.body2"><b>@context.GroupName:</b> @context.Key</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">
+                                    @context.Items.Count() issue@(context.Items.Count() == 1 ? "" : "s")
+                                </MudChip>
+                            </div>
+                        </MudTh>
+                    </GroupHeaderTemplate>
                     <RowTemplate>
                         <MudTd DataLabel="Issue">
                             <MudText Typo="Typo.body2"><b>@context.Title</b></MudText>
@@ -120,7 +143,22 @@ else
             <MudText Typo="Typo.h6" Class="mb-3">Service Status Overview</MudText>
             @if (_services.Count > 0)
             {
-                <MudTable Items="_services" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" SortLabel="Sort By">
+                <MudTable Items="_services" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" SortLabel="Sort By"
+                          GroupBy="_serviceGroupDefinition" GroupHeaderStyle="background-color:var(--mud-palette-background-grey);">
+                    <ToolBarContent>
+                        <MudText Typo="Typo.subtitle2">@_totalServices service@(_totalServices == 1 ? "" : "s")</MudText>
+                        <MudSpacer />
+                        <MudSelect T="string" Value="_serviceGroupMode" ValueChanged="OnServiceGroupModeChanged" Label="Group by"
+                                   Dense="true" Margin="Margin.Dense" Style="max-width:220px;">
+                            <MudSelectItem Value="@("none")">None</MudSelectItem>
+                            <MudSelectItem Value="@("status")">Status</MudSelectItem>
+                            @if (TenantFilter.IsMultiTenantView)
+                            {
+                                <MudSelectItem Value="@("tenant")">Tenant</MudSelectItem>
+                                <MudSelectItem Value="@("tenant-status")">Tenant, then Status</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </ToolBarContent>
                     <HeaderContent>
                         @if (TenantFilter.IsMultiTenantView)
                         {
@@ -129,6 +167,16 @@ else
                         <MudTh><MudTableSortLabel SortBy="new Func<ServiceRow, object>(x => x.ServiceName)">Service</MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<ServiceRow, object>(x => x.Status)">Status</MudTableSortLabel></MudTh>
                     </HeaderContent>
+                    <GroupHeaderTemplate>
+                        <MudTh Class="mud-table-cell-custom-group" colspan="@_serviceGroupColspan">
+                            <div class="d-flex align-center" style="gap:8px;">
+                                <MudText Typo="Typo.body2"><b>@context.GroupName:</b> @(context.GroupName == "Status" ? FormatStatus(context.Key?.ToString() ?? "") : context.Key)</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">
+                                    @context.Items.Count() service@(context.Items.Count() == 1 ? "" : "s")
+                                </MudChip>
+                            </div>
+                        </MudTh>
+                    </GroupHeaderTemplate>
                     <RowTemplate>
                         @if (TenantFilter.IsMultiTenantView)
                         {
@@ -168,6 +216,16 @@ else
 
     private List<ServiceRow> _services = [];
     private List<IssueRow> _issues = [];
+
+    private string _issueGroupMode = "service";
+    private bool _issueGroupModeUserSet;
+    private TableGroupDefinition<IssueRow>? _issueGroupDefinition;
+    private int _issueGroupColspan = 6;
+
+    private string _serviceGroupMode = "none";
+    private bool _serviceGroupModeUserSet;
+    private TableGroupDefinition<ServiceRow>? _serviceGroupDefinition;
+    private int _serviceGroupColspan = 3;
 
     protected override async Task OnInitializedAsync()
     {
@@ -231,7 +289,111 @@ else
         _incidentCount = _issues.Count(i => string.Equals(i.Classification, "incident", StringComparison.OrdinalIgnoreCase));
         _advisoryCount = _issues.Count(i => string.Equals(i.Classification, "advisory", StringComparison.OrdinalIgnoreCase));
 
+        // Default grouping depends on the view (unless the user picked a mode explicitly):
+        // multi-tenant -> group by tenant; single-tenant -> by service (issues) / none (status).
+        if (!_issueGroupModeUserSet)
+            _issueGroupMode = TenantFilter.IsMultiTenantView ? "tenant" : "service";
+        else if (!TenantFilter.IsMultiTenantView && (_issueGroupMode is "tenant" or "tenant-service"))
+            _issueGroupMode = "service";
+
+        if (!_serviceGroupModeUserSet)
+            _serviceGroupMode = TenantFilter.IsMultiTenantView ? "tenant" : "none";
+        else if (!TenantFilter.IsMultiTenantView && (_serviceGroupMode is "tenant" or "tenant-status"))
+            _serviceGroupMode = "status";
+
+        BuildIssueGroupDefinition();
+        BuildServiceGroupDefinition();
+
         _loading = false;
+    }
+
+    private void OnIssueGroupModeChanged(string mode)
+    {
+        _issueGroupMode = mode;
+        _issueGroupModeUserSet = true;
+        BuildIssueGroupDefinition();
+    }
+
+    private void BuildIssueGroupDefinition()
+    {
+        _issueGroupColspan = TenantFilter.IsMultiTenantView ? 6 : 5;
+
+        var serviceGroup = new TableGroupDefinition<IssueRow>
+        {
+            GroupName = "Service",
+            Expandable = true,
+            IsInitiallyExpanded = true,
+            Selector = x => string.IsNullOrWhiteSpace(x.ServiceName) ? "Unknown" : x.ServiceName
+        };
+
+        _issueGroupDefinition = _issueGroupMode switch
+        {
+            "service" => serviceGroup,
+            "type" => new TableGroupDefinition<IssueRow>
+            {
+                GroupName = "Type",
+                Expandable = true,
+                IsInitiallyExpanded = true,
+                Selector = x => GetClassificationLabel(x.Classification)
+            },
+            "tenant" => new TableGroupDefinition<IssueRow>
+            {
+                GroupName = "Tenant",
+                Expandable = true,
+                IsInitiallyExpanded = false,
+                Selector = x => x.TenantName
+            },
+            "tenant-service" => new TableGroupDefinition<IssueRow>
+            {
+                GroupName = "Tenant",
+                Expandable = true,
+                IsInitiallyExpanded = false,
+                Selector = x => x.TenantName,
+                InnerGroup = serviceGroup
+            },
+            _ => null
+        };
+    }
+
+    private void OnServiceGroupModeChanged(string mode)
+    {
+        _serviceGroupMode = mode;
+        _serviceGroupModeUserSet = true;
+        BuildServiceGroupDefinition();
+    }
+
+    private void BuildServiceGroupDefinition()
+    {
+        _serviceGroupColspan = TenantFilter.IsMultiTenantView ? 3 : 2;
+
+        var statusGroup = new TableGroupDefinition<ServiceRow>
+        {
+            GroupName = "Status",
+            Expandable = true,
+            IsInitiallyExpanded = true,
+            Selector = x => x.Status
+        };
+
+        _serviceGroupDefinition = _serviceGroupMode switch
+        {
+            "status" => statusGroup,
+            "tenant" => new TableGroupDefinition<ServiceRow>
+            {
+                GroupName = "Tenant",
+                Expandable = true,
+                IsInitiallyExpanded = false,
+                Selector = x => x.TenantName
+            },
+            "tenant-status" => new TableGroupDefinition<ServiceRow>
+            {
+                GroupName = "Tenant",
+                Expandable = true,
+                IsInitiallyExpanded = false,
+                Selector = x => x.TenantName,
+                InnerGroup = statusGroup
+            },
+            _ => null
+        };
     }
 
     private static bool IsAffected(string status)

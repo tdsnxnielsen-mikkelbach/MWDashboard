@@ -49,6 +49,9 @@
 - [x] Automated consent flow with tenant auto-registration — Static Web App + Consent Callback container (HMAC-validated, Graph `/organization` verification, initial data collection trigger)
 - [x] Azure AD authentication — OpenID Connect multi-tenant login with home tenant (full access) + customer tenant (scoped to own data) isolation
 - [x] Branding / whitelabeling settings page — logo, favicon, light/dark theme colors, app title (home-tenant only)
+- [x] Per-tenant consent health indicator — Tenants page surfaces a "Re-consent" warning banner + per-tenant status column (probed each collection run + on-demand "Check permissions" button); persisted on `TenantInfo` (`MissingPermissions`, `PermissionsCheckedAt`)
+- [x] Premium-tier gating — sign-in-based collection (sign-in summary, inactive accounts) auto-skipped on free-tier tenants; per-tenant Plan (Free/P1/P2) chip on the Tenants page; premium-license 403s no longer mislabeled as permission/consent errors
+- [x] Collapsible grouping on data tables — Secure Score remediation actions (by Category/Tenant) and Service Health active issues + status overview (by Service/Type/Status/Tenant), with smart per-view defaults
 - [ ] Consumption score threshold alerts (email/Teams notification when score drops)
 - [x] Historical comparison: month-over-month score change indicators — delta chips on all KPI cards
 - [ ] Per-department consumption scoring (combine department usage + segmentation)
@@ -71,9 +74,9 @@
 - [x] **Service health & incidents** — proactive per-tenant M365 incident/advisory awareness — implemented as `/servicehealth` page (KPIs, active-issues table, per-service status overview), `ServiceHealthSnapshot` + `ServiceHealthIssueSnapshot` models, collection pipeline (Job + on-demand), Redis caching
   - Endpoints: `GET /admin/serviceAnnouncement/healthOverviews`, `GET /admin/serviceAnnouncement/issues`
   - Permission: `ServiceHealth.Read.All` (new)
-- [x] **Inactive / stale accounts** — licensed accounts with no sign-in in 30/60/90 days (license-waste $ story; pairs with Partner Center cost data) — surfaced on Security page; uses `AuditLog.Read.All` + `User.Read.All`
+- [x] **Inactive / stale accounts** — licensed accounts with no sign-in in 30/60/90 days (license-waste $ story; pairs with Partner Center cost data) — surfaced on Security page; uses `AuditLog.Read.All` + `User.Read.All`. **Requires Entra ID P1/P2** on the target tenant (the `signInActivity` property is premium-gated); collection is auto-skipped on free-tier tenants
   - Endpoint: `GET /users?$select=signInActivity,assignedLicenses`
-  - Permission: `AuditLog.Read.All` (already granted) + Entra ID P1 on target tenant
+  - Permission: `AuditLog.Read.All` (already granted) + `User.Read.All` + Entra ID P1/P2 on target tenant
 
 ### Tier 2 — Endpoint & identity governance
 
