@@ -13,6 +13,7 @@
     Device compliance, Conditional Access coverage, guest/external accounts, and identity risk.
     Requires <code>DeviceManagementManagedDevices.Read.All</code>, <code>Policy.Read.All</code>,
     <code>User.Read.All</code>, and (for risk) <code>IdentityRiskyUser.Read.All</code>.
+    <strong>Entra ID license:</strong> Conditional Access requires <strong>P1 or P2</strong>; Risky Users (Identity Protection) requires <strong>P2</strong>; Device Compliance (Intune) and Guest Users are available on all tiers.
 </MudText>
 
 @if (_loading)
@@ -127,7 +128,7 @@ else
     <MudTabPanel Text="Conditional Access" Icon="@Icons.Material.Filled.Policy">
         @if (_conditionalAccess.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No Conditional Access data available. Requires <code>Policy.Read.All</code>.</MudAlert>
+            <MudAlert Severity="Severity.Info">No Conditional Access data available. Requires <code>Policy.Read.All</code> and a <strong>Microsoft Entra ID P1 or P2</strong> license (Conditional Access is a premium feature — tenants on the Free tier have no policies to report).</MudAlert>
         }
         else
         {
@@ -173,7 +174,11 @@ else
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
-                    <MudText Typo="Typo.h6" Class="mb-3">Coverage by Tenant</MudText>
+                    <MudText Typo="Typo.h6" Class="mb-1">Coverage by Tenant</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" /> enforced &nbsp;
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" /> coverage gap (no enabled policy). Conditional Access requires Entra ID P1/P2.
+                    </MudText>
                     <MudTable Items="_conditionalAccess" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
                         <HeaderContent>
                             <MudTh>Tenant</MudTh>
@@ -187,12 +192,16 @@ else
                             <MudTd DataLabel="Policies" Style="text-align:right">@context.TotalPolicies.ToString("N0")</MudTd>
                             <MudTd DataLabel="Enabled" Style="text-align:right">@context.EnabledPolicies.ToString("N0")</MudTd>
                             <MudTd DataLabel="MFA" Style="text-align:center">
-                                <MudIcon Icon="@(context.RequiresMfa ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
-                                         Color="@(context.RequiresMfa ? Color.Success : Color.Warning)" Size="Size.Small" />
+                                <MudTooltip Text="@(context.RequiresMfa ? "An enabled Conditional Access policy enforces MFA" : "Coverage gap: no enabled policy enforces MFA")">
+                                    <MudIcon Icon="@(context.RequiresMfa ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
+                                             Color="@(context.RequiresMfa ? Color.Success : Color.Warning)" Size="Size.Small" />
+                                </MudTooltip>
                             </MudTd>
                             <MudTd DataLabel="Legacy Blocked" Style="text-align:center">
-                                <MudIcon Icon="@(context.BlocksLegacyAuth ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
-                                         Color="@(context.BlocksLegacyAuth ? Color.Success : Color.Warning)" Size="Size.Small" />
+                                <MudTooltip Text="@(context.BlocksLegacyAuth ? "An enabled Conditional Access policy blocks legacy authentication" : "Coverage gap: no enabled policy blocks legacy authentication")">
+                                    <MudIcon Icon="@(context.BlocksLegacyAuth ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
+                                             Color="@(context.BlocksLegacyAuth ? Color.Success : Color.Warning)" Size="Size.Small" />
+                                </MudTooltip>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>

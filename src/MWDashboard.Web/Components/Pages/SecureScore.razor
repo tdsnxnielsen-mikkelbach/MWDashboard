@@ -271,6 +271,19 @@ else
         _activeUsers = latestPerTenant.Sum(s => s.ActiveUserCount);
         _licensedUsers = latestPerTenant.Sum(s => s.LicensedUserCount);
 
+        // Microsoft Graph's secureScore.licensedUserCount is 0/stale for some tenants. Fall back to
+        // the actual seat count from license data so the card never shows "0 licensed" with active users.
+        if (_licensedUsers == 0)
+        {
+            var licenses = await MauDataService.GetLatestLicensesAsync(tenantIds);
+            // Per tenant, the largest single SKU's consumed seats best approximates the licensed-user count
+            // (summing all SKUs would double-count users who hold multiple licenses).
+            var licensedFromSkus = licenses
+                .GroupBy(l => l.TenantId)
+                .Sum(g => g.Max(l => l.ConsumedLicenses));
+            _licensedUsers = Math.Max(licensedFromSkus, _activeUsers);
+        }
+
         // Comparative is a percentage benchmark; average it across tenants (weighted by max score)
         var comparativeWeighted = latestPerTenant.Sum(s => s.ComparativeScoreAllTenants * s.MaxScore);
         _comparativePercent = _maxScore > 0 ? comparativeWeighted / _maxScore : 0;

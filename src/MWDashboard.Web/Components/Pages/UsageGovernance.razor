@@ -73,21 +73,29 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Quota Status</MudText>
-                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_quotaBreakdown" Name="Mailboxes"
-                                         SeriesType="SeriesType.Donut"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (_quotaBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_quotaBreakdown" Name="Mailboxes"
+                                             SeriesType="SeriesType.Donut"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
+                    else { <MudText Color="Color.Secondary">No data available.</MudText> }
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Active vs Inactive</MudText>
-                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_mailboxActivityBreakdown" Name="Mailboxes"
-                                         SeriesType="SeriesType.Donut"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (_mailboxActivityBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_mailboxActivityBreakdown" Name="Mailboxes"
+                                             SeriesType="SeriesType.Donut"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
+                    else { <MudText Color="Color.Secondary">No data available.</MudText> }
                 </MudPaper>
             </MudItem>
 
@@ -160,21 +168,29 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Users by Device Type</MudText>
-                    <ApexChart TItem="LabelValue" Options="_barOptions" Height="340" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_teamsDeviceBreakdown" Name="Users"
-                                         SeriesType="SeriesType.Bar"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (_teamsDeviceBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_barOptions" Height="340" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_teamsDeviceBreakdown" Name="Users"
+                                             SeriesType="SeriesType.Bar"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
+                    else { <MudText Color="Color.Secondary">No data available.</MudText> }
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Platform Mix</MudText>
-                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="340" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_teamsDeviceBreakdown" Name="Users"
-                                         SeriesType="SeriesType.Donut"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (_teamsDeviceBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="340" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_teamsDeviceBreakdown" Name="Users"
+                                             SeriesType="SeriesType.Donut"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
+                    else { <MudText Color="Color.Secondary">No data available.</MudText> }
                 </MudPaper>
             </MudItem>
         </MudGrid>
@@ -213,28 +229,36 @@ else
             <MudItem xs="12" sm="6" md="3">
                 <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
                     <MudText Typo="Typo.caption" Color="Color.Secondary">Total Files</MudText>
-                    <MudText Typo="Typo.h4" Color="Color.Secondary">@(_spFiles + _odFiles).ToString("N0")</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Secondary">@((_spFiles + _odFiles).ToString("N0"))</MudText>
                 </MudPaper>
             </MudItem>
 
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Storage by Workload</MudText>
-                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_storageBreakdown" Name="GB"
-                                         SeriesType="SeriesType.Donut"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (_storageBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_storageBreakdown" Name="GB"
+                                             SeriesType="SeriesType.Donut"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
+                    else { <MudText Color="Color.Secondary">No data available.</MudText> }
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Sites / Accounts by Workload</MudText>
-                    <ApexChart TItem="LabelValue" Options="_barOptions" Height="320" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_siteCountBreakdown" Name="Count"
-                                         SeriesType="SeriesType.Bar"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (_siteCountBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_barOptions" Height="320" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_siteCountBreakdown" Name="Count"
+                                             SeriesType="SeriesType.Bar"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
+                    else { <MudText Color="Color.Secondary">No data available.</MudText> }
                 </MudPaper>
             </MudItem>
 
@@ -304,11 +328,15 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Engagement Mix</MudText>
-                    <ApexChart TItem="LabelValue" Options="_barOptions" Height="320" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_yammerBreakdown" Name="Users"
-                                         SeriesType="SeriesType.Bar"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (_yammerBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_barOptions" Height="320" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_yammerBreakdown" Name="Users"
+                                             SeriesType="SeriesType.Bar"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
+                    else { <MudText Color="Color.Secondary">No data available.</MudText> }
                 </MudPaper>
             </MudItem>
         </MudGrid>
@@ -362,11 +390,15 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Groups by Type</MudText>
-                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_groupBreakdown" Name="Groups"
-                                         SeriesType="SeriesType.Donut"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (_groupBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_groupBreakdown" Name="Groups"
+                                             SeriesType="SeriesType.Donut"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
+                    else { <MudText Color="Color.Secondary">No data available.</MudText> }
                 </MudPaper>
             </MudItem>
 

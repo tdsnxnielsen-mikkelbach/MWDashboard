@@ -83,7 +83,7 @@ else
             @if (_tableData.Count > 0)
             {
                 <MudTable Items="_tableData" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
-                          SortLabel="Sort By" FixedHeader="true">
+                          SortLabel="Sort By" FixedHeader="true" GroupBy="_groupDefinition">
                     <HeaderContent>
                         <MudTh><MudTableSortLabel SortBy="new Func<AppTableRow, object>(x => x.AppName)">Application</MudTableSortLabel></MudTh>
                         @if (TenantFilter.IsMultiTenantView)
@@ -93,6 +93,12 @@ else
                         <MudTh><MudTableSortLabel SortBy="new Func<AppTableRow, object>(x => x.UserCount)" InitialDirection="SortDirection.Descending">Users</MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<AppTableRow, object>(x => x.ReportDate)">Report Date</MudTableSortLabel></MudTh>
                     </HeaderContent>
+                    <GroupHeaderTemplate>
+                        <MudTh Class="mud-table-cell-custom-group" colspan="@(_groupColspan)">
+                            <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Small" Class="mr-2" />
+                            <b>@context.Key</b>
+                        </MudTh>
+                    </GroupHeaderTemplate>
                     <RowTemplate>
                         <MudTd DataLabel="Application"><b>@context.AppName</b></MudTd>
                         @if (TenantFilter.IsMultiTenantView)
@@ -121,6 +127,8 @@ else
     private Dictionary<string, List<AppDataPoint>> _appChartData = [];
     private List<AppDataPoint> _platformData = [];
     private List<AppTableRow> _tableData = [];
+    private TableGroupDefinition<AppTableRow>? _groupDefinition;
+    private int _groupColspan = 3;
 
     private ApexChartOptions<AppDataPoint> _appChartOptions = new()
     {
@@ -217,6 +225,24 @@ else
             UserCount = d.UserCount,
             ReportDate = d.ReportDate
         }).OrderByDescending(d => d.UserCount).ToList();
+
+        // Group the details table by tenant in multi-tenant view for easier scanning
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _groupDefinition = new TableGroupDefinition<AppTableRow>
+            {
+                Selector = x => x.TenantName,
+                GroupName = "Tenant",
+                Expandable = true,
+                IsInitiallyExpanded = true
+            };
+            _groupColspan = 4; // Application + Tenant + Users + Report Date
+        }
+        else
+        {
+            _groupDefinition = null;
+            _groupColspan = 3;
+        }
 
         _chartKey = Guid.NewGuid().ToString();
         _loading = false;

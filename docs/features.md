@@ -64,7 +64,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 
 - **Users by Application** — bar chart of active user counts per app (Outlook, Word, Excel, PowerPoint, OneNote, Teams)
 - **Users by Platform** — donut chart of active users by platform (Windows, Mac, Mobile, Web)
-- **App usage details table** — searchable/sortable per-app user counts with report date; Tenant column in multi-tenant view
+- **App usage details table** — searchable/sortable per-app user counts with report date; Tenant column in multi-tenant view. In multi-tenant view the table is grouped into expandable sections by tenant (initially expanded) for easier scanning across tenants
 - **All apps always shown** — every app column present in the report is recorded even when its count is 0 or blank, so apps with no recent activity (e.g. PowerPoint) still appear with a 0 value rather than silently disappearing
 - Data source: Graph Reports API (`getM365AppUserCounts` with D30 period); usage data lags ~2–3 days and depends on tenant telemetry/diagnostic-data settings
 
@@ -125,7 +125,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 
 ## Secure Score (`/securescore`)
 
-- **KPI cards** — current secure score % (points achieved / max), delta vs. global average benchmark, count of actions to improve, licensed/active users
+- **KPI cards** — current secure score % (points achieved / max), delta vs. global average benchmark, count of actions to improve, licensed/active users. The licensed-users count falls back to the tenant's consumed license seats when Microsoft Graph reports a stale/zero `licensedUserCount`, and is never shown lower than the active-user count
 - **Score trend chart** — secure score % over the last 90 days; per-tenant series in multi-tenant view
 - **Score by category** — donut chart of achieved points per control category (Identity, Data, Device, Apps, Infrastructure)
 - **Recommended remediation actions** — searchable/sortable table of controls not fully implemented, ordered by lowest progress first, with progress bar, category, and implementation status (Complete/Partial/Not started); Tenant column in multi-tenant view
@@ -146,7 +146,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 A single page with four tabs covering endpoint and identity governance. Each tab degrades gracefully with an info alert when its data/permission is unavailable, shows KPI cards plus charts, and adds a per-tenant comparison table in multi-tenant view.
 
 - **Device Compliance** — Intune-managed device posture: managed device count, compliant %, non-compliant count, in-grace/error count; compliance-status donut and devices-by-platform bar chart. Data source: `GET /deviceManagement/managedDevices`; requires `DeviceManagementManagedDevices.Read.All` (available on all tiers)
-- **Conditional Access** — policy inventory and coverage gaps: total/enabled/report-only policy counts, MFA-enforced indicator, legacy-auth-blocked indicator (aggregated across tenants); policy-state donut and per-tenant coverage table with MFA/legacy-block icons. Data source: `GET /identity/conditionalAccess/policies`; requires `Policy.Read.All` (all tiers)
+- **Conditional Access** — policy inventory and coverage gaps: total/enabled/report-only policy counts, MFA-enforced indicator, legacy-auth-blocked indicator (aggregated across tenants); policy-state donut and per-tenant coverage table with MFA/legacy-block icons (icon legend + per-icon tooltips explain enforced vs. coverage-gap states). Data source: `GET /identity/conditionalAccess/policies`; requires `Policy.Read.All` **and Entra ID P1/P2** — Conditional Access is a premium feature, so Free-tier tenants have no policies to report
 - **Guest Users** — external-collaboration governance: total guests, accepted vs. pending-acceptance, recently-added (last 30 days); invitation-status donut. Data source: `GET /users?$filter=userType eq 'Guest'`; reuses the already-granted `User.Read.All` (all tiers)
 - **Risky Users** — Identity Protection risk: at-risk users by High/Medium/Low risk level; risk-level donut. Data source: `GET /identityProtection/riskyUsers`; requires `IdentityRiskyUser.Read.All` **and Entra ID P2** — tenants below P2 are skipped during collection (logged at Information)
 - **Tenant-scoped** — customer-tenant users see only their own tenant's data

@@ -97,7 +97,8 @@ else
         MFA & Authentication Method Registration
     </MudText>
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-        Tenant-wide adoption of strong authentication for member accounts (guests excluded). Available on all tiers — uses <code>AuditLog.Read.All</code>.
+        Tenant-wide adoption of strong authentication for member accounts (guests excluded).
+        <strong>Entra ID license:</strong> available on <strong>all tiers</strong> (Free, P1, P2) &mdash; uses <code>AuditLog.Read.All</code>.
     </MudText>
     @if (_mfaTotalUsers == 0)
     {
@@ -153,7 +154,8 @@ else
         Inactive / Stale Licensed Accounts
     </MudText>
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-        Enabled, licensed member accounts with no interactive sign-in (license-waste signal). Available on all tiers via <code>AuditLog.Read.All</code>.
+        Enabled, licensed member accounts with no interactive sign-in (license-waste signal).
+        <strong>Entra ID license:</strong> requires <strong>Microsoft Entra ID P1 or P2</strong> (derived from <code>signInActivity</code>); tenants below P1 are skipped during collection. Uses <code>AuditLog.Read.All</code>.
     </MudText>
     @if (_inactiveTotalLicensed == 0)
     {
