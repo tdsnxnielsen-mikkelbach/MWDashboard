@@ -10,7 +10,7 @@
 
 <MudText Typo="Typo.h4" Class="mb-2">Security Services</MudText>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-    Sign-in activity and MFA metrics from Entra audit logs. Requires <code>AuditLog.Read.All</code> permission.
+    Sign-in activity and MFA metrics from Entra audit logs. Requires <PermissionTag Scope="AuditLog.Read.All" />.
 </MudText>
 
 @if (_loading)
@@ -98,7 +98,7 @@ else
     </MudText>
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
         Tenant-wide adoption of strong authentication for member accounts (guests excluded).
-        <strong>Entra ID license:</strong> available on <strong>all tiers</strong> (Free, P1, P2) &mdash; uses <code>AuditLog.Read.All</code>.
+        <strong>Entra ID license:</strong> available on <strong>all tiers</strong> (Free, P1, P2) &mdash; uses <PermissionTag Scope="AuditLog.Read.All" />.
     </MudText>
     @if (_mfaTotalUsers == 0)
     {
@@ -155,7 +155,7 @@ else
     </MudText>
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
         Enabled, licensed member accounts with no interactive sign-in (license-waste signal).
-        <strong>Entra ID license:</strong> requires <strong>Microsoft Entra ID P1 or P2</strong> (derived from <code>signInActivity</code>); tenants below P1 are skipped during collection. Uses <code>AuditLog.Read.All</code>.
+        <strong>Entra ID license:</strong> requires <strong>Microsoft Entra ID P1 or P2</strong> (derived from <code>signInActivity</code>); tenants below P1 are skipped during collection. Uses <PermissionTag Scope="AuditLog.Read.All" />.
     </MudText>
     @if (_inactiveTotalLicensed == 0)
     {

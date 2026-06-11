@@ -18,6 +18,14 @@ The app registration needs the following **Application** permissions (not Delega
 
 > `Guest / external users` (Identity & Devices page) reuses the already-granted `User.Read.All` permission — no extra consent needed.
 
+## How permissions appear in the UI
+
+Throughout the dashboard, Graph permissions are shown with their official admin-consent display name followed by the scope in parentheses — e.g. **Read all users' full profiles (`User.Read.All`)** — so non-technical admins understand what is being requested while the exact scope stays copy-paste friendly.
+
+- The reusable `<PermissionTag Scope="User.Read.All" />` Blazor component ([src/MWDashboard.Web/Components/Shared/PermissionTag.razor](../src/MWDashboard.Web/Components/Shared/PermissionTag.razor)) renders this format anywhere a permission is referenced (page descriptions, "no data" alerts). Pass `ShowName="false"` for a compact code-only form with the display name in a tooltip.
+- The scope → display-name map is centralized in `GraphPermissions` ([src/MWDashboard.Shared/Models/GraphPermissions.cs](../src/MWDashboard.Shared/Models/GraphPermissions.cs)) — the single source of truth. Add new permissions there and both the UI component and code-side formatting pick them up automatically. Unknown scopes fall back to the raw code.
+- The Tenants page formats the stored `TenantInfo.MissingPermissions` (comma-separated scopes) the same way via `GraphPermissions.DescribeWithScope(...)`, so the re-consent alert lists friendly names too.
+
 ## Granting Consent
 
 After adding permissions in Azure Portal → App Registrations → API Permissions, you must **re-grant admin consent** for each tenant. Either:

@@ -1235,10 +1235,12 @@ public class MauDataService : IMauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        return await query
+        var all = await query.ToListAsync();
+        // Latest snapshot per tenant
+        return all
             .GroupBy(s => s.TenantId)
             .Select(g => g.OrderByDescending(s => s.ReportDate).First())
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task SaveMailboxUsageAsync(MailboxUsageSnapshot snapshot)
@@ -1322,10 +1324,12 @@ public class MauDataService : IMauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        return await query
+        var all = await query.ToListAsync();
+        // Latest snapshot per tenant
+        return all
             .GroupBy(s => s.TenantId)
             .Select(g => g.OrderByDescending(s => s.ReportDate).First())
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task SaveTeamsDeviceUsageAsync(TeamsDeviceUsageSnapshot snapshot)
@@ -1454,10 +1458,12 @@ public class MauDataService : IMauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        return await query
+        var all = await query.ToListAsync();
+        // Latest snapshot per tenant
+        return all
             .GroupBy(s => s.TenantId)
             .Select(g => g.OrderByDescending(s => s.ReportDate).First())
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task SaveYammerActivityAsync(YammerActivitySnapshot snapshot)
@@ -1490,10 +1496,12 @@ public class MauDataService : IMauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        return await query
+        var all = await query.ToListAsync();
+        // Latest snapshot per tenant
+        return all
             .GroupBy(s => s.TenantId)
             .Select(g => g.OrderByDescending(s => s.ReportDate).First())
-            .ToListAsync();
+            .ToList();
     }
 
     public async Task SaveGroupSprawlAsync(GroupSnapshot snapshot)

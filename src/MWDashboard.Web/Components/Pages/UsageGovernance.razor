@@ -12,7 +12,7 @@
 <MudText Typo="Typo.h4" Class="mb-2">Usage &amp; Governance</MudText>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Mailbox storage, Teams device adoption, SharePoint &amp; OneDrive usage, Viva Engage activity, and Microsoft 365 group sprawl.
-    Requires <code>Reports.Read.All</code> and (for group governance) <code>Group.Read.All</code>.
+    Requires <PermissionTag Scope="Reports.Read.All" /> and (for group governance) <PermissionTag Scope="Group.Read.All" />.
 </MudText>
 
 @if (_loading)
@@ -27,7 +27,7 @@ else if (!_hasAnyData)
 {
     <MudAlert Severity="Severity.Info">
         No usage or governance data available for the selected tenant(s). Collect data from the Tenants page first.
-        These insights require <code>Reports.Read.All</code>; group governance additionally requires <code>Group.Read.All</code>.
+        These insights require <PermissionTag Scope="Reports.Read.All" />; group governance additionally requires <PermissionTag Scope="Group.Read.All" />.
     </MudAlert>
 }
 else
@@ -38,7 +38,7 @@ else
     <MudTabPanel Text="Mailbox Usage" Icon="@Icons.Material.Filled.Email">
         @if (_mailboxes.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No mailbox usage data available. Requires <code>Reports.Read.All</code>.</MudAlert>
+            <MudAlert Severity="Severity.Info">No mailbox usage data available. Requires <PermissionTag Scope="Reports.Read.All" />.</MudAlert>
         }
         else
         {
@@ -133,7 +133,7 @@ else
     <MudTabPanel Text="Teams Devices" Icon="@Icons.Material.Filled.Groups">
         @if (_teamsDevices.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No Teams device usage data available. Requires <code>Reports.Read.All</code>.</MudAlert>
+            <MudAlert Severity="Severity.Info">No Teams device usage data available. Requires <PermissionTag Scope="Reports.Read.All" />.</MudAlert>
         }
         else
         {
@@ -201,7 +201,7 @@ else
     <MudTabPanel Text="SharePoint &amp; OneDrive" Icon="@Icons.Material.Filled.Storage">
         @if (_siteUsage.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No SharePoint / OneDrive usage data available. Requires <code>Reports.Read.All</code>.</MudAlert>
+            <MudAlert Severity="Severity.Info">No SharePoint / OneDrive usage data available. Requires <PermissionTag Scope="Reports.Read.All" />.</MudAlert>
         }
         else
         {
@@ -298,7 +298,7 @@ else
     <MudTabPanel Text="Viva Engage" Icon="@Icons.Material.Filled.Forum">
         @if (_yammer.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No Viva Engage (Yammer) activity data available. Requires <code>Reports.Read.All</code> and an active Viva Engage deployment.</MudAlert>
+            <MudAlert Severity="Severity.Info">No Viva Engage (Yammer) activity data available. Requires <PermissionTag Scope="Reports.Read.All" /> and an active Viva Engage deployment.</MudAlert>
         }
         else
         {
@@ -347,7 +347,7 @@ else
     <MudTabPanel Text="Groups &amp; Teams" Icon="@Icons.Material.Filled.AccountTree">
         @if (_groups.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No group governance data available. Requires <code>Group.Read.All</code> to be consented.</MudAlert>
+            <MudAlert Severity="Severity.Info">No group governance data available. Requires <PermissionTag Scope="Group.Read.All" /> to be consented.</MudAlert>
         }
         else
         {

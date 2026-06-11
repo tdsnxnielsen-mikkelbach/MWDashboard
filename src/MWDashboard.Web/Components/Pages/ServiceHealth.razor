@@ -10,7 +10,7 @@
 <MudText Typo="Typo.h4" Class="mb-2">Microsoft 365 Service Health</MudText>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Current operational status of Microsoft 365 services and active incidents/advisories.
-    Requires <code>ServiceHealth.Read.All</code> permission.
+    Requires <PermissionTag Scope="ServiceHealth.Read.All" />.
 </MudText>
 
 @if (_loading)
@@ -25,7 +25,7 @@ else if (!_hasData)
 {
     <MudAlert Severity="Severity.Info">
         No service health data available for the selected tenant(s). Collect data from the Tenants page first.
-        Service Health requires the <code>ServiceHealth.Read.All</code> Graph permission to be consented.
+        Service Health requires the <PermissionTag Scope="ServiceHealth.Read.All" /> Graph permission to be consented.
     </MudAlert>
 }
 else

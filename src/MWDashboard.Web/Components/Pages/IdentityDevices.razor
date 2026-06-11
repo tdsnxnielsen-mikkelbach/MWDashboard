@@ -11,8 +11,8 @@
 <MudText Typo="Typo.h4" Class="mb-2">Identity &amp; Devices</MudText>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Device compliance, Conditional Access coverage, guest/external accounts, and identity risk.
-    Requires <code>DeviceManagementManagedDevices.Read.All</code>, <code>Policy.Read.All</code>,
-    <code>User.Read.All</code>, and (for risk) <code>IdentityRiskyUser.Read.All</code>.
+    Requires <PermissionTag Scope="DeviceManagementManagedDevices.Read.All" />, <PermissionTag Scope="Policy.Read.All" />,
+    <PermissionTag Scope="User.Read.All" />, and (for risk) <PermissionTag Scope="IdentityRiskyUser.Read.All" />.
     <strong>Entra ID license:</strong> Conditional Access requires <strong>P1 or P2</strong>; Risky Users (Identity Protection) requires <strong>P2</strong>; Device Compliance (Intune) and Guest Users are available on all tiers.
 </MudText>
 
@@ -39,7 +39,7 @@ else
     <MudTabPanel Text="Device Compliance" Icon="@Icons.Material.Filled.Devices">
         @if (_devices.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No Intune-managed device data available. Requires <code>DeviceManagementManagedDevices.Read.All</code>.</MudAlert>
+            <MudAlert Severity="Severity.Info">No Intune-managed device data available. Requires <PermissionTag Scope="DeviceManagementManagedDevices.Read.All" />.</MudAlert>
         }
         else
         {
@@ -128,7 +128,7 @@ else
     <MudTabPanel Text="Conditional Access" Icon="@Icons.Material.Filled.Policy">
         @if (_conditionalAccess.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No Conditional Access data available. Requires <code>Policy.Read.All</code> and a <strong>Microsoft Entra ID P1 or P2</strong> license (Conditional Access is a premium feature — tenants on the Free tier have no policies to report).</MudAlert>
+            <MudAlert Severity="Severity.Info">No Conditional Access data available. Requires <PermissionTag Scope="Policy.Read.All" /> and a <strong>Microsoft Entra ID P1 or P2</strong> license (Conditional Access is a premium feature — tenants on the Free tier have no policies to report).</MudAlert>
         }
         else
         {
@@ -215,7 +215,7 @@ else
     <MudTabPanel Text="Guest Users" Icon="@Icons.Material.Filled.GroupAdd">
         @if (_guests.Count == 0)
         {
-            <MudAlert Severity="Severity.Info">No guest/external user data available. Requires <code>User.Read.All</code>.</MudAlert>
+            <MudAlert Severity="Severity.Info">No guest/external user data available. Requires <PermissionTag Scope="User.Read.All" />.</MudAlert>
         }
         else
         {
@@ -293,7 +293,7 @@ else
         {
             <MudAlert Severity="Severity.Warning" Class="mb-2">
                 No identity risk data available. Risky-user analysis uses Microsoft Entra ID <strong>Identity Protection</strong>,
-                which requires the <code>IdentityRiskyUser.Read.All</code> permission <strong>and an Entra ID P2 license</strong>
+                which requires the <PermissionTag Scope="IdentityRiskyUser.Read.All" /> permission <strong>and an Entra ID P2 license</strong>
                 on the target tenant. Tenants below P2 are skipped during collection (this is a licensing limit, not a consent gap).
             </MudAlert>
             @if (_nonP2Tenants.Count > 0)

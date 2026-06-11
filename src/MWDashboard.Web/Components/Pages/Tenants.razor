@@ -33,7 +33,7 @@
             @foreach (var t in tenantsNeedingConsent)
             {
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Warning" IconColor="Color.Warning">
-                    <strong>@t.DisplayName</strong> — missing: @t.MissingPermissions
+                    <strong>@t.DisplayName</strong> — missing: @FormatMissingPermissions(t.MissingPermissions)
                     <MudLink Href="@GetConsentUrlForTenant(t.TenantId)" Target="_blank" Class="ml-2">Open consent link</MudLink>
                 </MudListItem>
             }
@@ -159,7 +159,7 @@
                         }
                         else
                         {
-                            <MudTooltip Text="@($"Missing: {context.MissingPermissions}")">
+                            <MudTooltip Text="@($"Missing: {FormatMissingPermissions(context.MissingPermissions)}")">
                                 <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning" Variant="Variant.Text">
                                     Re-consent
                                 </MudChip>
@@ -298,6 +298,16 @@
                $"?client_id={Uri.EscapeDataString(ClientId)}" +
                $"&redirect_uri={Uri.EscapeDataString(ConsentRedirectUri)}" +
                $"&scope=https://graph.microsoft.com/.default";
+    }
+
+    // Renders a comma-separated list of stored permission scopes with their human-readable
+    // admin-consent display names, e.g. "Read all users' full profiles (User.Read.All)".
+    private static string FormatMissingPermissions(string? missing)
+    {
+        if (string.IsNullOrWhiteSpace(missing))
+            return string.Empty;
+        var scopes = missing.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return string.Join(", ", scopes.Select(GraphPermissions.DescribeWithScope));
     }
 
     private void GenerateConsentUrl()

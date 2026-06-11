@@ -68,6 +68,7 @@ azd deploy
 - **Cache invalidation**: Every `Save*` method invalidates relevant cache keys automatically + publishes via Redis pub/sub to all replicas
 - **Cross-replica invalidation**: `RedisCacheInvalidationService` uses Redis pub/sub channel `MWDashboard:cache-invalidation`
 - **Cache warm-up**: `CacheWarmupService` pre-populates common all-tenant queries on startup (avoids thundering herd on cold start)
+- **Empty results are never cached**: `GetOrSetAsync` skips writing empty collections to the cache. Collection runs in a separate process (Collector container / scheduled Job) that uses the non-caching data service and only invalidates after writing, so caching an empty pre-collection result (e.g. from warm-up) would otherwise poison the `all`/multi-tenant key for its full TTL and show "no data" even though data exists
 - **Fallback**: System gracefully falls back to in-memory cache when Redis unavailable
 
 ### Page Patterns (src/MWDashboard.Web/Components/Pages/)
@@ -77,6 +78,7 @@ azd deploy
 - Check `TenantFilter.IsMultiTenantView` for chart series labeling
 - Dispose event subscription in `Dispose()`
 - Use `@key` on chart components when date ranges change to force re-render
+- **Permission references**: Never hard-code raw Graph scope codes in page markup. Use `<PermissionTag Scope="User.Read.All" />` (src/MWDashboard.Web/Components/Shared/PermissionTag.razor) which renders the human-readable admin-consent name with the scope, e.g. `Read all users' full profiles (User.Read.All)` (set `ShowName="false"` for code-only with the name in a tooltip). Scope→display-name mapping lives in `GraphPermissions` (src/MWDashboard.Shared/Models/GraphPermissions.cs) — the single source of truth; add new scopes there. `GraphPermissions.DescribeWithScope(scope)` is the code-side helper (e.g. used to format `TenantInfo.MissingPermissions` on the Tenants page)
 
 ### Background Collection (src/MWDashboard.Job/)
 - One-shot console app: collects all data for active tenants, then exits

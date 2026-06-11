@@ -70,6 +70,15 @@ public class CachedMauDataService : IMauDataService
 
         var result = await factory();
 
+        // Never cache empty collection results. Otherwise a query run before data is
+        // collected (e.g. by the startup cache warm-up) would poison the key with an
+        // empty list for the full TTL — and collection that happens in a separate
+        // process (Collector container / scheduled Job, which use the non-caching data
+        // service) never invalidates it. This made all-/multi-tenant views show "no data"
+        // while single-tenant views (never warmed) queried fresh and worked.
+        if (result is System.Collections.ICollection { Count: 0 })
+            return result;
+
         try
         {
             var json = JsonSerializer.Serialize(result);

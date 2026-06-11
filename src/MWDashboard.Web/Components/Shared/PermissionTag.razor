@@ -1,0 +1,32 @@
+@*
+    Renders a Microsoft Graph permission scope with its human-readable admin-consent
+    display name, e.g. "Read all users' full profiles (User.Read.All)".
+    Usage:
+      <PermissionTag Scope="User.Read.All" />                  full: "name (scope)"
+      <PermissionTag Scope="User.Read.All" ShowName="false" /> compact: code only, name in tooltip
+*@
+@using MWDashboard.Shared.Models
+
+@if (ShowName)
+{
+    <MudTooltip Text="@($"Microsoft Graph application permission: {Scope}")">
+        <span>@GraphPermissions.Describe(Scope) (<code>@Scope</code>)</span>
+    </MudTooltip>
+}
+else
+{
+    <MudTooltip Text="@GraphPermissions.Describe(Scope)">
+        <code>@Scope</code>
+    </MudTooltip>
+}
+
+@code {
+    /// <summary>The Graph permission scope, e.g. "User.Read.All".</summary>
+    [Parameter, EditorRequired] public string Scope { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When true (default), renders "Display name (Scope)". When false, renders just the
+    /// scope code with the display name in a tooltip (compact form for dense lists).
+    /// </summary>
+    [Parameter] public bool ShowName { get; set; } = true;
+}

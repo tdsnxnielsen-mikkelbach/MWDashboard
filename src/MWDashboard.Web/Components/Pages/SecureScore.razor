@@ -11,7 +11,7 @@
 <MudText Typo="Typo.h4" Class="mb-2">Microsoft Secure Score</MudText>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Security posture score and prioritized remediation actions from Microsoft Defender.
-    Requires <code>SecurityEvents.Read.All</code> permission.
+    Requires <PermissionTag Scope="SecurityEvents.Read.All" />.
 </MudText>
 
 @if (_loading)
@@ -26,7 +26,7 @@ else if (!_hasData)
 {
     <MudAlert Severity="Severity.Info">
         No secure score data available for the selected tenant(s). Collect data from the Tenants page first.
-        Secure Score requires the <code>SecurityEvents.Read.All</code> Graph permission to be consented.
+        Secure Score requires the <PermissionTag Scope="SecurityEvents.Read.All" /> Graph permission to be consented.
     </MudAlert>
 }
 else
