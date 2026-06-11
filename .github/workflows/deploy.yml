@@ -3,6 +3,15 @@ name: Deploy to Azure
 on:
   push:
     branches: [main]
+    # Only deploy when files that actually affect the deployed app change.
+    # Doc-only changes (**/*.md, docs/**, LICENSE) and other non-deployment
+    # files won't trigger a deploy. Use the "Run workflow" button to force one.
+    paths:
+      - 'src/**'
+      - 'infra/**'
+      - 'static/**'
+      - 'azure.yaml'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
