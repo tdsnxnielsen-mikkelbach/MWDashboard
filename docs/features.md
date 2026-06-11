@@ -73,9 +73,10 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **KPI cards** — Total Copilot active users, total assigned licenses, overall adoption rate with color-coded thresholds
 - **Per-app bar chart** — Active users across Word, Excel, PowerPoint, Outlook, Teams, OneNote, Loop, and Copilot Chat
 - **Adoption detail table** — per-app breakdown with utilization progress bars and status chips (Strong/Growing/Low/Critical)
+- **Copilot licenses by tenant** — per-tenant table of assigned vs. total Copilot SKU seats (SKU part number contains `COPILOT`); shown even when no usage data is returned, so tenants that hold Copilot licenses but have no reported activity (or only use free Copilot Chat) still surface their license footprint
 - **Automated recommendations** — actionable alerts based on adoption patterns (low app usage, overall low adoption, Chat-only usage patterns)
 - Multi-tenant view — per-tenant grouped bar chart series
-- Data source: Graph Beta API (`getMicrosoft365CopilotUsageUserDetail`); requires Copilot licenses
+- Data source: Graph Beta API (`getMicrosoft365CopilotUsageUserDetail`); requires <PermissionTag Scope="Reports.Read.All" /> and **returns usage only for users holding a Microsoft 365 Copilot license**. Free, unlicensed **Copilot Chat** usage is *not* exposed by Graph — tenants using only Copilot Chat (e.g. Business Standard without the Copilot add-on) show no usage here (see [todo.md](todo.md) for the Office 365 Management Activity API option). The empty-state message explains this and still lists Copilot license counts when present
 
 ## User Segmentation (`/segmentation`)
 
@@ -156,11 +157,11 @@ A single page with four tabs covering endpoint and identity governance. Each tab
 
 A single page with five tabs covering workload adoption and Microsoft 365 governance hygiene. Each tab degrades gracefully with an info alert when its data/permission is unavailable, shows KPI cards plus charts, and adds top-N drill-down tables (with a Tenant column in multi-tenant view).
 
-- **Mailbox Usage** — Exchange Online mailbox posture: total/active mailboxes, total storage used, at/over-quota count (warning + send-prohibited); quota-status and active-vs-inactive donuts; top-20 largest mailboxes table (storage, item count, last activity). Data sources: `getMailboxUsageDetail`, `getMailboxUsageQuotaStatusMailboxCounts`; requires `Reports.Read.All` (all tiers)
+- **Mailbox Usage** — Exchange Online mailbox posture: total/active mailboxes, total storage used, at/over-quota count (warning + send-prohibited); quota-status and active-vs-inactive donuts; top-20 largest mailboxes table (storage, item count, last activity — grouped by tenant in multi-tenant view). Data sources: `getMailboxUsageDetail`, `getMailboxUsageQuotaStatusMailboxCounts`; requires `Reports.Read.All` (all tiers)
 - **Teams Devices** — Teams client adoption: desktop / mobile / web user counts, total active users; users-by-device-type bar and platform-mix donut. Data source: `getTeamsDeviceUsageUserCounts`; requires `Reports.Read.All` (all tiers)
 - **SharePoint & OneDrive** — collaboration storage: SharePoint site count + storage, OneDrive account count + storage, combined storage and file totals; storage-by-workload donut and site-count bar; top-20 largest sites/accounts table. Data sources: `getSharePointSiteUsageDetail`, `getOneDriveUsageAccountDetail`; requires `Reports.Read.All` (all tiers)
 - **Viva Engage** — Yammer/Viva Engage engagement: users who posted / read / liked; engagement-mix bar. Data source: `getYammerActivityUserCounts`; requires `Reports.Read.All` and an active Viva Engage deployment (all tiers)
-- **Groups & Teams** — group governance: total groups, Microsoft 365 groups, Teams-connected groups, ownerless M365 groups (governance-risk warning when > 0); groups-by-type donut and per-tenant table. Data source: `GET /groups` with `owners` expand; requires `Group.Read.All` (**new permission** — must be re-consented by each tenant)
+- **Groups & Teams** — group governance: total groups, Microsoft 365 groups, Teams-connected groups, ownerless M365 groups (governance-risk warning when > 0); groups-by-type donut (Microsoft 365 / Security / Distribution Lists / Other) and per-tenant table. Group types are classified from Graph properties: Microsoft 365 = `groupTypes` contains `Unified`; Security = security-enabled non-unified; Distribution Lists = mail-enabled non-security non-unified; Other = any remaining edge cases. Data source: `GET /groups` with `owners` expand; requires `Group.Read.All` (**new permission** — must be re-consented by each tenant)
 - **Tenant-scoped** — customer-tenant users see only their own tenant's data
 - Data models: `MailboxUsageSnapshot`, `TopMailboxSnapshot`, `TeamsDeviceUsageSnapshot`, `SiteUsageSnapshot`, `SiteUsageDetailSnapshot`, `YammerActivitySnapshot`, `GroupSnapshot` (aggregates one row per tenant per day; top-N rows ranked per tenant per day)
 

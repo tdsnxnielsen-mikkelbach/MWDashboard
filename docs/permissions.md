@@ -14,7 +14,7 @@ The app registration needs the following **Application** permissions (not Delega
 | `DeviceManagementManagedDevices.Read.All` | Intune-managed device compliance state + OS breakdown | Identity & Devices page — Device Compliance tab |
 | `Policy.Read.All` | Conditional Access policy inventory + coverage gaps (legacy-auth block, MFA grant) | Identity & Devices page — Conditional Access tab; Conditional Access is a premium feature so policies exist only on **Entra ID P1/P2** tenants (Free-tier tenants report none) |
 | `IdentityRiskyUser.Read.All` | Identity Protection risky users by risk level | Identity & Devices page — Risky Users tab; **requires Entra ID P2** on target tenant |
-| `Group.Read.All` | Microsoft 365 / security / Teams-connected group inventory + ownerless-group detection | Usage & Governance page — Groups & Teams tab |
+| `Group.Read.All` | Microsoft 365 / security / distribution-list / Teams-connected group inventory + ownerless-group detection | Usage & Governance page — Groups & Teams tab |
 
 > `Guest / external users` (Identity & Devices page) reuses the already-granted `User.Read.All` permission — no extra consent needed.
 

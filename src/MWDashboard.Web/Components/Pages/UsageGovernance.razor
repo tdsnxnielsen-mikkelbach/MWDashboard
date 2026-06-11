@@ -104,18 +104,22 @@ else
                 <MudItem xs="12">
                     <MudPaper Class="pa-4" Elevation="2">
                         <MudText Typo="Typo.h6" Class="mb-3">Largest Mailboxes (Top @_topMailboxes.Count)</MudText>
-                        <MudTable Items="_topMailboxes" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                        <MudTable Items="_topMailboxes" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" GroupBy="@_mailboxGroupDefinition">
                             <HeaderContent>
                                 <MudTh Style="text-align:right">#</MudTh>
-                                @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
                                 <MudTh>Mailbox</MudTh>
                                 <MudTh Style="text-align:right">Storage</MudTh>
                                 <MudTh Style="text-align:right">Items</MudTh>
                                 <MudTh Style="text-align:right">Last Activity</MudTh>
                             </HeaderContent>
+                            <GroupHeaderTemplate>
+                                <MudTh Class="mud-table-cell-custom-group" colspan="5">
+                                    <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Small" Class="mr-2" />
+                                    <b>@context.Key</b>
+                                </MudTh>
+                            </GroupHeaderTemplate>
                             <RowTemplate>
                                 <MudTd DataLabel="#" Style="text-align:right">@context.Rank</MudTd>
-                                @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
                                 <MudTd DataLabel="Mailbox">@context.DisplayName</MudTd>
                                 <MudTd DataLabel="Storage" Style="text-align:right">@FormatBytes(context.StorageUsedBytes)</MudTd>
                                 <MudTd DataLabel="Items" Style="text-align:right">@context.ItemCount.ToString("N0")</MudTd>
@@ -412,6 +416,8 @@ else
                                 <MudTh>Tenant</MudTh>
                                 <MudTh Style="text-align:right">Total</MudTh>
                                 <MudTh Style="text-align:right">M365</MudTh>
+                                <MudTh Style="text-align:right">Security</MudTh>
+                                <MudTh Style="text-align:right">Distribution</MudTh>
                                 <MudTh Style="text-align:right">Teams</MudTh>
                                 <MudTh Style="text-align:right">Ownerless</MudTh>
                             </HeaderContent>
@@ -419,6 +425,8 @@ else
                                 <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd>
                                 <MudTd DataLabel="Total" Style="text-align:right">@context.TotalGroups.ToString("N0")</MudTd>
                                 <MudTd DataLabel="M365" Style="text-align:right">@context.M365Groups.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Security" Style="text-align:right">@context.SecurityGroups.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Distribution" Style="text-align:right">@context.DistributionGroups.ToString("N0")</MudTd>
                                 <MudTd DataLabel="Teams" Style="text-align:right">@context.TeamsConnectedGroups.ToString("N0")</MudTd>
                                 <MudTd DataLabel="Ownerless" Style="text-align:right">@context.OwnerlessGroups.ToString("N0")</MudTd>
                             </RowTemplate>
@@ -440,6 +448,7 @@ else
 
     private List<MailboxUsageSnapshot> _mailboxes = [];
     private List<TopMailboxSnapshot> _topMailboxes = [];
+    private TableGroupDefinition<TopMailboxSnapshot>? _mailboxGroupDefinition;
     private List<TeamsDeviceUsageSnapshot> _teamsDevices = [];
     private List<SiteUsageSnapshot> _siteUsage = [];
     private List<SiteUsageDetailSnapshot> _siteDetails = [];
@@ -467,7 +476,7 @@ else
     private List<LabelValue> _yammerBreakdown = [];
 
     // Group KPIs
-    private int _totalGroups, _m365Groups, _securityGroups, _teamsGroups, _ownerlessGroups;
+    private int _totalGroups, _m365Groups, _securityGroups, _distributionGroups, _teamsGroups, _ownerlessGroups;
     private List<LabelValue> _groupBreakdown = [];
 
     private readonly ApexChartOptions<LabelValue> _donutOptions = new()
@@ -524,6 +533,11 @@ else
         // When multiple tenants are selected, present the highest-storage mailboxes/sites overall.
         _topMailboxes = _topMailboxes.OrderByDescending(m => m.StorageUsedBytes).Take(20).ToList();
         _siteDetails = _siteDetails.OrderByDescending(s => s.StorageUsedBytes).Take(20).ToList();
+
+        // Group the largest-mailboxes table by tenant when viewing multiple tenants.
+        _mailboxGroupDefinition = TenantFilter.IsMultiTenantView
+            ? new TableGroupDefinition<TopMailboxSnapshot> { Selector = m => TenantFilter.GetTenantName(m.TenantId) }
+            : null;
 
         BuildMailboxMetrics();
         BuildTeamsDeviceMetrics();
@@ -626,14 +640,16 @@ else
         _totalGroups = _groups.Sum(g => g.TotalGroups);
         _m365Groups = _groups.Sum(g => g.M365Groups);
         _securityGroups = _groups.Sum(g => g.SecurityGroups);
+        _distributionGroups = _groups.Sum(g => g.DistributionGroups);
         _teamsGroups = _groups.Sum(g => g.TeamsConnectedGroups);
         _ownerlessGroups = _groups.Sum(g => g.OwnerlessGroups);
 
-        var other = _totalGroups - _m365Groups - _securityGroups;
+        var other = _totalGroups - _m365Groups - _securityGroups - _distributionGroups;
         _groupBreakdown =
         [
             new("Microsoft 365", _m365Groups),
             new("Security", _securityGroups),
+            new("Distribution Lists", _distributionGroups),
             new("Other", other > 0 ? other : 0)
         ];
         _groupBreakdown = _groupBreakdown.Where(x => x.Value > 0).ToList();

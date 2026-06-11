@@ -55,6 +55,7 @@
 - [ ] Consumption score threshold alerts (email/Teams notification when score drops)
 - [x] Historical comparison: month-over-month score change indicators — delta chips on all KPI cards
 - [ ] Per-department consumption scoring (combine department usage + segmentation)
+- [ ] **Unlicensed Copilot Chat usage via Office 365 Management Activity API** — the Microsoft Graph Copilot usage reports API only returns data for users holding a Microsoft 365 Copilot license; free Copilot Chat usage by unlicensed users (e.g. Business Standard tenants) is not exposed by Graph. Capturing it requires the Office 365 Management Activity API (subscription/feed model, separate `ActivityFeed.Read` permission and per-event audit-log parsing) or Microsoft Purview audit logs (`Search-UnifiedAuditLog`). This is a larger project scoped separately.
 
 ---
 

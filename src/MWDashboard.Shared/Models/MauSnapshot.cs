@@ -464,6 +464,7 @@ public class GroupSnapshot
     public int TotalGroups { get; set; }
     public int M365Groups { get; set; }          // unified groups
     public int SecurityGroups { get; set; }
+    public int DistributionGroups { get; set; }  // mail-enabled, non-security, non-unified (distribution lists)
     public int TeamsConnectedGroups { get; set; }
     public int OwnerlessGroups { get; set; }     // M365 groups with zero owners
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;

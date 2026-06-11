@@ -1515,6 +1515,7 @@ public class MauDataService : IMauDataService
             existing.TotalGroups = snapshot.TotalGroups;
             existing.M365Groups = snapshot.M365Groups;
             existing.SecurityGroups = snapshot.SecurityGroups;
+            existing.DistributionGroups = snapshot.DistributionGroups;
             existing.TeamsConnectedGroups = snapshot.TeamsConnectedGroups;
             existing.OwnerlessGroups = snapshot.OwnerlessGroups;
             existing.CollectedAt = DateTime.UtcNow;

@@ -21,8 +21,35 @@
 else if (_copilotData.Count == 0)
 {
     <MudAlert Severity="Severity.Info" Class="mb-4">
-        No Copilot usage data available. This requires tenants with Microsoft 365 Copilot licenses assigned and Reports.Read.All permission.
+        No <strong>licensed</strong> Microsoft 365 Copilot usage data is available for the selected tenant(s).
+        The Microsoft Graph reports API only returns usage for users who hold a Microsoft 365 Copilot
+        license (and requires <PermissionTag Scope="Reports.Read.All" />).
+        <br />
+        Free <strong>Microsoft 365 Copilot Chat</strong> usage by unlicensed users is <em>not</em> exposed by Graph,
+        so tenants using only Copilot Chat (e.g. Business Standard without Copilot add-on) will show no usage here
+        even when Copilot Chat is actively used. See the Microsoft 365 Admin Center Copilot Chat usage report for that data.
     </MudAlert>
+
+    @if (_copilotLicenses.Count > 0)
+    {
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Copilot Licenses by Tenant</MudText>
+            <MudTable Items="_copilotLicenses" Dense="true" Hover="true" Striped="true">
+                <HeaderContent>
+                    <MudTh>Tenant</MudTh>
+                    <MudTh>SKU</MudTh>
+                    <MudTh Style="text-align:right">Assigned</MudTh>
+                    <MudTh Style="text-align:right">Total</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Tenant">@context.TenantName</MudTd>
+                    <MudTd DataLabel="SKU">@context.SkuPartNumber</MudTd>
+                    <MudTd DataLabel="Assigned" Style="text-align:right">@context.Assigned.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Total" Style="text-align:right">@context.Total.ToString("N0")</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
 }
 else
 {
@@ -48,6 +75,30 @@ else
             </MudText>
         </MudPaper>
     </MudItem>
+
+    <!-- Copilot Licenses by Tenant -->
+    @if (_copilotLicenses.Count > 0)
+    {
+        <MudItem xs="12">
+            <MudPaper Class="pa-4" Elevation="2">
+                <MudText Typo="Typo.h6" Class="mb-3">Copilot Licenses by Tenant</MudText>
+                <MudTable Items="_copilotLicenses" Dense="true" Hover="true" Striped="true">
+                    <HeaderContent>
+                        <MudTh>Tenant</MudTh>
+                        <MudTh>SKU</MudTh>
+                        <MudTh Style="text-align:right">Assigned</MudTh>
+                        <MudTh Style="text-align:right">Total</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Tenant">@context.TenantName</MudTd>
+                        <MudTd DataLabel="SKU">@context.SkuPartNumber</MudTd>
+                        <MudTd DataLabel="Assigned" Style="text-align:right">@context.Assigned.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Total" Style="text-align:right">@context.Total.ToString("N0")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+    }
 
     <!-- Per-App Bar Chart -->
     <MudItem xs="12">
@@ -134,6 +185,7 @@ else
     private List<CopilotUsageSnapshot> _copilotData = [];
     private List<CopilotAppData> _appData = [];
     private List<CopilotTableRow> _tableData = [];
+    private List<CopilotLicenseRow> _copilotLicenses = [];
     private Dictionary<string, List<CopilotAppData>> _perTenantData = [];
     private int _totalActiveUsers;
     private int _totalLicenses;
@@ -175,6 +227,22 @@ else
 
         var tenantIds = TenantFilter.GetFilteredTenantIds();
         _copilotData = await MauDataService.GetCopilotUsageAsync(tenantIds);
+
+        // Copilot license inventory (shown even when no usage data is returned by Graph,
+        // e.g. tenants that only use the free, unlicensed Copilot Chat).
+        var licenses = await MauDataService.GetLatestLicensesAsync(tenantIds);
+        _copilotLicenses = licenses
+            .Where(l => l.SkuPartNumber.Contains("COPILOT", StringComparison.OrdinalIgnoreCase))
+            .Select(l => new CopilotLicenseRow
+            {
+                TenantName = TenantFilter.GetTenantName(l.TenantId),
+                SkuPartNumber = l.SkuPartNumber,
+                Assigned = l.ConsumedLicenses,
+                Total = l.TotalLicenses
+            })
+            .OrderBy(l => l.TenantName)
+            .ThenBy(l => l.SkuPartNumber)
+            .ToList();
 
         // Aggregate per app
         _appData = _copilotData
@@ -296,6 +364,14 @@ else
         public int ActiveUsers { get; set; }
         public int TotalLicenses { get; set; }
         public double AdoptionRate { get; set; }
+    }
+
+    public class CopilotLicenseRow
+    {
+        public string TenantName { get; set; } = string.Empty;
+        public string SkuPartNumber { get; set; } = string.Empty;
+        public int Assigned { get; set; }
+        public int Total { get; set; }
     }
 
     public record Recommendation(Severity Severity, string Message);

@@ -1821,7 +1821,7 @@ public class GraphReportService : IGraphReportService
         {
             var page = await client.Groups.GetAsync(c =>
             {
-                c.QueryParameters.Select = ["id", "groupTypes", "resourceProvisioningOptions", "securityEnabled"];
+                c.QueryParameters.Select = ["id", "groupTypes", "resourceProvisioningOptions", "securityEnabled", "mailEnabled"];
                 c.QueryParameters.Expand = ["owners($select=id)"];
                 c.QueryParameters.Top = 999;
             });
@@ -1846,6 +1846,11 @@ public class GraphReportService : IGraphReportService
                 else if (g.SecurityEnabled == true)
                 {
                     snapshot.SecurityGroups++;
+                }
+                else if (g.MailEnabled == true)
+                {
+                    // Mail-enabled, non-security, non-unified = classic distribution list
+                    snapshot.DistributionGroups++;
                 }
 
                 if (isTeam) snapshot.TeamsConnectedGroups++;
