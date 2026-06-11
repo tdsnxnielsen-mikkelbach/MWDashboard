@@ -11,6 +11,11 @@ The app registration needs the following **Application** permissions (not Delega
 | `User.Read.All` | User department attribute; licensed/enabled member accounts & `signInActivity` for inactive-account analysis | Department Adoption page (all tiers); Inactive Accounts on Security page (requires P1/P2 for `signInActivity`) |
 | `SecurityEvents.Read.All` | Microsoft Secure Score + control profiles | Secure Score page — security posture score, trend, and remediation actions |
 | `ServiceHealth.Read.All` | M365 service health overviews + active issues | Service Health page — per-service status and active incidents/advisories |
+| `DeviceManagementManagedDevices.Read.All` | Intune-managed device compliance state + OS breakdown | Identity & Devices page — Device Compliance tab |
+| `Policy.Read.All` | Conditional Access policy inventory + coverage gaps (legacy-auth block, MFA grant) | Identity & Devices page — Conditional Access tab |
+| `IdentityRiskyUser.Read.All` | Identity Protection risky users by risk level | Identity & Devices page — Risky Users tab; **requires Entra ID P2** on target tenant |
+
+> `Guest / external users` (Identity & Devices page) reuses the already-granted `User.Read.All` permission — no extra consent needed.
 
 ## Granting Consent
 
@@ -34,11 +39,11 @@ This URL is stable after first deployment and does not change unless you recreat
 
 | Target Tenant License | What's Available |
 |----------------------|-----------------|
-| Entra ID Free | MAU reports, licenses, Message Center, workload activity, segmentation, departments, MFA registration, Secure Score, Service Health — **no sign-in logs and no inactive-account analysis** (`signInActivity` is premium-gated) |
+| Entra ID Free | MAU reports, licenses, Message Center, workload activity, segmentation, departments, MFA registration, Secure Score, Service Health, device compliance, Conditional Access, guest users — **no sign-in logs, no inactive-account analysis, no risky-user analysis** (`signInActivity` and Identity Protection are premium-gated) |
 | Entra ID P1 | All above + sign-in logs (success/failure counts) + inactive/stale account analysis |
-| Entra ID P2 | All above + full AuthenticationDetails (MFA method breakdown) |
+| Entra ID P2 | All above + full AuthenticationDetails (MFA method breakdown) + risky-user (Identity Protection) analysis |
 
-> The dashboard detects each tenant's tier from its license SKUs (`TenantEntraTier.FromLicenses`) and **skips** sign-in-based collection (sign-in summary, inactive accounts) on free-tier tenants — logged at Information rather than as a permission error. The Tenants page shows a per-tenant **Plan** chip (Free/P1/P2) so this limitation is visible at a glance.
+> The dashboard detects each tenant's tier from its license SKUs (`TenantEntraTier.FromLicenses`) and **skips** premium-gated collection on tenants that lack the required tier — sign-in summary and inactive accounts on free-tier tenants, and risky-user analysis on anything below P2 — logged at Information rather than as a permission error. The Tenants page shows a per-tenant **Plan** chip (Free/P1/P2) so this limitation is visible at a glance. Because `IdentityRiskyUser.Read.All` is P2-gated, it is intentionally **not** included in the consent probe (a 403 on a non-P2 tenant is a licensing limit, not a consent gap, and would otherwise produce a false re-consent flag).
 
 ## Copilot Data Requirements
 

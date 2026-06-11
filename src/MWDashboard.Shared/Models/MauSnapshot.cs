@@ -288,6 +288,73 @@ public class ServiceHealthIssueSnapshot
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }
 
+// Intune device compliance — tenant-level point-in-time counts (Tier 2)
+public class DeviceComplianceSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public int TotalDevices { get; set; }
+    public int CompliantCount { get; set; }
+    public int NonCompliantCount { get; set; }
+    public int InGracePeriodCount { get; set; }
+    public int ErrorCount { get; set; }
+    public int UnknownCount { get; set; }
+    // OS breakdown
+    public int WindowsCount { get; set; }
+    public int IosCount { get; set; }
+    public int AndroidCount { get; set; }
+    public int MacOsCount { get; set; }
+    public int OtherOsCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Conditional Access coverage — tenant-level policy counts + gap flags (Tier 2)
+public class ConditionalAccessSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public int TotalPolicies { get; set; }
+    public int EnabledPolicies { get; set; }
+    public int ReportOnlyPolicies { get; set; }
+    public int DisabledPolicies { get; set; }
+    // Coverage gap flags (true = the protection is present in an enabled policy)
+    public bool BlocksLegacyAuth { get; set; }
+    public bool RequiresMfa { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Guest / external users — tenant-level governance counts (Tier 2)
+public class GuestUserSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public int TotalGuests { get; set; }
+    public int AcceptedGuests { get; set; }
+    public int PendingAcceptanceGuests { get; set; }
+    public int RecentlyAddedGuests { get; set; }   // created in the last 30 days
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Risky users (Identity Protection) — tenant-level counts, Entra ID P2 only (Tier 2)
+public class RiskyUserSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public int TotalAtRisk { get; set; }   // riskState == atRisk or confirmedCompromised
+    public int HighRisk { get; set; }
+    public int MediumRisk { get; set; }
+    public int LowRisk { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class BrandingSettings
 {
     public int Id { get; set; }

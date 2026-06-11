@@ -234,6 +234,62 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("service-health-issues", null));
     }
 
+    // --- Device Compliance (cached 60 min — daily-changing data) ---
+    public Task<List<DeviceComplianceSnapshot>> GetDeviceComplianceAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("device-compliance", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetDeviceComplianceAsync(tenantIds), options);
+    }
+
+    public async Task SaveDeviceComplianceAsync(DeviceComplianceSnapshot snapshot)
+    {
+        await _inner.SaveDeviceComplianceAsync(snapshot);
+        await InvalidateAsync(BuildKey("device-compliance", new[] { snapshot.TenantId }), BuildKey("device-compliance", null));
+    }
+
+    // --- Conditional Access (cached 60 min — daily-changing data) ---
+    public Task<List<ConditionalAccessSnapshot>> GetConditionalAccessAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("conditional-access", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetConditionalAccessAsync(tenantIds), options);
+    }
+
+    public async Task SaveConditionalAccessAsync(ConditionalAccessSnapshot snapshot)
+    {
+        await _inner.SaveConditionalAccessAsync(snapshot);
+        await InvalidateAsync(BuildKey("conditional-access", new[] { snapshot.TenantId }), BuildKey("conditional-access", null));
+    }
+
+    // --- Guest Users (cached 60 min — daily-changing data) ---
+    public Task<List<GuestUserSnapshot>> GetGuestUsersAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("guest-users", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetGuestUsersAsync(tenantIds), options);
+    }
+
+    public async Task SaveGuestUsersAsync(GuestUserSnapshot snapshot)
+    {
+        await _inner.SaveGuestUsersAsync(snapshot);
+        await InvalidateAsync(BuildKey("guest-users", new[] { snapshot.TenantId }), BuildKey("guest-users", null));
+    }
+
+    // --- Risky Users (cached 60 min — daily-changing data) ---
+    public Task<List<RiskyUserSnapshot>> GetRiskyUsersAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("risky-users", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetRiskyUsersAsync(tenantIds), options);
+    }
+
+    public async Task SaveRiskyUsersAsync(RiskyUserSnapshot snapshot)
+    {
+        await _inner.SaveRiskyUsersAsync(snapshot);
+        await InvalidateAsync(BuildKey("risky-users", new[] { snapshot.TenantId }), BuildKey("risky-users", null));
+    }
+
     // --- Tenant consent health (no caching — written during collection, read directly from DB) ---
     public Task UpdateTenantPermissionStatusAsync(string tenantId, IEnumerable<string> missingPermissions)
         => _inner.UpdateTenantPermissionStatusAsync(tenantId, missingPermissions);

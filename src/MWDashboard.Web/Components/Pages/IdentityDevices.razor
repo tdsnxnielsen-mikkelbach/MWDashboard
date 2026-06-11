@@ -1,0 +1,561 @@
+@page "/identity"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<PageTitle>Identity & Devices</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-2">Identity &amp; Devices</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Device compliance, Conditional Access coverage, guest/external accounts, and identity risk.
+    Requires <code>DeviceManagementManagedDevices.Read.All</code>, <code>Policy.Read.All</code>,
+    <code>User.Read.All</code>, and (for risk) <code>IdentityRiskyUser.Read.All</code>.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading identity &amp; device data...</MudText>
+    </div>
+}
+else if (!_hasAnyData)
+{
+    <MudAlert Severity="Severity.Info">
+        No identity or device data available for the selected tenant(s). Collect data from the Tenants page first.
+        These insights require the listed Graph permissions to be consented; risky users additionally requires Microsoft Entra ID P2.
+    </MudAlert>
+}
+else
+{
+<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+
+    @* ---------------- Device Compliance ---------------- *@
+    <MudTabPanel Text="Device Compliance" Icon="@Icons.Material.Filled.Devices">
+        @if (_devices.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No Intune-managed device data available. Requires <code>DeviceManagementManagedDevices.Read.All</code>.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Managed Devices</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_totalDevices.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">enrolled in Intune</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Compliant</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_compliancePercent.ToString("0.#")%</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_compliantDevices.ToString("N0") devices</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Non-Compliant</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_nonCompliantDevices > 0 ? Color.Error : Color.Success)">@_nonCompliantDevices.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">need remediation</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">In Grace / Error</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_graceErrorDevices > 0 ? Color.Warning : Color.Success)">@_graceErrorDevices.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">grace period or error</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Compliance Status</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_complianceBreakdown" Name="Devices"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Devices by Platform</MudText>
+                    <ApexChart TItem="LabelValue" Options="_barOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_platformBreakdown" Name="Devices"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            @if (TenantFilter.IsMultiTenantView)
+            {
+                <MudItem xs="12">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.h6" Class="mb-3">By Tenant</MudText>
+                        <MudTable Items="_devices" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                            <HeaderContent>
+                                <MudTh>Tenant</MudTh>
+                                <MudTh Style="text-align:right">Total</MudTh>
+                                <MudTh Style="text-align:right">Compliant</MudTh>
+                                <MudTh Style="text-align:right">Non-Compliant</MudTh>
+                                <MudTh Style="text-align:right">Grace</MudTh>
+                                <MudTh Style="text-align:right">Error</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd>
+                                <MudTd DataLabel="Total" Style="text-align:right">@context.TotalDevices.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Compliant" Style="text-align:right">@context.CompliantCount.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Non-Compliant" Style="text-align:right">@context.NonCompliantCount.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Grace" Style="text-align:right">@context.InGracePeriodCount.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Error" Style="text-align:right">@context.ErrorCount.ToString("N0")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Conditional Access ---------------- *@
+    <MudTabPanel Text="Conditional Access" Icon="@Icons.Material.Filled.Policy">
+        @if (_conditionalAccess.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No Conditional Access data available. Requires <code>Policy.Read.All</code>.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Policies</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_totalPolicies.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_enabledPolicies.ToString("N0") enabled</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Report-Only</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_reportOnlyPolicies.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">not yet enforced</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">MFA Enforced</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_mfaCoverage ? Color.Success : Color.Warning)">@(_mfaCoverage ? "Yes" : "Gap")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_mfaTenantCount / @_conditionalAccess.Count tenant(s)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Legacy Auth Blocked</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_legacyBlocked ? Color.Success : Color.Warning)">@(_legacyBlocked ? "Yes" : "Gap")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_legacyTenantCount / @_conditionalAccess.Count tenant(s)</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Policy States</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_policyStateBreakdown" Name="Policies"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Coverage by Tenant</MudText>
+                    <MudTable Items="_conditionalAccess" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            <MudTh>Tenant</MudTh>
+                            <MudTh Style="text-align:right">Policies</MudTh>
+                            <MudTh Style="text-align:right">Enabled</MudTh>
+                            <MudTh Style="text-align:center">MFA</MudTh>
+                            <MudTh Style="text-align:center">Legacy Blocked</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd>
+                            <MudTd DataLabel="Policies" Style="text-align:right">@context.TotalPolicies.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Enabled" Style="text-align:right">@context.EnabledPolicies.ToString("N0")</MudTd>
+                            <MudTd DataLabel="MFA" Style="text-align:center">
+                                <MudIcon Icon="@(context.RequiresMfa ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
+                                         Color="@(context.RequiresMfa ? Color.Success : Color.Warning)" Size="Size.Small" />
+                            </MudTd>
+                            <MudTd DataLabel="Legacy Blocked" Style="text-align:center">
+                                <MudIcon Icon="@(context.BlocksLegacyAuth ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
+                                         Color="@(context.BlocksLegacyAuth ? Color.Success : Color.Warning)" Size="Size.Small" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Guest Users ---------------- *@
+    <MudTabPanel Text="Guest Users" Icon="@Icons.Material.Filled.GroupAdd">
+        @if (_guests.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No guest/external user data available. Requires <code>User.Read.All</code>.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Guests</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_totalGuests.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">external accounts</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Accepted</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_acceptedGuests.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">invitation accepted</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Pending</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_pendingGuests > 0 ? Color.Warning : Color.Success)">@_pendingGuests.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">awaiting acceptance</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Added (30 days)</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_recentGuests.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">recently invited</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Invitation Status</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_guestBreakdown" Name="Guests"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            @if (TenantFilter.IsMultiTenantView)
+            {
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.h6" Class="mb-3">By Tenant</MudText>
+                        <MudTable Items="_guests" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                            <HeaderContent>
+                                <MudTh>Tenant</MudTh>
+                                <MudTh Style="text-align:right">Total</MudTh>
+                                <MudTh Style="text-align:right">Accepted</MudTh>
+                                <MudTh Style="text-align:right">Pending</MudTh>
+                                <MudTh Style="text-align:right">New (30d)</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd>
+                                <MudTd DataLabel="Total" Style="text-align:right">@context.TotalGuests.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Accepted" Style="text-align:right">@context.AcceptedGuests.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Pending" Style="text-align:right">@context.PendingAcceptanceGuests.ToString("N0")</MudTd>
+                                <MudTd DataLabel="New (30d)" Style="text-align:right">@context.RecentlyAddedGuests.ToString("N0")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Risky Users ---------------- *@
+    <MudTabPanel Text="Risky Users" Icon="@Icons.Material.Filled.GppMaybe">
+        @if (_riskyUsers.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-2">
+                No identity risk data available. Risky-user analysis uses Microsoft Entra ID <strong>Identity Protection</strong>,
+                which requires the <code>IdentityRiskyUser.Read.All</code> permission <strong>and an Entra ID P2 license</strong>
+                on the target tenant. Tenants below P2 are skipped during collection (this is a licensing limit, not a consent gap).
+            </MudAlert>
+            @if (_nonP2Tenants.Count > 0)
+            {
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Selected tenant(s) without Entra ID P2: <strong>@string.Join(", ", _nonP2Tenants)</strong>.
+                </MudAlert>
+            }
+        }
+        else
+        {
+        @if (_nonP2Tenants.Count > 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+                Risky-user data requires Entra ID P2. The following selected tenant(s) lack P2 and are excluded from these figures:
+                <strong>@string.Join(", ", _nonP2Tenants)</strong>.
+            </MudAlert>
+        }
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">At Risk</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_totalAtRisk > 0 ? Color.Error : Color.Success)">@_totalAtRisk.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">users flagged</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">High Risk</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_highRisk > 0 ? Color.Error : Color.Success)">@_highRisk.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">immediate attention</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Medium Risk</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_mediumRisk > 0 ? Color.Warning : Color.Success)">@_mediumRisk.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">review recommended</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Low Risk</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_lowRisk.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">monitor</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Risk Levels</MudText>
+                    <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_riskBreakdown" Name="Users"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            @if (TenantFilter.IsMultiTenantView)
+            {
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="2">
+                        <MudText Typo="Typo.h6" Class="mb-3">By Tenant</MudText>
+                        <MudTable Items="_riskyUsers" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                            <HeaderContent>
+                                <MudTh>Tenant</MudTh>
+                                <MudTh Style="text-align:right">At Risk</MudTh>
+                                <MudTh Style="text-align:right">High</MudTh>
+                                <MudTh Style="text-align:right">Medium</MudTh>
+                                <MudTh Style="text-align:right">Low</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd>
+                                <MudTd DataLabel="At Risk" Style="text-align:right">@context.TotalAtRisk.ToString("N0")</MudTd>
+                                <MudTd DataLabel="High" Style="text-align:right">@context.HighRisk.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Medium" Style="text-align:right">@context.MediumRisk.ToString("N0")</MudTd>
+                                <MudTd DataLabel="Low" Style="text-align:right">@context.LowRisk.ToString("N0")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+</MudTabs>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _hasAnyData;
+    private int _chartKey;
+
+    private List<DeviceComplianceSnapshot> _devices = [];
+    private List<ConditionalAccessSnapshot> _conditionalAccess = [];
+    private List<GuestUserSnapshot> _guests = [];
+    private List<RiskyUserSnapshot> _riskyUsers = [];
+
+    // Device KPIs
+    private int _totalDevices, _compliantDevices, _nonCompliantDevices, _graceErrorDevices;
+    private double _compliancePercent;
+    private List<LabelValue> _complianceBreakdown = [];
+    private List<LabelValue> _platformBreakdown = [];
+
+    // Conditional Access KPIs
+    private int _totalPolicies, _enabledPolicies, _reportOnlyPolicies;
+    private bool _mfaCoverage, _legacyBlocked;
+    private int _mfaTenantCount, _legacyTenantCount;
+    private List<LabelValue> _policyStateBreakdown = [];
+
+    // Guest KPIs
+    private int _totalGuests, _acceptedGuests, _pendingGuests, _recentGuests;
+    private List<LabelValue> _guestBreakdown = [];
+
+    // Risky user KPIs
+    private int _totalAtRisk, _highRisk, _mediumRisk, _lowRisk;
+    private List<LabelValue> _riskBreakdown = [];
+    private List<string> _nonP2Tenants = [];
+
+    private readonly ApexChartOptions<LabelValue> _donutOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private readonly ApexChartOptions<LabelValue> _barOptions = new()
+    {
+        Legend = new Legend { Show = false },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = true } },
+        DataLabels = new DataLabels { Enabled = true }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+
+        _devices = await MauDataService.GetDeviceComplianceAsync(tenantIds);
+        _conditionalAccess = await MauDataService.GetConditionalAccessAsync(tenantIds);
+        _guests = await MauDataService.GetGuestUsersAsync(tenantIds);
+        _riskyUsers = await MauDataService.GetRiskyUsersAsync(tenantIds);
+
+        // Tier info so the Risky Users tab can explain why P2-only data is missing
+        var tiers = await MauDataService.GetTenantEntraIdTiersAsync();
+        var scoped = tenantIds?.ToHashSet();
+        _nonP2Tenants = tiers
+            .Where(t => t.Tier != "P2" && (scoped == null || scoped.Contains(t.TenantId)))
+            .Select(t => TenantFilter.GetTenantName(t.TenantId))
+            .OrderBy(n => n)
+            .ToList();
+
+        _hasAnyData = _devices.Count > 0 || _conditionalAccess.Count > 0 || _guests.Count > 0 || _riskyUsers.Count > 0;
+
+        BuildDeviceMetrics();
+        BuildConditionalAccessMetrics();
+        BuildGuestMetrics();
+        BuildRiskyUserMetrics();
+
+        _chartKey++;
+        _loading = false;
+    }
+
+    private void BuildDeviceMetrics()
+    {
+        _totalDevices = _devices.Sum(d => d.TotalDevices);
+        _compliantDevices = _devices.Sum(d => d.CompliantCount);
+        _nonCompliantDevices = _devices.Sum(d => d.NonCompliantCount);
+        _graceErrorDevices = _devices.Sum(d => d.InGracePeriodCount + d.ErrorCount);
+        _compliancePercent = _totalDevices > 0 ? (double)_compliantDevices / _totalDevices * 100 : 0;
+
+        _complianceBreakdown =
+        [
+            new("Compliant", _compliantDevices),
+            new("Non-Compliant", _nonCompliantDevices),
+            new("In Grace Period", _devices.Sum(d => d.InGracePeriodCount)),
+            new("Error", _devices.Sum(d => d.ErrorCount)),
+            new("Unknown", _devices.Sum(d => d.UnknownCount))
+        ];
+        _complianceBreakdown = _complianceBreakdown.Where(x => x.Value > 0).ToList();
+
+        _platformBreakdown =
+        [
+            new("Windows", _devices.Sum(d => d.WindowsCount)),
+            new("iOS / iPadOS", _devices.Sum(d => d.IosCount)),
+            new("Android", _devices.Sum(d => d.AndroidCount)),
+            new("macOS", _devices.Sum(d => d.MacOsCount)),
+            new("Other", _devices.Sum(d => d.OtherOsCount))
+        ];
+        _platformBreakdown = _platformBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private void BuildConditionalAccessMetrics()
+    {
+        _totalPolicies = _conditionalAccess.Sum(c => c.TotalPolicies);
+        _enabledPolicies = _conditionalAccess.Sum(c => c.EnabledPolicies);
+        _reportOnlyPolicies = _conditionalAccess.Sum(c => c.ReportOnlyPolicies);
+
+        _mfaTenantCount = _conditionalAccess.Count(c => c.RequiresMfa);
+        _legacyTenantCount = _conditionalAccess.Count(c => c.BlocksLegacyAuth);
+        _mfaCoverage = _conditionalAccess.Count > 0 && _mfaTenantCount == _conditionalAccess.Count;
+        _legacyBlocked = _conditionalAccess.Count > 0 && _legacyTenantCount == _conditionalAccess.Count;
+
+        _policyStateBreakdown =
+        [
+            new("Enabled", _enabledPolicies),
+            new("Report-Only", _reportOnlyPolicies),
+            new("Disabled", _conditionalAccess.Sum(c => c.DisabledPolicies))
+        ];
+        _policyStateBreakdown = _policyStateBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private void BuildGuestMetrics()
+    {
+        _totalGuests = _guests.Sum(g => g.TotalGuests);
+        _acceptedGuests = _guests.Sum(g => g.AcceptedGuests);
+        _pendingGuests = _guests.Sum(g => g.PendingAcceptanceGuests);
+        _recentGuests = _guests.Sum(g => g.RecentlyAddedGuests);
+
+        var other = _totalGuests - _acceptedGuests - _pendingGuests;
+        _guestBreakdown =
+        [
+            new("Accepted", _acceptedGuests),
+            new("Pending", _pendingGuests),
+            new("Other", other > 0 ? other : 0)
+        ];
+        _guestBreakdown = _guestBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private void BuildRiskyUserMetrics()
+    {
+        _totalAtRisk = _riskyUsers.Sum(r => r.TotalAtRisk);
+        _highRisk = _riskyUsers.Sum(r => r.HighRisk);
+        _mediumRisk = _riskyUsers.Sum(r => r.MediumRisk);
+        _lowRisk = _riskyUsers.Sum(r => r.LowRisk);
+
+        _riskBreakdown =
+        [
+            new("High", _highRisk),
+            new("Medium", _mediumRisk),
+            new("Low", _lowRisk)
+        ];
+        _riskBreakdown = _riskBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    private record LabelValue(string Label, int Value);
+}

@@ -157,6 +157,46 @@ public class OnDemandDataCollectionService : IDataCollectionService
             i.TenantName = tenantName;
         await _dataService.SaveServiceHealthIssuesAsync(healthIssues);
 
+        // Intune device compliance (all tiers)
+        var deviceCompliance = await _graphService.GetDeviceComplianceAsync(tenantId);
+        if (deviceCompliance != null)
+        {
+            deviceCompliance.TenantName = tenantName;
+            await _dataService.SaveDeviceComplianceAsync(deviceCompliance);
+        }
+
+        // Conditional Access coverage (all tiers)
+        var conditionalAccess = await _graphService.GetConditionalAccessAsync(tenantId);
+        if (conditionalAccess != null)
+        {
+            conditionalAccess.TenantName = tenantName;
+            await _dataService.SaveConditionalAccessAsync(conditionalAccess);
+        }
+
+        // Guest / external users (all tiers — uses User.Read.All)
+        var guests = await _graphService.GetGuestUsersAsync(tenantId);
+        if (guests != null)
+        {
+            guests.TenantName = tenantName;
+            await _dataService.SaveGuestUsersAsync(guests);
+        }
+
+        // Risky users (Identity Protection — Entra ID P2 only)
+        if (entraTier.Tier == "P2")
+        {
+            var risky = await _graphService.GetRiskyUsersAsync(tenantId);
+            if (risky != null)
+            {
+                risky.TenantName = tenantName;
+                await _dataService.SaveRiskyUsersAsync(risky);
+            }
+        }
+        else
+        {
+            _logger.LogInformation("Skipping risky-user analysis for tenant {TenantName}: Identity Protection requires Microsoft Entra ID P2 (tenant tier: {Tier}).",
+                tenantName, entraTier.Tier);
+        }
+
         // Compute and save consumption score
         await ComputeConsumptionScoreAsync(tenantId, tenantName, storage, activities, segments, licenses);
 

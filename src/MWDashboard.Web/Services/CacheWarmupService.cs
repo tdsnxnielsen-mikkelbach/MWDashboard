@@ -46,6 +46,10 @@ public class CacheWarmupService : BackgroundService
             await dataService.GetInactiveAccountsAsync(null);
             await dataService.GetServiceHealthAsync(null);
             await dataService.GetServiceHealthIssuesAsync(null);
+            await dataService.GetDeviceComplianceAsync(null);
+            await dataService.GetConditionalAccessAsync(null);
+            await dataService.GetGuestUsersAsync(null);
+            await dataService.GetRiskyUsersAsync(null);
 
             _logger.LogInformation("Cache warm-up completed successfully");
         }

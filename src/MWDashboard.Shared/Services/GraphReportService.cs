@@ -23,6 +23,10 @@ public interface IGraphReportService
     Task<MfaRegistrationSnapshot?> GetMfaRegistrationAsync(string tenantId);
     Task<InactiveAccountSnapshot?> GetInactiveAccountsAsync(string tenantId);
     Task<(List<ServiceHealthSnapshot> Services, List<ServiceHealthIssueSnapshot> Issues)> GetServiceHealthAsync(string tenantId);
+    Task<DeviceComplianceSnapshot?> GetDeviceComplianceAsync(string tenantId);
+    Task<ConditionalAccessSnapshot?> GetConditionalAccessAsync(string tenantId);
+    Task<GuestUserSnapshot?> GetGuestUsersAsync(string tenantId);
+    Task<RiskyUserSnapshot?> GetRiskyUsersAsync(string tenantId);
     Task<List<string>> CheckMissingPermissionsAsync(string tenantId);
 }
 
@@ -1291,6 +1295,258 @@ public class GraphReportService : IGraphReportService
         return (services, issues);
     }
 
+    // Intune device compliance — tenant-level point-in-time counts of managed devices by
+    // compliance state and operating system. Requires DeviceManagementManagedDevices.Read.All.
+    public async Task<DeviceComplianceSnapshot?> GetDeviceComplianceAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+
+        try
+        {
+            var page = await client.DeviceManagement.ManagedDevices.GetAsync(c =>
+            {
+                c.QueryParameters.Select = ["id", "complianceState", "operatingSystem"];
+                c.QueryParameters.Top = 999;
+            });
+
+            if (page?.Value == null) return null;
+
+            var snapshot = new DeviceComplianceSnapshot
+            {
+                TenantId = tenantId,
+                ReportDate = DateTime.UtcNow.Date,
+                CollectedAt = DateTime.UtcNow
+            };
+
+            void Accumulate(Microsoft.Graph.Models.ManagedDevice d)
+            {
+                snapshot.TotalDevices++;
+
+                switch (d.ComplianceState)
+                {
+                    case Microsoft.Graph.Models.ComplianceState.Compliant:
+                        snapshot.CompliantCount++; break;
+                    case Microsoft.Graph.Models.ComplianceState.Noncompliant:
+                        snapshot.NonCompliantCount++; break;
+                    case Microsoft.Graph.Models.ComplianceState.InGracePeriod:
+                        snapshot.InGracePeriodCount++; break;
+                    case Microsoft.Graph.Models.ComplianceState.Error:
+                        snapshot.ErrorCount++; break;
+                    default:
+                        snapshot.UnknownCount++; break;
+                }
+
+                var os = (d.OperatingSystem ?? string.Empty).ToLowerInvariant();
+                if (os.Contains("windows")) snapshot.WindowsCount++;
+                else if (os.Contains("ios") || os.Contains("ipados")) snapshot.IosCount++;
+                else if (os.Contains("android")) snapshot.AndroidCount++;
+                else if (os.Contains("mac")) snapshot.MacOsCount++;
+                else snapshot.OtherOsCount++;
+            }
+
+            var iterator = Microsoft.Graph.PageIterator<Microsoft.Graph.Models.ManagedDevice, Microsoft.Graph.Models.ManagedDeviceCollectionResponse>
+                .CreatePageIterator(client, page, d => { Accumulate(d); return true; });
+            await iterator.IterateAsync();
+
+            return snapshot;
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            _logger.LogWarning("Device compliance unavailable for tenant {TenantId}: insufficient permissions. " +
+                "Requires DeviceManagementManagedDevices.Read.All.", tenantId);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get device compliance for tenant {TenantId}", tenantId);
+            return null;
+        }
+    }
+
+    // Conditional Access coverage — counts policies by state and detects whether key
+    // protections (legacy-auth block, MFA grant) exist in any enabled policy.
+    // Requires Policy.Read.All.
+    public async Task<ConditionalAccessSnapshot?> GetConditionalAccessAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+
+        try
+        {
+            var page = await client.Identity.ConditionalAccess.Policies.GetAsync();
+            if (page?.Value == null) return null;
+
+            var snapshot = new ConditionalAccessSnapshot
+            {
+                TenantId = tenantId,
+                ReportDate = DateTime.UtcNow.Date,
+                CollectedAt = DateTime.UtcNow
+            };
+
+            foreach (var p in page.Value)
+            {
+                snapshot.TotalPolicies++;
+                var enabled = p.State == Microsoft.Graph.Models.ConditionalAccessPolicyState.Enabled;
+                switch (p.State)
+                {
+                    case Microsoft.Graph.Models.ConditionalAccessPolicyState.Enabled:
+                        snapshot.EnabledPolicies++; break;
+                    case Microsoft.Graph.Models.ConditionalAccessPolicyState.EnabledForReportingButNotEnforced:
+                        snapshot.ReportOnlyPolicies++; break;
+                    default:
+                        snapshot.DisabledPolicies++; break;
+                }
+
+                if (!enabled) continue;
+
+                // MFA grant control present?
+                var controls = p.GrantControls?.BuiltInControls;
+                if (controls != null && controls.Contains(Microsoft.Graph.Models.ConditionalAccessGrantControl.Mfa))
+                    snapshot.RequiresMfa = true;
+
+                // Legacy-auth block: a block policy targeting the legacy client app types
+                var clientApps = p.Conditions?.ClientAppTypes;
+                var targetsLegacy = clientApps != null && (
+                    clientApps.Contains(Microsoft.Graph.Models.ConditionalAccessClientApp.ExchangeActiveSync) ||
+                    clientApps.Contains(Microsoft.Graph.Models.ConditionalAccessClientApp.Other));
+                var blocks = controls != null && controls.Contains(Microsoft.Graph.Models.ConditionalAccessGrantControl.Block);
+                if (targetsLegacy && blocks)
+                    snapshot.BlocksLegacyAuth = true;
+            }
+
+            return snapshot;
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            _logger.LogWarning("Conditional Access data unavailable for tenant {TenantId}: insufficient permissions. " +
+                "Requires Policy.Read.All.", tenantId);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get Conditional Access policies for tenant {TenantId}", tenantId);
+            return null;
+        }
+    }
+
+    // Guest / external users — tenant-level governance counts. Uses User.Read.All (already
+    // granted) and avoids signInActivity so it works on all license tiers.
+    public async Task<GuestUserSnapshot?> GetGuestUsersAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+
+        try
+        {
+            var page = await client.Users.GetAsync(c =>
+            {
+                c.QueryParameters.Filter = "userType eq 'Guest'";
+                c.QueryParameters.Select = ["id", "externalUserState", "createdDateTime"];
+                c.QueryParameters.Top = 999;
+            });
+
+            if (page?.Value == null) return null;
+
+            var snapshot = new GuestUserSnapshot
+            {
+                TenantId = tenantId,
+                ReportDate = DateTime.UtcNow.Date,
+                CollectedAt = DateTime.UtcNow
+            };
+
+            var recentCutoff = DateTimeOffset.UtcNow.AddDays(-30);
+
+            void Accumulate(Microsoft.Graph.Models.User u)
+            {
+                snapshot.TotalGuests++;
+
+                if (string.Equals(u.ExternalUserState, "PendingAcceptance", StringComparison.OrdinalIgnoreCase))
+                    snapshot.PendingAcceptanceGuests++;
+                else if (string.Equals(u.ExternalUserState, "Accepted", StringComparison.OrdinalIgnoreCase))
+                    snapshot.AcceptedGuests++;
+
+                if (u.CreatedDateTime != null && u.CreatedDateTime >= recentCutoff)
+                    snapshot.RecentlyAddedGuests++;
+            }
+
+            var iterator = Microsoft.Graph.PageIterator<Microsoft.Graph.Models.User, Microsoft.Graph.Models.UserCollectionResponse>
+                .CreatePageIterator(client, page, u => { Accumulate(u); return true; });
+            await iterator.IterateAsync();
+
+            return snapshot;
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            _logger.LogWarning("Guest user data unavailable for tenant {TenantId}: insufficient permissions. " +
+                "Requires User.Read.All.", tenantId);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get guest users for tenant {TenantId}", tenantId);
+            return null;
+        }
+    }
+
+    // Risky users (Identity Protection) — counts at-risk users by risk level.
+    // Requires IdentityRiskyUser.Read.All AND Entra ID P2 on the target tenant.
+    public async Task<RiskyUserSnapshot?> GetRiskyUsersAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+
+        try
+        {
+            var page = await client.IdentityProtection.RiskyUsers.GetAsync(c =>
+            {
+                c.QueryParameters.Select = ["id", "riskLevel", "riskState"];
+                c.QueryParameters.Top = 999;
+            });
+
+            if (page?.Value == null) return null;
+
+            var snapshot = new RiskyUserSnapshot
+            {
+                TenantId = tenantId,
+                ReportDate = DateTime.UtcNow.Date,
+                CollectedAt = DateTime.UtcNow
+            };
+
+            void Accumulate(Microsoft.Graph.Models.RiskyUser r)
+            {
+                // Only count users still considered a risk
+                var atRisk = r.RiskState == Microsoft.Graph.Models.RiskState.AtRisk
+                    || r.RiskState == Microsoft.Graph.Models.RiskState.ConfirmedCompromised;
+                if (!atRisk) return;
+
+                snapshot.TotalAtRisk++;
+                switch (r.RiskLevel)
+                {
+                    case Microsoft.Graph.Models.RiskLevel.High:
+                        snapshot.HighRisk++; break;
+                    case Microsoft.Graph.Models.RiskLevel.Medium:
+                        snapshot.MediumRisk++; break;
+                    case Microsoft.Graph.Models.RiskLevel.Low:
+                        snapshot.LowRisk++; break;
+                }
+            }
+
+            var iterator = Microsoft.Graph.PageIterator<Microsoft.Graph.Models.RiskyUser, Microsoft.Graph.Models.RiskyUserCollectionResponse>
+                .CreatePageIterator(client, page, r => { Accumulate(r); return true; });
+            await iterator.IterateAsync();
+
+            return snapshot;
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            _logger.LogWarning("Risky user data unavailable for tenant {TenantId}: insufficient permissions or license. " +
+                "Requires IdentityRiskyUser.Read.All + Entra ID P2.", tenantId);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get risky users for tenant {TenantId}", tenantId);
+            return null;
+        }
+    }
+
     // Consent health — probes each required Graph application permission with a minimal call.
     // Returns the display names of permissions that are NOT consented in the target tenant
     // (i.e. the tenant admin needs to re-consent). An empty list means all permissions are present.
@@ -1313,10 +1569,16 @@ public class GraphReportService : IGraphReportService
             () => client.Security.SecureScores.GetAsync(c => c.QueryParameters.Top = 1));
         await ProbePermissionAsync(missing, "ServiceHealth.Read.All",
             () => client.Admin.ServiceAnnouncement.HealthOverviews.GetAsync());
+        await ProbePermissionAsync(missing, "DeviceManagementManagedDevices.Read.All",
+            () => client.DeviceManagement.ManagedDevices.GetAsync(c => c.QueryParameters.Top = 1));
+        await ProbePermissionAsync(missing, "Policy.Read.All",
+            () => client.Identity.ConditionalAccess.Policies.GetAsync(c => c.QueryParameters.Top = 1));
+        // IdentityRiskyUser.Read.All is intentionally NOT probed here: it is Entra ID P2-gated,
+        // so a 403 on a non-P2 tenant is a licensing limit, not a consent gap, and would produce
+        // a false "re-consent" flag. The risky-user collection logs that case on its own.
 
         return missing;
     }
-
     private async Task ProbePermissionAsync(List<string> missing, string permission, Func<Task> probe)
     {
         try

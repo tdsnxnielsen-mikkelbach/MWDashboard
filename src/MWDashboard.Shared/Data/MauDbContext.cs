@@ -25,6 +25,10 @@ public class MauDbContext : DbContext
     public DbSet<InactiveAccountSnapshot> InactiveAccountSnapshots => Set<InactiveAccountSnapshot>();
     public DbSet<ServiceHealthSnapshot> ServiceHealthSnapshots => Set<ServiceHealthSnapshot>();
     public DbSet<ServiceHealthIssueSnapshot> ServiceHealthIssueSnapshots => Set<ServiceHealthIssueSnapshot>();
+    public DbSet<DeviceComplianceSnapshot> DeviceComplianceSnapshots => Set<DeviceComplianceSnapshot>();
+    public DbSet<ConditionalAccessSnapshot> ConditionalAccessSnapshots => Set<ConditionalAccessSnapshot>();
+    public DbSet<GuestUserSnapshot> GuestUserSnapshots => Set<GuestUserSnapshot>();
+    public DbSet<RiskyUserSnapshot> RiskyUserSnapshots => Set<RiskyUserSnapshot>();
     public DbSet<BrandingSettings> BrandingSettings => Set<BrandingSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -179,6 +183,34 @@ public class MauDbContext : DbContext
             entity.Property(e => e.Classification).HasMaxLength(100);
             entity.Property(e => e.Status).HasMaxLength(100);
             entity.Property(e => e.Feature).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<DeviceComplianceSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<ConditionalAccessSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<GuestUserSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<RiskyUserSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
         });
 
         modelBuilder.Entity<BrandingSettings>(entity =>

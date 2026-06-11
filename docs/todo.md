@@ -80,18 +80,19 @@
 
 ### Tier 2 — Endpoint & identity governance
 
-- [ ] **Intune device compliance** — compliant vs. non-compliant devices, OS/encryption breakdown, unmanaged devices
-  - Endpoints: `GET /deviceManagement/managedDevices`, `GET /deviceManagement/deviceCompliancePolicyDeviceStateSummary`
-  - Permission: `DeviceManagementManagedDevices.Read.All` (new)
-- [ ] **Conditional Access coverage** — count of CA policies + gaps (e.g. legacy auth not blocked)
+- [x] **Intune device compliance** — compliant vs. non-compliant devices, OS breakdown, grace/error states
+  - Endpoints: `GET /deviceManagement/managedDevices`
+  - Permission: `DeviceManagementManagedDevices.Read.All` (new — requires re-consent)
+- [x] **Conditional Access coverage** — count of CA policies + gaps (legacy-auth block, MFA grant detection)
   - Endpoint: `GET /identity/conditionalAccess/policies`
-  - Permission: `Policy.Read.All` (new)
-- [ ] **Guest / external users** — guest sprawl + stale guest accounts (governance/data-exfil risk)
+  - Permission: `Policy.Read.All` (new — requires re-consent)
+- [x] **Guest / external users** — guest sprawl, accepted vs. pending, recently-added (30 days)
   - Endpoint: `GET /users?$filter=userType eq 'Guest'`
   - Permission: `User.Read.All` (already granted)
-- [ ] **Risky users (Identity Protection)** — compromised/at-risk accounts; gate behind P2 like existing Security page logic
-  - Endpoints: `GET /identityProtection/riskyUsers`, `GET /identityProtection/riskDetections`
+- [x] **Risky users (Identity Protection)** — at-risk accounts by risk level; gated behind Entra ID P2
+  - Endpoints: `GET /identityProtection/riskyUsers`
   - Permission: `IdentityRiskyUser.Read.All` (new, **Entra ID P2 only**)
+  - Surfaced on the **Identity & Devices** page (`/identity`) with tabs for all four features
 
 ### Tier 3 — Deeper usage/adoption detail (no new consent — uses existing `Reports.Read.All`)
 

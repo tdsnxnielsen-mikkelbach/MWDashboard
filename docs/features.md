@@ -141,6 +141,17 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Tenant-scoped** — customer-tenant users see only their own tenant's service health
 - Data source: Microsoft Graph `GET /admin/serviceAnnouncement/healthOverviews` (per-service status) + `GET /admin/serviceAnnouncement/issues` (active issues); requires `ServiceHealth.Read.All`
 
+## Identity & Devices (`/identity`)
+
+A single page with four tabs covering endpoint and identity governance. Each tab degrades gracefully with an info alert when its data/permission is unavailable, shows KPI cards plus charts, and adds a per-tenant comparison table in multi-tenant view.
+
+- **Device Compliance** — Intune-managed device posture: managed device count, compliant %, non-compliant count, in-grace/error count; compliance-status donut and devices-by-platform bar chart. Data source: `GET /deviceManagement/managedDevices`; requires `DeviceManagementManagedDevices.Read.All` (available on all tiers)
+- **Conditional Access** — policy inventory and coverage gaps: total/enabled/report-only policy counts, MFA-enforced indicator, legacy-auth-blocked indicator (aggregated across tenants); policy-state donut and per-tenant coverage table with MFA/legacy-block icons. Data source: `GET /identity/conditionalAccess/policies`; requires `Policy.Read.All` (all tiers)
+- **Guest Users** — external-collaboration governance: total guests, accepted vs. pending-acceptance, recently-added (last 30 days); invitation-status donut. Data source: `GET /users?$filter=userType eq 'Guest'`; reuses the already-granted `User.Read.All` (all tiers)
+- **Risky Users** — Identity Protection risk: at-risk users by High/Medium/Low risk level; risk-level donut. Data source: `GET /identityProtection/riskyUsers`; requires `IdentityRiskyUser.Read.All` **and Entra ID P2** — tenants below P2 are skipped during collection (logged at Information)
+- **Tenant-scoped** — customer-tenant users see only their own tenant's data
+- Data models: `DeviceComplianceSnapshot`, `ConditionalAccessSnapshot`, `GuestUserSnapshot`, `RiskyUserSnapshot` (one row per tenant per day)
+
 ## Branding & Appearance (`/settings`)
 
 - **Home-tenant only** — page restricted to home-tenant users (same guard pattern as Tenants page)

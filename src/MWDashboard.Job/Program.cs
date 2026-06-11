@@ -193,6 +193,46 @@ try
                 i.TenantName = tenant.TenantName;
             await dataService.SaveServiceHealthIssuesAsync(healthIssues);
 
+            // Intune device compliance (all tiers)
+            var deviceCompliance = await graphService.GetDeviceComplianceAsync(tenant.TenantId);
+            if (deviceCompliance != null)
+            {
+                deviceCompliance.TenantName = tenant.TenantName;
+                await dataService.SaveDeviceComplianceAsync(deviceCompliance);
+            }
+
+            // Conditional Access coverage (all tiers)
+            var conditionalAccess = await graphService.GetConditionalAccessAsync(tenant.TenantId);
+            if (conditionalAccess != null)
+            {
+                conditionalAccess.TenantName = tenant.TenantName;
+                await dataService.SaveConditionalAccessAsync(conditionalAccess);
+            }
+
+            // Guest / external users (all tiers — uses User.Read.All)
+            var guests = await graphService.GetGuestUsersAsync(tenant.TenantId);
+            if (guests != null)
+            {
+                guests.TenantName = tenant.TenantName;
+                await dataService.SaveGuestUsersAsync(guests);
+            }
+
+            // Risky users (Identity Protection — Entra ID P2 only)
+            if (entraTier.Tier == "P2")
+            {
+                var risky = await graphService.GetRiskyUsersAsync(tenant.TenantId);
+                if (risky != null)
+                {
+                    risky.TenantName = tenant.TenantName;
+                    await dataService.SaveRiskyUsersAsync(risky);
+                }
+            }
+            else
+            {
+                logger.LogInformation("Skipping risky-user analysis for tenant {TenantName}: Identity Protection requires Microsoft Entra ID P2 (tenant tier: {Tier}).",
+                    tenant.TenantName, entraTier.Tier);
+            }
+
             // Compute consumption score
             {
                 var totalLicenses = licenses.Sum(l => l.TotalLicenses);
