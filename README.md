@@ -94,4 +94,4 @@ azd up
 
 ## License
 
-Proprietary — internal use only.
+Licensed under the [MIT License](LICENSE). Copyright (c) 2026 TD Synnex.
