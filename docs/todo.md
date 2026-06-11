@@ -36,6 +36,69 @@
 
 ---
 
+## Unlicensed Copilot Chat Usage via Office 365 Management Activity API
+
+**Priority**: Medium
+**Status**: Not started
+**Context**: The Microsoft Graph Copilot usage reports API (`getMicrosoft365CopilotUsageUserDetail`) **only returns data for users holding a Microsoft 365 Copilot license**. Free, unlicensed **Copilot Chat** usage (e.g. on Business Standard tenants without the Copilot add-on) is *not* exposed by Graph. The only programmatic source is the **Office 365 Management Activity API** (raw `CopilotInteraction` audit events) or Microsoft Purview audit logs (`Search-UnifiedAuditLog`). This is the only data source in the app that isn't a stateless Graph read, so it warrants its own topic.
+
+### Why it's a separate, larger project
+Unlike every existing feature, this is **not** a new Graph endpoint slotted into `GraphReportService`. It's a different API surface, a different auth audience, a new consent scope, a **stateful subscription lifecycle**, and a per-event aggregation pipeline with a hard data-retention window.
+
+| | Today (Graph reports) | Management Activity API |
+|---|---|---|
+| Endpoint | `graph.microsoft.com` | `manage.office.com/api/v1.0/{tenantId}/activity/feed` |
+| Data shape | Pre-aggregated CSV (full dataset each pull) | Raw, per-event audit blobs you aggregate yourself |
+| Model | Stateless GET | **Stateful subscription** + incremental content-blob retrieval |
+| Permission | `Reports.Read.All` (Graph) | `ActivityFeed.Read` (**Office 365 Management APIs** resource) |
+| Latency | Current as of report-refresh date | Up to **12 h** before first blobs appear; events out of order |
+| Retention | N/A | Content blobs expire after **7 days** — miss the window = data lost |
+
+### What the data looks like
+Copilot Chat interactions land in `Audit.General` content blobs as records with:
+- `Operation: "CopilotInteraction"`, `Workload: "Copilot"`, `RecordType: "CopilotInteraction"`
+- `AppHost` identifies the surface — the **free Copilot Chat** values are `BizChat`, `Bing`, `Edge`, `Office`, `M365App`, `OfficeCopilotSearchAnswer` (all map to "Microsoft 365 Copilot Chat")
+- `AppIdentity` e.g. `Copilot.MicrosoftCopilot.BizChat`
+- `UserId`, `CreationTime` — aggregate into active-user / interaction counts
+- The audit record does **not** state whether the user is licensed; cross-reference `UserId` against assigned Copilot SKUs (already collected in `LicenseSnapshot`) to split licensed vs. unlicensed.
+
+### Prerequisites (customer-side, per tenant)
+- **Unified audit logging must be ON** (default-on for new tenants, but not guaranteed).
+- **New admin-consented permission**: `ActivityFeed.Read` on the *Office 365 Management APIs* resource → requires **re-consent by every tenant**.
+- Audit (Standard) covers Microsoft Copilot for free; only *non-Microsoft* AI apps are pay-as-you-go, so Copilot Chat itself adds no billing.
+
+### Implementation Plan
+1. **Auth / consent**
+   - [ ] Add `ActivityFeed.Read` (Office 365 Management APIs) to the app registration.
+   - [ ] Add the scope to `GraphPermissions`, the consent-URL builder, and `CheckMissingPermissionsAsync` (with appropriate handling — it's a different resource audience).
+   - [ ] Document in `docs/permissions.md`.
+2. **New client + subscription lifecycle** (the genuinely new part)
+   - [ ] `ManagementActivityClient` — raw `HttpClient` + `ClientSecretCredential` for the `manage.office.com` audience.
+   - [ ] On first run per tenant: `POST /subscriptions/start?contentType=Audit.General`; handle "already started", the 15-min start throttle, and AF* error codes.
+   - [ ] Polling (preferred over webhooks): `GET /subscriptions/content` over rolling ≤24 h windows, follow `NextPageUri` pagination, then `GET` each `contentUri` blob.
+   - [ ] Persist a **cursor** (last processed `contentCreated` per tenant) so only new blobs are pulled and the 7-day retention window is never exceeded — new state (small table or column on `TenantInfo`).
+3. **Parsing + aggregation**
+   - [ ] Deserialize blobs; filter to `Workload == "Copilot"` + the BizChat `AppHost` set; dedupe by `UserId`/day; optionally split licensed vs. unlicensed against existing Copilot SKUs.
+4. **New model + migration** (follow the `new-model` skill)
+   - [ ] `CopilotChatUsageSnapshot` (`TenantId`, `TenantName`, `ReportDate`, surface/`AppHost`, `ActiveUsers`, `InteractionCount`, `UnlicensedUsers`, `CollectedAt`) with composite unique index `(TenantId, AppHost, ReportDate)`.
+   - [ ] Add DbSet (#31), save/upsert + query methods, cache integration + invalidation.
+5. **Collection wiring**
+   - [ ] Add the pull to `OnDemandDataCollectionService` (Collector + fallback) **and** the scheduled `Job`.
+   - [ ] Note: the daily Job cron keeps the cursor advancing within the 7-day window, but means up-to-12h+24h staleness (acceptable).
+6. **UI** — Copilot page (`/copilot`)
+   - [ ] Add a "Copilot Chat (unlicensed)" KPI / trend; remove the empty-state caveat once data flows.
+   - [ ] Guard empty ApexChart series as usual.
+7. **Resilience**
+   - [ ] Handle AF20022 (no subscription), AF429 throttling with backoff, the per-tenant quota model, and out-of-order events.
+
+### Risks
+- **7-day retention**: a stalled collector loses that data permanently.
+- **12h+ initial latency** after subscription start.
+- **Throttling at scale** across many tenants (2,000 req/min baseline per tenant).
+- **Audit logging may be disabled** on a tenant — needs detection + a clear UI message.
+
+---
+
 ## Other Future Items
 
 - [x] Redis caching for consumption/storage queries (TTL 15 min) — `CachedMauDataService` decorator wraps `MauDataService`
@@ -55,7 +118,7 @@
 - [ ] Consumption score threshold alerts (email/Teams notification when score drops)
 - [x] Historical comparison: month-over-month score change indicators — delta chips on all KPI cards
 - [ ] Per-department consumption scoring (combine department usage + segmentation)
-- [ ] **Unlicensed Copilot Chat usage via Office 365 Management Activity API** — the Microsoft Graph Copilot usage reports API only returns data for users holding a Microsoft 365 Copilot license; free Copilot Chat usage by unlicensed users (e.g. Business Standard tenants) is not exposed by Graph. Capturing it requires the Office 365 Management Activity API (subscription/feed model, separate `ActivityFeed.Read` permission and per-event audit-log parsing) or Microsoft Purview audit logs (`Search-UnifiedAuditLog`). This is a larger project scoped separately.
+- [ ] **Unlicensed Copilot Chat usage** — see the dedicated [Unlicensed Copilot Chat Usage via Office 365 Management Activity API](#unlicensed-copilot-chat-usage-via-office-365-management-activity-api) topic below.
 
 ---
 
