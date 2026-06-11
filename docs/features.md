@@ -10,7 +10,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Immediate access control** — deactivating or removing a tenant immediately blocks login for users from that tenant; adding/activating allows login
 - **Access denied page** — rejected tenants see a styled "Access Denied" page (`/access-denied`) with user-friendly message ("Your organization is not authorized...") and "Sign Out & Try Another Account" link; internal OIDC errors are never exposed to users
 - **Data isolation** — customer-tenant users can only view data from their own tenant; queries always filter by scoped tenant ID (never fetches all data)
-- **Page-level restrictions** — Tenants management page (`/tenants`) is only accessible to home-tenant users; nav link hidden for customer-tenant users
+- **Page-level restrictions** — Tenants management (`/tenants`) and Settings (`/settings`) pages are only accessible to home-tenant users; nav links are hidden for customer-tenant users, and direct URL access silently redirects them to the dashboard (the restricted pages are never revealed)
 - **AppBar user controls** — user icon (tooltip shows name) + sign-out button visible when authenticated
 - **Login redirect** — unauthenticated users are automatically redirected to Azure AD sign-in (HTTP-level enforcement before Blazor renders)
 - **Container Apps TLS** — forwarded headers middleware trusts proxy `X-Forwarded-Proto` to ensure `https://` redirect URIs
@@ -32,7 +32,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Active Users by Service** — shows per-service active users vs **service-relevant** license seats (only counts SKUs that include that service, not all tenant licenses). Uses dynamic `IncludedServices` field auto-detected from Graph API service plans, with static `ServiceSkuMap` fallback for older data
 - 12-month MAU trend line chart (per-tenant series in multi-tenant view)
 - Per-service bar chart comparison (grouped by tenant when multi-tenant)
-- License utilization table (with Tenant column in multi-tenant view)
+- License utilization table (with Tenant column in multi-tenant view) — Usage column shows a progress bar alongside the utilization percentage
 
 ## Services (`/services`)
 
@@ -59,6 +59,14 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Activity summary table** — searchable, sortable by total count and daily average across all workloads
 - Multi-tenant support — Tenant column visible when multiple tenants are selected; charts show tenant-level breakdown
 - Data source: Graph Reports API (`getTeamsUserActivityCounts`, `getSharePointActivityUserCounts`, `getOneDriveActivityUserCounts`, `getEmailActivityCounts`)
+
+## M365 App Usage (`/m365apps`)
+
+- **Users by Application** — bar chart of active user counts per app (Outlook, Word, Excel, PowerPoint, OneNote, Teams)
+- **Users by Platform** — donut chart of active users by platform (Windows, Mac, Mobile, Web)
+- **App usage details table** — searchable/sortable per-app user counts with report date; Tenant column in multi-tenant view
+- **All apps always shown** — every app column present in the report is recorded even when its count is 0 or blank, so apps with no recent activity (e.g. PowerPoint) still appear with a 0 value rather than silently disappearing
+- Data source: Graph Reports API (`getM365AppUserCounts` with D30 period); usage data lags ~2–3 days and depends on tenant telemetry/diagnostic-data settings
 
 ## Copilot Adoption (`/copilot`)
 

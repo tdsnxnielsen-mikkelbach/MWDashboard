@@ -228,7 +228,7 @@ MWDashboard/
 │   │   │       ├── Departments.razor      # Department-level adoption
 │   │   │       ├── Security.razor         # Security sign-in monitoring
 │   │   │       ├── Settings.razor         # Branding & whitelabeling (home tenant only)
-│   │   │       └── Tenants.razor          # Tenant management
+│   │   │       └── Tenants.razor          # Tenant management (home tenant only)
 │   │   └── wwwroot/                       # Static assets
 │   ├── MWDashboard.Consent/              # Consent callback → Container App
 │   │   └── Program.cs                     # Minimal API: validates HMAC, calls Graph, upserts tenant
@@ -259,6 +259,7 @@ flowchart TD
 - **Protocol**: OpenID Connect via `Microsoft.Identity.Web` (multi-tenant, `TenantId: "common"`)
 - **Tenant validation**: Home tenant ID (from `AzureAd:TenantId` config) always allowed; other tenants must be registered and active in the database (via consent flow)
 - **Data isolation**: `TenantFilterService.SetTenantScope()` restricts all data queries to the user's own tenant for customer-tenant users
+- **Page-level restrictions**: Settings (`/settings`) and Tenants (`/tenants`) pages are home-tenant only \u2014 nav links hidden for customer-tenant users and direct URL access silently redirects to the dashboard
 - **Secret reuse**: Single `ClientSecret` shared between Graph API client credentials and OpenID Connect user auth
 ## Key Constraints
 

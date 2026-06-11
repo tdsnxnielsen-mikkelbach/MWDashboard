@@ -67,6 +67,7 @@ In addition to the consent redirect URI (Static Web App), register the dashboard
 1. Home tenant (`AzureAd:TenantId`) — always allowed, sees all data
 2. Customer tenants — must be registered and active in the database (via consent flow); data scoped to own tenant only
 3. Unregistered/deactivated tenants — sign-in rejected, redirected to `/access-denied` page with error message and sign-out link
+4. Home-tenant-only pages — Settings (`/settings`) and Tenants (`/tenants`) are hidden from customer-tenant users; direct URL access silently redirects them to the dashboard
 
 ## Consent Troubleshooting
 

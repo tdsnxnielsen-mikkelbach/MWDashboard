@@ -10,7 +10,7 @@
 
 @if (!TenantFilter.IsHomeTenantUser)
 {
-    <MudAlert Severity="Severity.Error">You do not have permission to access this page.</MudAlert>
+    NavigationManager.NavigateTo("/", replace: true);
     return;
 }
 

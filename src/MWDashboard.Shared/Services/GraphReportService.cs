@@ -939,7 +939,9 @@ public class GraphReportService : IGraphReportService
             foreach (var (app, colIndex) in appColumns)
             {
                 if (colIndex < 0 || colIndex >= values.Length) continue;
-                if (!int.TryParse(values[colIndex].Trim(), out var count) || count == 0) continue;
+                // Keep the app even when the count is 0/blank so every app (e.g. PowerPoint)
+                // always appears on the M365 Apps page rather than silently disappearing.
+                int.TryParse(values[colIndex].Trim(), out var count);
 
                 snapshots.Add(new M365AppUsageSnapshot
                 {
