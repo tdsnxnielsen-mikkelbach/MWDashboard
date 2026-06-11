@@ -23,6 +23,7 @@ public interface IGraphReportService
     Task<MfaRegistrationSnapshot?> GetMfaRegistrationAsync(string tenantId);
     Task<InactiveAccountSnapshot?> GetInactiveAccountsAsync(string tenantId);
     Task<(List<ServiceHealthSnapshot> Services, List<ServiceHealthIssueSnapshot> Issues)> GetServiceHealthAsync(string tenantId);
+    Task<List<string>> CheckMissingPermissionsAsync(string tenantId);
 }
 
 public class GraphReportService : IGraphReportService
@@ -1176,8 +1177,21 @@ public class GraphReportService : IGraphReportService
         }
         catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
         {
-            _logger.LogWarning("Inactive account data unavailable for tenant {TenantId}: insufficient permissions. " +
-                "Requires AuditLog.Read.All + User.Read.All.", tenantId);
+            // The signInActivity property is gated behind a Microsoft Entra ID P1/P2 license.
+            // A tenant on the free tier returns 403 even when AuditLog.Read.All + User.Read.All
+            // are fully consented, so distinguish that case from a genuine consent gap.
+            var detail = $"{odataEx.Error?.Code} {odataEx.Error?.Message} {odataEx.Message}";
+            if (IsPremiumLicenseError(detail))
+            {
+                _logger.LogWarning("Inactive account data unavailable for tenant {TenantId}: reading signInActivity " +
+                    "requires a Microsoft Entra ID P1/P2 license (permissions are consented). Detail: {Detail}",
+                    tenantId, detail.Trim());
+            }
+            else
+            {
+                _logger.LogWarning("Inactive account data unavailable for tenant {TenantId}: insufficient permissions. " +
+                    "Requires AuditLog.Read.All + User.Read.All. Detail: {Detail}", tenantId, detail.Trim());
+            }
             return null;
         }
         catch (Exception ex)
@@ -1185,6 +1199,20 @@ public class GraphReportService : IGraphReportService
             _logger.LogWarning(ex, "Failed to get inactive account details for tenant {TenantId}", tenantId);
             return null;
         }
+    }
+
+    // signInActivity (and several other sign-in-derived properties) require an Entra ID P1/P2 license.
+    // Graph signals this with a 403 whose body mentions premium/license rather than a missing permission.
+    private static bool IsPremiumLicenseError(string detail)
+    {
+        if (string.IsNullOrEmpty(detail)) return false;
+        return detail.Contains("premium", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("P1", StringComparison.Ordinal)
+            || detail.Contains("P2", StringComparison.Ordinal)
+            || detail.Contains("Aad Premium", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("does not have a valid license", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("RequestFromNonPremiumTenant", StringComparison.OrdinalIgnoreCase)
+            || detail.Contains("B2C", StringComparison.OrdinalIgnoreCase);
     }
 
     // Service Health — per-service status overview + active service issues (incidents/advisories)
@@ -1261,5 +1289,77 @@ public class GraphReportService : IGraphReportService
         }
 
         return (services, issues);
+    }
+
+    // Consent health — probes each required Graph application permission with a minimal call.
+    // Returns the display names of permissions that are NOT consented in the target tenant
+    // (i.e. the tenant admin needs to re-consent). An empty list means all permissions are present.
+    public async Task<List<string>> CheckMissingPermissionsAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var missing = new List<string>();
+
+        await ProbePermissionAsync(missing, "Organization.Read.All",
+            () => client.Organization.GetAsync());
+        await ProbePermissionAsync(missing, "User.Read.All",
+            () => client.Users.GetAsync(c => { c.QueryParameters.Top = 1; c.QueryParameters.Select = ["id"]; }));
+        await ProbePermissionAsync(missing, "Reports.Read.All",
+            () => client.Reports.GetOffice365ActiveUserCountsWithPeriod("D7").GetAsync());
+        await ProbePermissionAsync(missing, "ServiceMessage.Read.All",
+            () => client.Admin.ServiceAnnouncement.Messages.GetAsync(c => c.QueryParameters.Top = 1));
+        await ProbePermissionAsync(missing, "AuditLog.Read.All",
+            () => client.Reports.AuthenticationMethods.UserRegistrationDetails.GetAsync(c => c.QueryParameters.Top = 1));
+        await ProbePermissionAsync(missing, "SecurityEvents.Read.All",
+            () => client.Security.SecureScores.GetAsync(c => c.QueryParameters.Top = 1));
+        await ProbePermissionAsync(missing, "ServiceHealth.Read.All",
+            () => client.Admin.ServiceAnnouncement.HealthOverviews.GetAsync());
+
+        return missing;
+    }
+
+    private async Task ProbePermissionAsync(List<string> missing, string permission, Func<Task> probe)
+    {
+        try
+        {
+            await probe();
+        }
+        catch (Exception ex)
+        {
+            if (IsPermissionError(ex))
+            {
+                missing.Add(permission);
+            }
+            else
+            {
+                // Non-permission failures (no license, no data, throttling) don't indicate a consent gap
+                _logger.LogDebug(ex, "Permission probe for {Permission} returned a non-permission error", permission);
+            }
+        }
+    }
+
+    private static bool IsPermissionError(Exception ex)
+    {
+        if (ex is Microsoft.Graph.Models.ODataErrors.ODataError odata)
+        {
+            var detail = $"{odata.Error?.Code} {odata.Error?.Message} {odata.Message}";
+
+            // A premium-license 403 (e.g. signInActivity needs Entra ID P1/P2) is NOT a consent gap —
+            // the permission is granted, the tenant just isn't licensed for the data. Don't flag it.
+            if (IsPremiumLicenseError(detail))
+                return false;
+
+            if (odata.ResponseStatusCode == 403) return true;
+            var code = odata.Error?.Code ?? string.Empty;
+            if (code.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase) ||
+                code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase) ||
+                code.Contains("Authorization_RequestDenied", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        var msg = ex.Message ?? string.Empty;
+        return msg.Contains("Invalid permission", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("does not have required", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("S2SUnauthorized", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("Authorization_RequestDenied", StringComparison.OrdinalIgnoreCase);
     }
 }

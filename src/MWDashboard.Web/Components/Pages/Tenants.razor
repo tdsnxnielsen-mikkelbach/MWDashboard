@@ -3,6 +3,8 @@
 @inject IConfiguration Configuration
 @inject IJSRuntime JS
 @inject IDataCollectionService DataCollectionService
+@inject IGraphReportService GraphService
+@inject IMauDataService DataService
 @inject TenantFilterService TenantFilter
 @inject NavigationManager NavigationManager
 
@@ -15,6 +17,29 @@
 }
 
 <MudText Typo="Typo.h4" Class="mb-4">Tenant Management</MudText>
+
+@{
+    var tenantsNeedingConsent = _tenants.Where(t => !string.IsNullOrWhiteSpace(t.MissingPermissions)).ToList();
+}
+@if (tenantsNeedingConsent.Count > 0)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4" Icon="@Icons.Material.Filled.GppMaybe">
+        <MudText Typo="Typo.subtitle2">Re-consent required</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2">
+            @tenantsNeedingConsent.Count tenant@(tenantsNeedingConsent.Count == 1 ? "" : "s") @(tenantsNeedingConsent.Count == 1 ? "is" : "are")
+            missing consent for one or more Graph permissions. Some data will not be collected until the customer's Global Admin re-runs admin consent.
+        </MudText>
+        <MudList T="string" Dense="true" DisablePadding="true">
+            @foreach (var t in tenantsNeedingConsent)
+            {
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Warning" IconColor="Color.Warning">
+                    <strong>@t.DisplayName</strong> — missing: @t.MissingPermissions
+                    <MudLink Href="@GetConsentUrlForTenant(t.TenantId)" Target="_blank" Class="ml-2">Open consent link</MudLink>
+                </MudListItem>
+            }
+        </MudList>
+    </MudAlert>
+}
 
 <MudGrid>
     <MudItem xs="12" md="5">
@@ -68,7 +93,9 @@
                 <HeaderContent>
                     <MudTh>Tenant Name</MudTh>
                     <MudTh>Tenant ID</MudTh>
+                    <MudTh>Plan</MudTh>
                     <MudTh>Active</MudTh>
+                    <MudTh>Consent</MudTh>
                     <MudTh>Onboarded</MudTh>
                     <MudTh>Actions</MudTh>
                 </HeaderContent>
@@ -91,8 +118,53 @@
                         }
                     </MudTd>
                     <MudTd DataLabel="Tenant ID"><MudText Typo="Typo.caption">@context.TenantId</MudText></MudTd>
+                    <MudTd DataLabel="Plan">
+                        @{
+                            var tier = GetTier(context.TenantId);
+                        }
+                        @if (tier == "P2")
+                        {
+                            <MudTooltip Text="Microsoft Entra ID P2 — sign-in based features available">
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">P2</MudChip>
+                            </MudTooltip>
+                        }
+                        else if (tier == "P1")
+                        {
+                            <MudTooltip Text="Microsoft Entra ID P1 — sign-in based features available">
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Text">P1</MudChip>
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <MudTooltip Text="Free tier — sign-in activity & inactive-account analysis require Entra ID P1/P2">
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Text">Free</MudChip>
+                            </MudTooltip>
+                        }
+                    </MudTd>
                     <MudTd DataLabel="Active">
                         <MudSwitch T="bool" Value="context.IsActive" ValueChanged="@(v => ToggleActive(context))" Color="Color.Success" />
+                    </MudTd>
+                    <MudTd DataLabel="Consent">
+                        @if (context.PermissionsCheckedAt == null)
+                        {
+                            <MudTooltip Text="Permissions not yet checked">
+                                <MudIcon Icon="@Icons.Material.Filled.HelpOutline" Color="Color.Default" Size="Size.Small" />
+                            </MudTooltip>
+                        }
+                        else if (string.IsNullOrWhiteSpace(context.MissingPermissions))
+                        {
+                            <MudTooltip Text="@($"All permissions consented (checked {context.PermissionsCheckedAt:yyyy-MM-dd HH:mm} UTC)")">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <MudTooltip Text="@($"Missing: {context.MissingPermissions}")">
+                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Warning" Variant="Variant.Text">
+                                    Re-consent
+                                </MudChip>
+                            </MudTooltip>
+                        }
                     </MudTd>
                     <MudTd DataLabel="Onboarded">@context.OnboardedAt.ToString("yyyy-MM-dd")</MudTd>
                     <MudTd>
@@ -100,6 +172,11 @@
                             <MudIconButton Icon="@Icons.Material.Filled.CloudSync" Color="Color.Success" Size="Size.Small"
                                            Disabled="@(_collectingTenantId == context.TenantId)"
                                            OnClick="@(() => CollectNow(context))" />
+                        </MudTooltip>
+                        <MudTooltip Text="Check permissions / consent">
+                            <MudIconButton Icon="@Icons.Material.Filled.VerifiedUser" Color="Color.Primary" Size="Size.Small"
+                                           Disabled="@(_checkingTenantId == context.TenantId)"
+                                           OnClick="@(() => CheckPermissions(context))" />
                         </MudTooltip>
                         <MudTooltip Text="Open admin consent URL">
                             <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Info" Size="Size.Small" 
@@ -116,6 +193,7 @@
 @code {
     private List<TenantInfo> _tenants = [];
     private TenantInfo _newTenant = new();
+    private Dictionary<string, string> _tiers = new();
     private MudForm _form = null!;
     private bool _loading = true;
     private string _message = string.Empty;
@@ -138,8 +216,12 @@
         _loading = true;
         await using var db = await DbFactory.CreateDbContextAsync();
         _tenants = await db.Tenants.OrderBy(t => t.TenantName).ToListAsync();
+        var tiers = await DataService.GetTenantEntraIdTiersAsync();
+        _tiers = tiers.ToDictionary(t => t.TenantId, t => t.Tier);
         _loading = false;
     }
+
+    private string GetTier(string tenantId) => _tiers.TryGetValue(tenantId, out var t) ? t : "Free";
 
     private async Task AddTenant()
     {
@@ -232,6 +314,7 @@
 
     private string? _collectingTenantId;
     private string? _editingTenantId;
+    private string? _checkingTenantId;
     private string _editDisplayName = string.Empty;
 
     private async Task CollectNow(TenantInfo tenant)
@@ -253,6 +336,39 @@
         finally
         {
             _collectingTenantId = null;
+        }
+    }
+
+    private async Task CheckPermissions(TenantInfo tenant)
+    {
+        _checkingTenantId = tenant.TenantId;
+        StateHasChanged();
+
+        try
+        {
+            var missing = await GraphService.CheckMissingPermissionsAsync(tenant.TenantId);
+            await DataService.UpdateTenantPermissionStatusAsync(tenant.TenantId, missing);
+
+            if (missing.Count == 0)
+            {
+                _message = $"All permissions consented for '{tenant.TenantName}'.";
+                _severity = Severity.Success;
+            }
+            else
+            {
+                _message = $"'{tenant.TenantName}' is missing consent for: {string.Join(", ", missing)}.";
+                _severity = Severity.Warning;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"Permission check failed: {ex.Message}";
+            _severity = Severity.Error;
+        }
+        finally
+        {
+            _checkingTenantId = null;
+            await LoadTenants();
         }
     }
 

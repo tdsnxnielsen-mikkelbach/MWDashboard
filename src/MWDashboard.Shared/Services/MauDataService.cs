@@ -72,6 +72,9 @@ public interface IMauDataService
     Task SaveServiceHealthAsync(IEnumerable<ServiceHealthSnapshot> snapshots);
     Task<List<ServiceHealthIssueSnapshot>> GetServiceHealthIssuesAsync(IEnumerable<string>? tenantIds);
     Task SaveServiceHealthIssuesAsync(IEnumerable<ServiceHealthIssueSnapshot> snapshots);
+
+    // Tenant consent health
+    Task UpdateTenantPermissionStatusAsync(string tenantId, IEnumerable<string> missingPermissions);
 }
 
 public class MauDataService : IMauDataService
@@ -1002,6 +1005,19 @@ public class MauDataService : IMauDataService
             }
         }
 
+        await db.SaveChangesAsync();
+    }
+
+    // Tenant consent health
+    public async Task UpdateTenantPermissionStatusAsync(string tenantId, IEnumerable<string> missingPermissions)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        if (tenant == null) return;
+
+        tenant.MissingPermissions = string.Join(",", missingPermissions);
+        tenant.PermissionsCheckedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
     }
 }

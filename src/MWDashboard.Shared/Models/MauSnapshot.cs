@@ -19,6 +19,12 @@ public class TenantInfo
     public string DisplayName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public DateTime OnboardedAt { get; set; } = DateTime.UtcNow;
+    /// <summary>
+    /// Comma-separated list of Graph permissions that failed a consent probe during the last collection.
+    /// Empty means all required permissions are consented. Indicates the tenant admin must re-consent.
+    /// </summary>
+    public string MissingPermissions { get; set; } = string.Empty;
+    public DateTime? PermissionsCheckedAt { get; set; }
 }
 
 public class LicenseSnapshot

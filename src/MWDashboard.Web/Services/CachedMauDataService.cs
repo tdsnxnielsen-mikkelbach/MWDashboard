@@ -234,6 +234,10 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("service-health-issues", null));
     }
 
+    // --- Tenant consent health (no caching — written during collection, read directly from DB) ---
+    public Task UpdateTenantPermissionStatusAsync(string tenantId, IEnumerable<string> missingPermissions)
+        => _inner.UpdateTenantPermissionStatusAsync(tenantId, missingPermissions);
+
     // --- Pass-through for write operations; cached reads below ---
 
     // --- MAU History (15 min — dashboard-level, queried frequently) ---

@@ -35,13 +35,26 @@ public class OnDemandDataCollectionService : IDataCollectionService
         if (licenses.Count > 0)
             await _dataService.SaveLicensesAsync(licenses);
 
+        // Determine the tenant's Entra ID tier from its SKUs. Sign-in-based features
+        // (signInActivity, sign-in logs) require P1/P2, so skip them on the free tier
+        // instead of issuing a call that always returns 403.
+        var entraTier = TenantEntraTier.FromLicenses(tenantId, tenantName, licenses.Select(l => l.SkuPartNumber));
+
         var posts = await _graphService.GetMessageCenterPostsAsync(tenantId);
         if (posts.Count > 0)
             await _dataService.SaveMessageCenterPostsAsync(posts);
 
-        var signIns = await _graphService.GetSignInSummaryAsync(tenantId);
-        if (signIns.Count > 0)
-            await _dataService.SaveSecuritySummariesAsync(signIns);
+        if (entraTier.HasSignInAccess)
+        {
+            var signIns = await _graphService.GetSignInSummaryAsync(tenantId);
+            if (signIns.Count > 0)
+                await _dataService.SaveSecuritySummariesAsync(signIns);
+        }
+        else
+        {
+            _logger.LogInformation("Skipping sign-in summary for tenant {TenantName}: requires Microsoft Entra ID P1/P2 (tenant tier: {Tier}).",
+                tenantName, entraTier.Tier);
+        }
 
         var activities = await _graphService.GetWorkloadActivityAsync(tenantId);
         if (activities.Count > 0)
@@ -117,11 +130,19 @@ public class OnDemandDataCollectionService : IDataCollectionService
         }
 
         // Inactive / stale licensed accounts (tenant-level staleness counts)
-        var inactive = await _graphService.GetInactiveAccountsAsync(tenantId);
-        if (inactive != null)
+        if (entraTier.HasSignInAccess)
         {
-            inactive.TenantName = tenantName;
-            await _dataService.SaveInactiveAccountsAsync(inactive);
+            var inactive = await _graphService.GetInactiveAccountsAsync(tenantId);
+            if (inactive != null)
+            {
+                inactive.TenantName = tenantName;
+                await _dataService.SaveInactiveAccountsAsync(inactive);
+            }
+        }
+        else
+        {
+            _logger.LogInformation("Skipping inactive-account analysis for tenant {TenantName}: signInActivity requires Microsoft Entra ID P1/P2 (tenant tier: {Tier}).",
+                tenantName, entraTier.Tier);
         }
 
         // Service health overview + active issues
@@ -138,6 +159,15 @@ public class OnDemandDataCollectionService : IDataCollectionService
 
         // Compute and save consumption score
         await ComputeConsumptionScoreAsync(tenantId, tenantName, storage, activities, segments, licenses);
+
+        // Probe consent health so the UI can flag tenants that need re-consent
+        var missingPermissions = await _graphService.CheckMissingPermissionsAsync(tenantId);
+        await _dataService.UpdateTenantPermissionStatusAsync(tenantId, missingPermissions);
+        if (missingPermissions.Count > 0)
+        {
+            _logger.LogWarning("Tenant {TenantName} is missing consent for: {Permissions}",
+                tenantName, string.Join(", ", missingPermissions));
+        }
 
         _logger.LogInformation("On-demand data collection completed for tenant {TenantName}", tenantName);
     }
