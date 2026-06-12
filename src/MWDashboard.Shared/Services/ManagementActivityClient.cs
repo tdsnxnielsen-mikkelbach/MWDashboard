@@ -257,6 +257,19 @@ public class ManagementActivityClient : IManagementActivityClient
             _ => string.Empty,
         };
 
+        // "Tenant does not exist" is returned when the audit backend has never been provisioned for
+        // the tenant — i.e. unified audit logging has never been enabled there. The first-time
+        // enablement can take up to 24 h to provision before a subscription can be started.
+        if (string.IsNullOrEmpty(hint) &&
+            (code.Contains("does not exist", StringComparison.OrdinalIgnoreCase) ||
+             message.Contains("does not exist", StringComparison.OrdinalIgnoreCase) ||
+             body.Contains("does not exist", StringComparison.OrdinalIgnoreCase)))
+        {
+            hint = "The tenant's audit backend is not provisioned — turn on unified audit logging in the " +
+                   "Microsoft Purview portal (Solutions \u2192 Audit \u2192 Start recording user and admin activity). " +
+                   "First-time enablement can take up to 24 hours before polling will succeed.";
+        }
+
         var detail = (code, message) switch
         {
             ("", "") => string.IsNullOrWhiteSpace(body) ? "No error detail returned." : body.Trim(),
