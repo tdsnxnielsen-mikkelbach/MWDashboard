@@ -111,8 +111,8 @@ main {
 }
 
     .tds-attribution img {
-        height: 26px;
-        max-width: 200px;
+        height: 36px;
+        max-width: 280px;
     }
 
 /* Hide on narrow screens to avoid colliding with the title / controls. */

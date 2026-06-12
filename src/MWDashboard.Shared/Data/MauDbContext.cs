@@ -14,8 +14,7 @@ public class MauDbContext : DbContext
     public DbSet<SecuritySignInSummary> SecuritySignInSummaries => Set<SecuritySignInSummary>();
     public DbSet<WorkloadActivitySnapshot> WorkloadActivities => Set<WorkloadActivitySnapshot>();
     public DbSet<CopilotUsageSnapshot> CopilotUsageSnapshots => Set<CopilotUsageSnapshot>();
-    public DbSet<UserSegmentSnapshot> UserSegmentSnapshots => Set<UserSegmentSnapshot>();
-    public DbSet<DepartmentUsageSnapshot> DepartmentUsageSnapshots => Set<DepartmentUsageSnapshot>();
+    public DbSet<UserSegmentSnapshot> UserSegmentSnapshots => Set<UserSegmentSnapshot>();    public DbSet<DepartmentUsageSnapshot> DepartmentUsageSnapshots => Set<DepartmentUsageSnapshot>();
     public DbSet<StorageSnapshot> StorageSnapshots => Set<StorageSnapshot>();
     public DbSet<ConsumptionSnapshot> ConsumptionSnapshots => Set<ConsumptionSnapshot>();
     public DbSet<M365AppUsageSnapshot> M365AppUsageSnapshots => Set<M365AppUsageSnapshot>();
@@ -37,6 +36,7 @@ public class MauDbContext : DbContext
     public DbSet<YammerActivitySnapshot> YammerActivitySnapshots => Set<YammerActivitySnapshot>();
     public DbSet<GroupSnapshot> GroupSnapshots => Set<GroupSnapshot>();
     public DbSet<BrandingSettings> BrandingSettings => Set<BrandingSettings>();
+    public DbSet<CopilotChatUsageSnapshot> CopilotChatUsageSnapshots => Set<CopilotChatUsageSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -284,6 +284,14 @@ public class MauDbContext : DbContext
             entity.Property(e => e.LogoContentType).HasMaxLength(50);
             entity.Property(e => e.FaviconContentType).HasMaxLength(50);
             entity.Property(e => e.AppTitle).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<CopilotChatUsageSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.AppHost, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.AppHost).HasMaxLength(100);
         });
     }
 }

@@ -48,6 +48,10 @@ services:
     project: ./src/MWDashboard.Consent
     host: containerapp
     language: dotnet
+  copilotaudit:
+    project: ./src/MWDashboard.CopilotAudit
+    host: containerapp
+    language: dotnet
 infra:
   provider: bicep
   path: ./infra

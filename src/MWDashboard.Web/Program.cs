@@ -139,6 +139,26 @@ else
     builder.Services.AddScoped<IDataCollectionService, MWDashboard.Shared.Services.OnDemandDataCollectionService>();
 }
 
+// Copilot Chat (unlicensed) audit collection — shared services power both the local fallback
+// and on-demand polling. The Management Activity client needs a typed HttpClient.
+builder.Services.AddHttpClient<IManagementActivityClient, ManagementActivityClient>();
+builder.Services.AddScoped<ICopilotAuditCollectionService, CopilotAuditCollectionService>();
+
+var copilotAuditBaseUrl = builder.Configuration["CopilotAuditBaseUrl"];
+if (!string.IsNullOrEmpty(copilotAuditBaseUrl))
+{
+    builder.Services.AddHttpClient<ICopilotAuditClient, HttpCopilotAuditClient>(client =>
+    {
+        client.BaseAddress = new Uri(copilotAuditBaseUrl);
+        client.Timeout = TimeSpan.FromMinutes(10);
+    });
+}
+else
+{
+    // Local fallback when no copilotaudit container URL is configured (dev/local)
+    builder.Services.AddScoped<ICopilotAuditClient, LocalCopilotAuditClient>();
+}
+
 // Cache warm-up on startup
 builder.Services.AddHostedService<CacheWarmupService>();
 

@@ -405,6 +405,29 @@ public class CachedMauDataService : IMauDataService
     public Task UpdateTenantPermissionStatusAsync(string tenantId, IEnumerable<string> missingPermissions)
         => _inner.UpdateTenantPermissionStatusAsync(tenantId, missingPermissions);
 
+    // --- Copilot Chat (unlicensed) usage (60 min — daily-changing audit aggregate) ---
+    public Task<List<CopilotChatUsageSnapshot>> GetCopilotChatUsageAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        var key = BuildKey("copilot-chat", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetCopilotChatUsageAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveCopilotChatUsageAsync(IEnumerable<CopilotChatUsageSnapshot> snapshots)
+    {
+        await _inner.SaveCopilotChatUsageAsync(snapshots);
+        foreach (var tid in snapshots.Select(s => s.TenantId).Distinct())
+            await InvalidateAsync(BuildKey("copilot-chat", new[] { tid }));
+        await InvalidateAsync(BuildKey("copilot-chat", null));
+    }
+
+    // The audit cursor is collection state, never cached — always read/written directly.
+    public Task<DateTime?> GetCopilotAuditCursorAsync(string tenantId)
+        => _inner.GetCopilotAuditCursorAsync(tenantId);
+
+    public Task UpdateCopilotAuditCursorAsync(string tenantId, DateTime cursorUtc)
+        => _inner.UpdateCopilotAuditCursorAsync(tenantId, cursorUtc);
+
     // --- Pass-through for write operations; cached reads below ---
 
     // --- MAU History (15 min — dashboard-level, queried frequently) ---

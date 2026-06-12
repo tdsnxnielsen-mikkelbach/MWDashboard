@@ -39,7 +39,7 @@
 ## Unlicensed Copilot Chat Usage via Office 365 Management Activity API
 
 **Priority**: Medium
-**Status**: Not started
+**Status**: Implemented (collection pipeline + dedicated container app + `/copilot` UI)
 **Context**: The Microsoft Graph Copilot usage reports API (`getMicrosoft365CopilotUsageUserDetail`) **only returns data for users holding a Microsoft 365 Copilot license**. Free, unlicensed **Copilot Chat** usage (e.g. on Business Standard tenants without the Copilot add-on) is *not* exposed by Graph. The only programmatic source is the **Office 365 Management Activity API** (raw `CopilotInteraction` audit events) or Microsoft Purview audit logs (`Search-UnifiedAuditLog`). This is the only data source in the app that isn't a stateless Graph read, so it warrants its own topic.
 
 ### Why it's a separate, larger project
@@ -63,39 +63,41 @@ Copilot Chat interactions land in `Audit.General` content blobs as records with:
 - The audit record does **not** state whether the user is licensed; cross-reference `UserId` against assigned Copilot SKUs (already collected in `LicenseSnapshot`) to split licensed vs. unlicensed.
 
 ### Prerequisites (customer-side, per tenant)
-- **Unified audit logging must be ON** (default-on for new tenants, but not guaranteed).
-- **New admin-consented permission**: `ActivityFeed.Read` on the *Office 365 Management APIs* resource → requires **re-consent by every tenant**.
+- **Unified audit logging must be ON** (default-on for new tenants, but not guaranteed). *(verified / enabled)*
+- **New admin-consented permission**: `ActivityFeed.Read` on the *Office 365 Management APIs* resource — added to the app registration and re-consented.
 - Audit (Standard) covers Microsoft Copilot for free; only *non-Microsoft* AI apps are pay-as-you-go, so Copilot Chat itself adds no billing.
 
 ### Implementation Plan
+> **Delivered** in `MWDashboard.CopilotAudit` — a dedicated container app (HTTP `POST /collect/{tenantId}` + internal 24 h cron scheduler), wired into infra the same way as the on-demand collector (placeholder image → real image on first deploy). The `/copilot` page surfaces the data with KPIs + a trend chart and an on-demand "Poll Copilot Chat" button.
+
 1. **Auth / consent**
-   - [ ] Add `ActivityFeed.Read` (Office 365 Management APIs) to the app registration.
-   - [ ] Add the scope to `GraphPermissions`, the consent-URL builder, and `CheckMissingPermissionsAsync` (with appropriate handling — it's a different resource audience).
-   - [ ] Document in `docs/permissions.md`.
+   - [x] Add `ActivityFeed.Read` (Office 365 Management APIs) to the app registration. *(manual, customer-side — done)*
+   - [x] Add the scope to `GraphPermissions`. Consent-URL builder needs no change (the `/adminconsent` `.default` URL grants every configured app permission); `CheckMissingPermissionsAsync` intentionally **not** changed (it only exercises Graph endpoints).
+   - [x] Document in `docs/permissions.md`.
 2. **New client + subscription lifecycle** (the genuinely new part)
-   - [ ] `ManagementActivityClient` — raw `HttpClient` + `ClientSecretCredential` for the `manage.office.com` audience.
-   - [ ] On first run per tenant: `POST /subscriptions/start?contentType=Audit.General`; handle "already started", the 15-min start throttle, and AF* error codes.
-   - [ ] Polling (preferred over webhooks): `GET /subscriptions/content` over rolling ≤24 h windows, follow `NextPageUri` pagination, then `GET` each `contentUri` blob.
-   - [ ] Persist a **cursor** (last processed `contentCreated` per tenant) so only new blobs are pulled and the 7-day retention window is never exceeded — new state (small table or column on `TenantInfo`).
+   - [x] `ManagementActivityClient` — raw `HttpClient` + `ClientSecretCredential` for the `manage.office.com` audience (per-tenant token cache).
+   - [x] On first run per tenant: `POST /subscriptions/start?contentType=Audit.General`; handles "already enabled" (AF20024) and lazily starts on AF20022.
+   - [x] Polling: `GET /subscriptions/content` over rolling ≤24 h windows, follows `NextPageUri` pagination, then `GET`s each `contentUri` blob.
+   - [x] Persists a **cursor** (`TenantInfo.CopilotAuditCursorUtc`, last processed `contentCreated`) so only new blobs are pulled and the cursor never moves backwards.
 3. **Parsing + aggregation**
-   - [ ] Deserialize blobs; filter to `Workload == "Copilot"` + the BizChat `AppHost` set; dedupe by `UserId`/day; optionally split licensed vs. unlicensed against existing Copilot SKUs.
-4. **New model + migration** (follow the `new-model` skill)
-   - [ ] `CopilotChatUsageSnapshot` (`TenantId`, `TenantName`, `ReportDate`, surface/`AppHost`, `ActiveUsers`, `InteractionCount`, `UnlicensedUsers`, `CollectedAt`) with composite unique index `(TenantId, AppHost, ReportDate)`.
-   - [ ] Add DbSet (#31), save/upsert + query methods, cache integration + invalidation.
+   - [x] Deserializes blobs; filters to `Workload == "Copilot"` + the BizChat `AppHost` set; dedupes distinct `UserId`/day; splits licensed vs. unlicensed against assigned Copilot SKUs (`GraphReportService.GetCopilotLicensedUpnsAsync`).
+4. **New model + migration** (followed the `new-model` skill)
+   - [x] `CopilotChatUsageSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `AppHost`, `ActiveUsers`, `InteractionCount`, `UnlicensedUsers`, `CollectedAt`) with composite unique index `(TenantId, AppHost, ReportDate)`.
+   - [x] Added DbSet (#31), save/upsert + query methods, cache integration + invalidation (`copilot-chat` key, 60 min TTL).
 5. **Collection wiring**
-   - [ ] Add the pull to `OnDemandDataCollectionService` (Collector + fallback) **and** the scheduled `Job`.
-   - [ ] Note: the daily Job cron keeps the cursor advancing within the 7-day window, but means up-to-12h+24h staleness (acceptable).
+   - [x] Runs in the dedicated `MWDashboard.CopilotAudit` container app: on-demand HTTP endpoint **and** an internal `PeriodicTimer` cron that loops active tenants (keeps each cursor advancing within the 7-day window).
 6. **UI** — Copilot page (`/copilot`)
-   - [ ] Add a "Copilot Chat (unlicensed)" KPI / trend; remove the empty-state caveat once data flows.
-   - [ ] Guard empty ApexChart series as usual.
+   - [x] Added a **"Copilot Chat (unlicensed)"** section: KPI cards (unlicensed/active chat users for the latest day, 30-day interactions, active surfaces), a daily activity trend chart (interactions + active + unlicensed users), and a per-surface breakdown table. Softened the licensed empty-state caveat to point at the new section.
+   - [x] Guarded the trend ApexChart series against empty data; the section shows a clear info message when no audit activity has been collected yet (covers the 12 h latency / audit-logging-off / 7-day-retention cases).
+   - [x] Added a **"Poll Copilot Chat"** button that triggers on-demand collection for the selected tenant(s) via the `MWDashboard.CopilotAudit` container (`HttpCopilotAuditClient`, local fallback), then reloads.
 7. **Resilience**
-   - [ ] Handle AF20022 (no subscription), AF429 throttling with backoff, the per-tenant quota model, and out-of-order events.
+   - [x] Handles AF20022 (no subscription → start + retry), AF429 throttling with `Retry-After` backoff, and out-of-order events (cursor keyed on blob `contentCreated`; late events arrive in newer blobs).
 
 ### Risks
-- **7-day retention**: a stalled collector loses that data permanently.
-- **12h+ initial latency** after subscription start.
-- **Throttling at scale** across many tenants (2,000 req/min baseline per tenant).
-- **Audit logging may be disabled** on a tenant — needs detection + a clear UI message.
+- **7-day retention**: a stalled collector loses that data permanently. *Mitigated*: the `MWDashboard.CopilotAudit` container runs `minReplicas: 1` with an internal 24 h cron so each tenant's cursor keeps advancing inside the window even without traffic; the cursor is seeded at `now - 7 days + 5 min` on first run.
+- **12h+ initial latency** after subscription start. *Surfaced in UI*: the empty-state and per-surface caption both warn that audit events can lag usage by up to 12 hours.
+- **Throttling at scale** across many tenants (2,000 req/min baseline per tenant). *Mitigated*: `ManagementActivityClient` honors `Retry-After` with bounded backoff.
+- **Audit logging may be disabled** on a tenant. *Surfaced in UI*: the empty-state explicitly lists "unified audit logging off" as a cause and links the required `ActivityFeed.Read` permission.
 
 ---
 
@@ -119,7 +121,7 @@ Copilot Chat interactions land in `Audit.General` content blobs as records with:
 - [ ] Consumption score threshold alerts (email/Teams notification when score drops)
 - [x] Historical comparison: month-over-month score change indicators — delta chips on all KPI cards
 - [ ] Per-department consumption scoring (combine department usage + segmentation)
-- [ ] **Unlicensed Copilot Chat usage** — see the dedicated [Unlicensed Copilot Chat Usage via Office 365 Management Activity API](#unlicensed-copilot-chat-usage-via-office-365-management-activity-api) topic below.
+- [x] **Unlicensed Copilot Chat usage** — implemented: collection pipeline + `MWDashboard.CopilotAudit` container app + model/migration + `/copilot` UI section with on-demand polling. See the dedicated [Unlicensed Copilot Chat Usage via Office 365 Management Activity API](#unlicensed-copilot-chat-usage-via-office-365-management-activity-api) topic above.
 
 ---
 

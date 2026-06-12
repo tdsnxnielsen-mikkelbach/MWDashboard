@@ -23,7 +23,21 @@ public static class GraphPermissions
         ["DeviceManagementManagedDevices.Read.All"] = "Read Microsoft Intune devices",
         ["Policy.Read.All"] = "Read your organization's policies",
         ["IdentityRiskyUser.Read.All"] = "Read all identity risky user information",
+        // Office 365 Management APIs resource (not Graph) — powers unlicensed Copilot Chat collection.
+        ["ActivityFeed.Read"] = "Read activity data for your organization",
     };
+
+    /// <summary>
+    /// Permission display names for non-Graph resources used by the dashboard.
+    /// </summary>
+    /// <remarks>
+    /// <c>ActivityFeed.Read</c> belongs to the <b>Office 365 Management APIs</b> resource (not Microsoft
+    /// Graph). It powers the unlicensed Copilot Chat collection. It is granted via the same admin-consent
+    /// flow (the <c>/adminconsent</c> URL grants every permission configured on the app registration), so
+    /// no separate consent URL is needed — but it must be added to the app registration.
+    /// It is intentionally not part of the Graph consent probe, which only exercises Graph endpoints.
+    /// </remarks>
+    public const string ActivityFeedRead = "ActivityFeed.Read";
 
     /// <summary>
     /// Returns the human-readable admin-consent display name for a Graph scope,

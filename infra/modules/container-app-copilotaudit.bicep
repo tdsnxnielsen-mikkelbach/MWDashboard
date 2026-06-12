@@ -1,4 +1,4 @@
-@description('Name of the Container App')
+@description('Name of the Container App (Copilot Audit collector)')
 param name string
 
 @description('Location for the resource')
@@ -28,24 +28,18 @@ param azureAdTenantId string
 @description('User-Assigned Managed Identity resource ID')
 param managedIdentityId string
 
-@description('Internal FQDN of the collector container app')
-param collectorFqdn string = ''
-
-@description('Internal FQDN of the Copilot Chat audit container app')
-param copilotAuditFqdn string = ''
-
 @description('Application Insights connection string')
 param appInsightsConnectionString string = ''
 
-@description('Consent redirect URI (Static Web App URL)')
-param consentRedirectUri string = ''
-
+// On first provision the image does not exist in ACR yet, so fall back to a public placeholder
+// image. azd then pushes the real image and re-deploys. This prevents the initial deploy hanging
+// on an image-pull failure (same pattern as the on-demand collector container app).
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource containerAppCopilotAudit 'Microsoft.App/containerApps@2024-03-01' = {
   name: name
   location: location
-  tags: union(tags, { 'azd-service-name': 'web' })
+  tags: union(tags, { 'azd-service-name': 'copilotaudit' })
   identity: {
     type: 'SystemAssigned,UserAssigned'
     userAssignedIdentities: {
@@ -56,7 +50,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     managedEnvironmentId: containerAppsEnvironmentId
     configuration: {
       ingress: {
-        external: true
+        external: false
         targetPort: 8080
         transport: 'auto'
         allowInsecure: false
@@ -64,31 +58,26 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       registries: [
         {
           server: containerRegistryLoginServer
-          identity: 'system'
+          identity: managedIdentityId
         }
       ]
       secrets: [
         {
           name: 'azuread-client-id'
           keyVaultUrl: '${keyVaultUri}secrets/AzureAdClientId'
-          identity: 'system'
+          identity: managedIdentityId
         }
         {
           name: 'azuread-client-secret'
           keyVaultUrl: '${keyVaultUri}secrets/AzureAdClientSecret'
-          identity: 'system'
-        }
-        {
-          name: 'redis-connection-string'
-          keyVaultUrl: '${keyVaultUri}secrets/RedisConnectionString'
-          identity: 'system'
+          identity: managedIdentityId
         }
       ]
     }
     template: {
       containers: [
         {
-          name: 'web'
+          name: 'copilotaudit'
           image: fullImageName
           resources: {
             cpu: json('0.5')
@@ -104,10 +93,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: sqlConnectionString
             }
             {
-              name: 'ConnectionStrings__Redis'
-              secretRef: 'redis-connection-string'
-            }
-            {
               name: 'AzureAd__ClientId'
               secretRef: 'azuread-client-id'
             }
@@ -120,45 +105,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: azureAdTenantId
             }
             {
-              name: 'CollectorBaseUrl'
-              value: collectorFqdn != '' ? 'https://${collectorFqdn}' : ''
-            }
-            {
-              name: 'CopilotAuditBaseUrl'
-              value: copilotAuditFqdn != '' ? 'https://${copilotAuditFqdn}' : ''
-            }
-            {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsightsConnectionString
             }
-            {
-              name: 'ConsentCallback__RedirectUri'
-              value: consentRedirectUri
-            }
-            {
-              name: 'AzureAdAuth__Instance'
-              value: 'https://login.microsoftonline.com/'
-            }
-            {
-              name: 'AzureAdAuth__TenantId'
-              value: 'common'
-            }
-            {
-              name: 'AzureAdAuth__ClientId'
-              secretRef: 'azuread-client-id'
-            }
-            {
-              name: 'AzureAdAuth__CallbackPath'
-              value: '/signin-oidc'
-            }
-            {
-              name: 'AzureAdAuth__SignedOutCallbackPath'
-              value: '/signout-callback-oidc'
-            }
-
           ]
         }
       ]
+      // minReplicas must stay at 1: the internal cron scheduler that advances each tenant's
+      // 7-day audit cursor only runs while a replica is alive.
       scale: {
         minReplicas: 1
         maxReplicas: 3
@@ -167,7 +121,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             name: 'http-scaling'
             http: {
               metadata: {
-                concurrentRequests: '50'
+                concurrentRequests: '5'
               }
             }
           }
@@ -177,7 +131,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
-output id string = containerApp.id
-output name string = containerApp.name
-output uri string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
-output principalId string = containerApp.identity.principalId
+output id string = containerAppCopilotAudit.id
+output name string = containerAppCopilotAudit.name
+output fqdn string = containerAppCopilotAudit.properties.configuration.ingress.fqdn
+output principalId string = containerAppCopilotAudit.identity.principalId

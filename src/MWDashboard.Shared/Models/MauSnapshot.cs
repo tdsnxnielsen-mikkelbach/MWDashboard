@@ -25,6 +25,14 @@ public class TenantInfo
     /// </summary>
     public string MissingPermissions { get; set; } = string.Empty;
     public DateTime? PermissionsCheckedAt { get; set; }
+
+    /// <summary>
+    /// Cursor for the Office 365 Management Activity API Copilot-Chat collection: the
+    /// <c>contentCreated</c> timestamp (UTC) of the most recent content blob already processed.
+    /// Only blobs newer than this are pulled, so the 7-day retention window is never re-scanned.
+    /// Null means no Copilot-Chat collection has run for this tenant yet.
+    /// </summary>
+    public DateTime? CopilotAuditCursorUtc { get; set; }
 }
 
 public class LicenseSnapshot
@@ -130,6 +138,30 @@ public class CopilotUsageSnapshot
     public string AppName { get; set; } = string.Empty;
     public int ActiveUsers { get; set; }
     public int TotalAssignedLicenses { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Daily usage of free, unlicensed Microsoft 365 Copilot Chat (e.g. BizChat), sourced from raw
+/// <c>CopilotInteraction</c> audit events in the Office 365 Management Activity API
+/// (<c>Audit.General</c> content blobs) — data the Graph Copilot reports API does not expose.
+/// Aggregated per surface (<see cref="AppHost"/>) per day. <see cref="UnlicensedUsers"/> is derived
+/// by cross-referencing interacting users against assigned Copilot SKUs (<see cref="LicenseSnapshot"/>).
+/// </summary>
+public class CopilotChatUsageSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    /// <summary>The audit <c>AppHost</c> surface (e.g. <c>BizChat</c>, <c>Bing</c>, <c>Edge</c>, <c>Office</c>, <c>M365App</c>).</summary>
+    public string AppHost { get; set; } = string.Empty;
+    /// <summary>Distinct users who had at least one Copilot Chat interaction on this surface this day.</summary>
+    public int ActiveUsers { get; set; }
+    /// <summary>Total Copilot Chat interactions (events) on this surface this day.</summary>
+    public int InteractionCount { get; set; }
+    /// <summary>Subset of <see cref="ActiveUsers"/> who do NOT hold a Microsoft 365 Copilot license.</summary>
+    public int UnlicensedUsers { get; set; }
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }
 

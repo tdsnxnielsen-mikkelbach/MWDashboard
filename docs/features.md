@@ -77,7 +77,17 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Copilot licenses by tenant** — per-tenant table of assigned vs. total Copilot SKU seats (SKU part number contains `COPILOT`); shown even when no usage data is returned, so tenants that hold Copilot licenses but have no reported activity (or only use free Copilot Chat) still surface their license footprint
 - **Automated recommendations** — actionable alerts based on adoption patterns (low app usage, overall low adoption, Chat-only usage patterns)
 - Multi-tenant view — per-tenant grouped bar chart series
-- Data source: Graph Beta API (`getMicrosoft365CopilotUsageUserDetail`); requires <PermissionTag Scope="Reports.Read.All" /> and **returns usage only for users holding a Microsoft 365 Copilot license**. Free, unlicensed **Copilot Chat** usage is *not* exposed by Graph — tenants using only Copilot Chat (e.g. Business Standard without the Copilot add-on) show no usage here (see [todo.md](todo.md) for the Office 365 Management Activity API option). The empty-state message explains this and still lists Copilot license counts when present
+- Data source: Graph Beta API (`getMicrosoft365CopilotUsageUserDetail`); requires <PermissionTag Scope="Reports.Read.All" /> and **returns usage only for users holding a Microsoft 365 Copilot license**. Free, unlicensed **Copilot Chat** usage is *not* exposed by Graph — it is collected separately (see the Copilot Chat section below). The empty-state message explains this and still lists Copilot license counts when present
+
+### Copilot Chat (unlicensed)
+
+- **Dedicated section** on the same `/copilot` page covering free **Microsoft 365 Copilot Chat** usage by unlicensed users (BizChat, Bing, Edge, Office, M365 App surfaces) — the data the Graph reports API does not return
+- **KPI cards** — unlicensed chat users and active chat users for the latest day (per surface), total interactions over 30 days, and active-surface count
+- **Daily activity trend chart** — interactions, active users, and unlicensed users per day (ApexChart, guarded against empty series)
+- **Per-surface table** — latest-day active users, unlicensed users, and interactions broken down by `AppHost`
+- **"Poll Copilot Chat" button** — triggers on-demand collection for the selected tenant(s) via the dedicated `MWDashboard.CopilotAudit` container app (HTTP call with local fallback), then reloads
+- **Resilience messaging** — when no data has been collected yet, a clear info message explains the three expected causes: up to 12 h initial audit latency, unified audit logging being disabled, or no Copilot Chat usage in the 7-day audit-retention window
+- Data source: **Office 365 Management Activity API** (`Audit.General` `CopilotInteraction` events), collected by `MWDashboard.CopilotAudit` and stored as `CopilotChatUsageSnapshot`; requires <PermissionTag Scope="ActivityFeed.Read" /> (Office 365 Management APIs) and unified audit logging enabled per tenant. Unlicensed users are derived by cross-referencing interacting users against assigned Copilot SKUs
 
 ## User Segmentation (`/segmentation`)
 

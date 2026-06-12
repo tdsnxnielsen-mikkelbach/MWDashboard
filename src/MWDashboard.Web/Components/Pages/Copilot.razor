@@ -2,16 +2,31 @@
 @using ApexCharts
 @using Color = MudBlazor.Color
 @using Size = MudBlazor.Size
+@using MWDashboard.Web.Services
 @inject IMauDataService MauDataService
 @inject TenantFilterService TenantFilter
+@inject ICopilotAuditClient CopilotAuditClient
+@inject ISnackbar Snackbar
 @implements IDisposable
 
 <PageTitle>Copilot Adoption</PageTitle>
 
 <div class="d-flex justify-space-between align-center mb-4">
     <MudText Typo="Typo.h4">Microsoft 365 Copilot Adoption</MudText>
-    <ExportButton Feature="copilot" />
+    <div class="d-flex align-center gap-2">
+        <MudTooltip Text="Pull the latest unlicensed Copilot Chat audit activity for the selected tenant(s) now. New events can take up to 12 hours to appear after first enabling.">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.CloudSync"
+                       Disabled="@_polling"
+                       OnClick="PollCopilotChatAsync">
+                @(_polling ? "Polling…" : "Poll Copilot Chat")
+            </MudButton>
+        </MudTooltip>
+        <ExportButton Feature="copilot" />
+    </div>
 </div>
+
 
 @if (_loading)
 {
@@ -21,17 +36,20 @@
         <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading Copilot data...</MudText>
     </div>
 }
-else if (_copilotData.Count == 0)
+else
+{
+@if (_copilotData.Count == 0)
 {
     <MudAlert Severity="Severity.Info" Class="mb-4">
         No <strong>licensed</strong> Microsoft 365 Copilot usage data is available for the selected tenant(s).
         The Microsoft Graph reports API only returns usage for users who hold a Microsoft 365 Copilot
         license (and requires <PermissionTag Scope="Reports.Read.All" />).
         <br />
-        Free <strong>Microsoft 365 Copilot Chat</strong> usage by unlicensed users is <em>not</em> exposed by Graph,
-        so tenants using only Copilot Chat (e.g. Business Standard without Copilot add-on) will show no usage here
-        even when Copilot Chat is actively used. See the Microsoft 365 Admin Center Copilot Chat usage report for that data.
+        Free <strong>Microsoft 365 Copilot Chat</strong> usage by unlicensed users is <em>not</em> exposed by Graph —
+        it is collected separately from the Office 365 Management Activity API and shown in the
+        <strong>Copilot Chat (unlicensed)</strong> section below.
     </MudAlert>
+
 
     @if (_copilotLicenses.Count > 0)
     {
@@ -184,6 +202,117 @@ else
 </MudGrid>
 }
 
+<MudDivider Class="my-8" />
+
+<div class="mb-3">
+    <MudText Typo="Typo.h5">Copilot Chat (unlicensed)</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        Free Microsoft 365 Copilot Chat activity (BizChat, Bing, Edge, Office, M365 App) sourced from the
+        Office 365 Management Activity API — usage the Graph reports API does not expose.
+    </MudText>
+</div>
+
+@if (_chatData.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        No <strong>Copilot Chat</strong> audit activity has been collected for the selected tenant(s) yet. This is expected when:
+        <ul class="mt-2 mb-1">
+            <li>Collection was only recently enabled — new audit events can take <strong>up to 12 hours</strong> to appear after the subscription is first started.</li>
+            <li><strong>Unified audit logging</strong> is turned off for the tenant — it must be enabled, and the app needs <PermissionTag Scope="ActivityFeed.Read" /> (Office 365 Management APIs) consented.</li>
+            <li>No one has used the free Copilot Chat experience in the last <strong>7 days</strong> (the audit-blob retention window).</li>
+        </ul>
+        Use <strong>Poll Copilot Chat</strong> above to pull the latest activity now.
+    </MudAlert>
+}
+else
+{
+<MudGrid>
+    <!-- Copilot Chat KPI Cards -->
+    <MudItem xs="12" sm="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Unlicensed Chat Users</MudText>
+            <MudText Typo="Typo.h3" Color="Color.Primary">@_chatUnlicensedLatest.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">latest day · by surface</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Active Chat Users</MudText>
+            <MudText Typo="Typo.h3">@_chatActiveLatest.ToString("N0")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">latest day · by surface</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Interactions (30d)</MudText>
+            <MudText Typo="Typo.h3">@_chatInteractions30d.ToString("N0")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="3">
+        <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Active Surfaces</MudText>
+            <MudText Typo="Typo.h3">@_chatSurfaceCount.ToString("N0")</MudText>
+        </MudPaper>
+    </MudItem>
+
+    <!-- Copilot Chat Trend -->
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Daily Copilot Chat Activity</MudText>
+            @if (_chatTrend.Count > 0)
+            {
+                <ApexChart @key="@_chatTrend.Count" TItem="ChatTrendPoint" Options="_chatTrendOptions" Height="320">
+                    <ApexPointSeries TItem="ChatTrendPoint"
+                                     Items="_chatTrend"
+                                     Name="Interactions"
+                                     SeriesType="SeriesType.Area"
+                                     XValue="@(e => e.Date.ToString("MMM dd"))"
+                                     YValue="@(e => (decimal?)e.Interactions)" />
+                    <ApexPointSeries TItem="ChatTrendPoint"
+                                     Items="_chatTrend"
+                                     Name="Active Users"
+                                     SeriesType="SeriesType.Line"
+                                     XValue="@(e => e.Date.ToString("MMM dd"))"
+                                     YValue="@(e => (decimal?)e.ActiveUsers)" />
+                    <ApexPointSeries TItem="ChatTrendPoint"
+                                     Items="_chatTrend"
+                                     Name="Unlicensed Users"
+                                     SeriesType="SeriesType.Line"
+                                     XValue="@(e => e.Date.ToString("MMM dd"))"
+                                     YValue="@(e => (decimal?)e.UnlicensedUsers)" />
+                </ApexChart>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <!-- Copilot Chat per-surface table -->
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Activity by Surface (latest day)</MudText>
+            <MudTable Items="_chatBySurface" Dense="true" Hover="true" Striped="true">
+                <HeaderContent>
+                    <MudTh>Surface</MudTh>
+                    <MudTh Style="text-align:right">Active Users</MudTh>
+                    <MudTh Style="text-align:right">Unlicensed Users</MudTh>
+                    <MudTh Style="text-align:right">Interactions</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Surface">@context.AppHost</MudTd>
+                    <MudTd DataLabel="Active Users" Style="text-align:right">@context.ActiveUsers.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Unlicensed Users" Style="text-align:right">@context.UnlicensedUsers.ToString("N0")</MudTd>
+                    <MudTd DataLabel="Interactions" Style="text-align:right">@context.Interactions.ToString("N0")</MudTd>
+                </RowTemplate>
+            </MudTable>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                Counts are distinct users per surface per day; a user active on multiple surfaces is counted once per surface.
+                Audit events can lag actual usage by up to 12 hours.
+            </MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+}
+}
+
 @code {
     private List<CopilotUsageSnapshot> _copilotData = [];
     private List<CopilotAppData> _appData = [];
@@ -194,6 +323,24 @@ else
     private int _totalLicenses;
     private double _adoptionRate;
     private bool _loading = true;
+
+    // Copilot Chat (unlicensed) — Office 365 Management Activity API
+    private List<CopilotChatUsageSnapshot> _chatData = [];
+    private List<ChatTrendPoint> _chatTrend = [];
+    private List<ChatSurfaceRow> _chatBySurface = [];
+    private int _chatUnlicensedLatest;
+    private int _chatActiveLatest;
+    private int _chatInteractions30d;
+    private int _chatSurfaceCount;
+    private bool _polling;
+
+    private readonly ApexChartOptions<ChatTrendPoint> _chatTrendOptions = new()
+    {
+        Yaxis = [new YAxis { Title = new AxisTitle { Text = "Count" } }],
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 }
+    };
 
     private ApexChartOptions<CopilotAppData> _barChartOptions = new()
     {
@@ -294,7 +441,102 @@ else
             .Sum(g => g.Max(c => c.TotalAssignedLicenses));
         _adoptionRate = _totalLicenses > 0 ? (double)_totalActiveUsers / _totalLicenses * 100 : 0;
 
+        // Copilot Chat (unlicensed) — separate Office 365 Management Activity API dataset
+        _chatData = await MauDataService.GetCopilotChatUsageAsync(tenantIds);
+        BuildChatViews();
+
         _loading = false;
+    }
+
+    private void BuildChatViews()
+    {
+        if (_chatData.Count == 0)
+        {
+            _chatTrend = [];
+            _chatBySurface = [];
+            _chatUnlicensedLatest = _chatActiveLatest = _chatInteractions30d = _chatSurfaceCount = 0;
+            return;
+        }
+
+        // Daily trend — aggregate across tenants/surfaces per report date.
+        _chatTrend = _chatData
+            .GroupBy(c => c.ReportDate.Date)
+            .Select(g => new ChatTrendPoint
+            {
+                Date = g.Key,
+                Interactions = g.Sum(x => x.InteractionCount),
+                ActiveUsers = g.Sum(x => x.ActiveUsers),
+                UnlicensedUsers = g.Sum(x => x.UnlicensedUsers)
+            })
+            .OrderBy(p => p.Date)
+            .ToList();
+
+        _chatInteractions30d = _chatData.Sum(c => c.InteractionCount);
+
+        // Latest-day breakdown by surface.
+        var latestDate = _chatData.Max(c => c.ReportDate.Date);
+        var latest = _chatData.Where(c => c.ReportDate.Date == latestDate).ToList();
+
+        _chatBySurface = latest
+            .GroupBy(c => c.AppHost)
+            .Select(g => new ChatSurfaceRow
+            {
+                AppHost = g.Key,
+                ActiveUsers = g.Sum(x => x.ActiveUsers),
+                UnlicensedUsers = g.Sum(x => x.UnlicensedUsers),
+                Interactions = g.Sum(x => x.InteractionCount)
+            })
+            .OrderByDescending(r => r.ActiveUsers)
+            .ToList();
+
+        _chatUnlicensedLatest = latest.Sum(c => c.UnlicensedUsers);
+        _chatActiveLatest = latest.Sum(c => c.ActiveUsers);
+        _chatSurfaceCount = _chatBySurface.Count;
+    }
+
+    private async Task PollCopilotChatAsync()
+    {
+        _polling = true;
+        StateHasChanged();
+        try
+        {
+            // Poll the tenants currently in scope/selection. SelectedTenantIds is always populated
+            // (scoped users see only their own); fall back to all visible tenants if empty.
+            var targets = TenantFilter.SelectedTenantIds.Count > 0
+                ? TenantFilter.AllTenants.Where(t => TenantFilter.SelectedTenantIds.Contains(t.TenantId)).ToList()
+                : TenantFilter.AllTenants.ToList();
+
+            if (targets.Count == 0)
+            {
+                Snackbar.Add("No tenant selected to poll.", Severity.Warning);
+                return;
+            }
+
+            var failures = 0;
+            foreach (var tenant in targets)
+            {
+                try
+                {
+                    await CopilotAuditClient.CollectForTenantAsync(tenant.TenantId, tenant.TenantName);
+                }
+                catch (Exception ex)
+                {
+                    failures++;
+                    Snackbar.Add($"Copilot Chat poll failed for '{tenant.TenantName}': {ex.Message}", Severity.Error);
+                }
+            }
+
+            await LoadData();
+            StateHasChanged();
+
+            if (failures == 0)
+                Snackbar.Add($"Copilot Chat data refreshed for {targets.Count} tenant(s). New audit events can take up to 12 hours to appear.", Severity.Success);
+        }
+        finally
+        {
+            _polling = false;
+            StateHasChanged();
+        }
     }
 
     private static Color GetAdoptionColor(double rate) => rate switch
@@ -375,6 +617,22 @@ else
         public string SkuPartNumber { get; set; } = string.Empty;
         public int Assigned { get; set; }
         public int Total { get; set; }
+    }
+
+    public class ChatTrendPoint
+    {
+        public DateTime Date { get; set; }
+        public int Interactions { get; set; }
+        public int ActiveUsers { get; set; }
+        public int UnlicensedUsers { get; set; }
+    }
+
+    public class ChatSurfaceRow
+    {
+        public string AppHost { get; set; } = string.Empty;
+        public int ActiveUsers { get; set; }
+        public int UnlicensedUsers { get; set; }
+        public int Interactions { get; set; }
     }
 
     public record Recommendation(Severity Severity, string Message);

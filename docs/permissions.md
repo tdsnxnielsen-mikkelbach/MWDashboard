@@ -18,6 +18,12 @@ The app registration needs the following **Application** permissions (not Delega
 
 > `Guest / external users` (Identity & Devices page) reuses the already-granted `User.Read.All` permission — no extra consent needed.
 
+In addition, one permission on a **different resource** is required for the unlicensed Copilot Chat feature:
+
+| Permission | Resource | Purpose | Notes |
+|-----------|----------|---------|-------|
+| `ActivityFeed.Read` | **Office 365 Management APIs** (not Microsoft Graph) | Read raw `Audit.General` audit events (`CopilotInteraction`) to measure free, unlicensed Copilot Chat usage that the Graph reports API does not expose | Granted by the same admin-consent flow (the `/adminconsent` URL grants every permission configured on the app registration), but it must first be **added to the app registration** under *Office 365 Management APIs → Application permissions*. Requires **unified audit logging** to be enabled on the tenant. Intentionally **not** part of the Graph consent probe (the probe only exercises Graph endpoints). |
+
 ## How permissions appear in the UI
 
 Throughout the dashboard, Graph permissions are shown with their official admin-consent display name followed by the scope in parentheses — e.g. **Read all users' full profiles (`User.Read.All`)** — so non-technical admins understand what is being requested while the exact scope stays copy-paste friendly.
@@ -63,6 +69,8 @@ This URL is stable after first deployment and does not change unless you recreat
 | Beta API availability | Uses Microsoft Graph Beta endpoint `getMicrosoft365CopilotUsageUserDetail` |
 
 If a tenant doesn't have Entra ID P1/P2, sign-in log collection will gracefully fail and log a warning — all other data collection continues normally.
+
+> **Unlicensed Copilot Chat** is sourced separately from the Office 365 Management Activity API (`ActivityFeed.Read`, see table above) by the `MWDashboard.CopilotAudit` container app — not from the Graph Copilot reports API, which only returns data for licensed Copilot users.
 
 ## Dashboard User Authentication
 

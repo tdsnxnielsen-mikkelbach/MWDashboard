@@ -6,7 +6,7 @@
 - **UI**: Blazor Server with MudBlazor + Blazor-ApexCharts
 - **Data**: EF Core + Azure SQL Serverless (auto-pause), Redis distributed cache
 - **Auth**: Azure AD multi-tenant — app-only (client credentials) for Graph API, OpenID Connect for user access with tenant-scoped data isolation
-- **Hosting**: Azure Container Apps (web + on-demand collector + consent callback + scheduled job) + Azure Static Web App (consent page)
+- **Hosting**: Azure Container Apps (web + on-demand collector + consent callback + scheduled job + Copilot-audit collector) + Azure Static Web App (consent page)
 - **Infra**: Bicep IaC via Azure Developer CLI (azd)
 - **No test projects** — manual/integration testing only
 
@@ -37,7 +37,7 @@ azd deploy
 - All snapshot models follow: `Id`, `TenantId`, `TenantName`, `ReportDate`, metric fields, `CollectedAt`
 - Composite unique indexes on `(TenantId, ServiceName/SkuId/Workload+ActivityType/AppName/Department, ReportDate)` for upsert deduplication
 - Use `DateTime` for dates (UTC everywhere)
-- 30 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots, M365AppUsageSnapshots, SecureScoreSnapshots, SecureScoreControlSnapshots, MfaRegistrationSnapshots, InactiveAccountSnapshots, ServiceHealthSnapshots, ServiceHealthIssueSnapshots, DeviceComplianceSnapshots, ConditionalAccessSnapshots, GuestUserSnapshots, RiskyUserSnapshots, MailboxUsageSnapshots, TopMailboxSnapshots, TeamsDeviceUsageSnapshots, SiteUsageSnapshots, SiteUsageDetailSnapshots, YammerActivitySnapshots, GroupSnapshots, BrandingSettings
+- 31 DbSets: MauSnapshots, Tenants, LicenseSnapshots, MessageCenterPosts, SecuritySignInSummaries, WorkloadActivities, CopilotUsageSnapshots, CopilotChatUsageSnapshots, UserSegmentSnapshots, DepartmentUsageSnapshots, StorageSnapshots, ConsumptionSnapshots, M365AppUsageSnapshots, SecureScoreSnapshots, SecureScoreControlSnapshots, MfaRegistrationSnapshots, InactiveAccountSnapshots, ServiceHealthSnapshots, ServiceHealthIssueSnapshots, DeviceComplianceSnapshots, ConditionalAccessSnapshots, GuestUserSnapshots, RiskyUserSnapshots, MailboxUsageSnapshots, TopMailboxSnapshots, TeamsDeviceUsageSnapshots, SiteUsageSnapshots, SiteUsageDetailSnapshots, YammerActivitySnapshots, GroupSnapshots, BrandingSettings
 - `BrandingSettings` is a singleton row: logo/favicon (Base64 + content type), 6 theme colors (light/dark × primary/secondary/appbar), app title
 - **TD SYNNEX attribution is non-removable**: a theme-aware logo (`wwwroot/tds-logo-light.svg` / `tds-logo-dark.svg`) is centered in the app bar (`MainLayout.razor`, `.tds-attribution`), served from static files and rendered independently of `BrandingSettings`. It must stay visible/unaltered in all (incl. rebranded) deployments per the LICENSE — never wire it into the branding settings or remove it
 - `TenantInfo` tracks consent health: `MissingPermissions` (comma-separated Graph permissions that failed a consent probe; empty = all consented) + `PermissionsCheckedAt` (last probe time). Populated on every collection run
@@ -94,6 +94,14 @@ azd deploy
 - Web app calls it via `HttpCollectorClient`; falls back to local collection if unreachable
 - Shares `OnDemandDataCollectionService` from `MWDashboard.Shared`
 
+### Copilot-Audit Collector (src/MWDashboard.CopilotAudit/)
+- Collects **unlicensed Copilot Chat** usage from the **Office 365 Management Activity API** (not Graph) — the only stateful, subscription-based source in the app
+- `POST /collect/{tenantId}?tenantName=...` (on-demand) **and** an internal `PeriodicTimer` cron (`CopilotAudit:ScheduleIntervalHours`, default 24h) that loops active tenants — `minReplicas: 1` so the cron keeps each tenant's cursor advancing inside the 7-day audit-retention window
+- Internal ingress only; placeholder-image → real-image deploy pattern (same as the collector)
+- `ManagementActivityClient` (audience `https://manage.office.com/.default`, per-tenant token cache, `Retry-After` backoff, AF20022/AF20024 handling) + `CopilotAuditCollectionService` (filters `Workload=="Copilot"` + BizChat `AppHost` set, dedupes distinct users/day, splits licensed vs. unlicensed via `GraphReportService.GetCopilotLicensedUpnsAsync`, advances cursor `TenantInfo.CopilotAuditCursorUtc`)
+- Web app polls it from `/copilot` ("Poll Copilot Chat") via `ICopilotAuditClient` → `HttpCopilotAuditClient` (typed HttpClient, `CopilotAuditBaseUrl`) with `LocalCopilotAuditClient` fallback when unconfigured
+- Cache feature key `copilot-chat` (60-min TTL); requires `ActivityFeed.Read` (Office 365 Management APIs) + unified audit logging enabled per tenant
+
 ### Consent Callback (src/MWDashboard.Consent/)
 - Minimal API with single endpoint: `POST /consent-callback?tenant={tenantId}&token={hmac}`
 - External ingress with CORS restricted to Static Web App origin
@@ -115,7 +123,7 @@ azd deploy
 ### EF Core Migrations (src/MWDashboard.Shared/Migrations/)
 - Add migrations from the Web project: `dotnet ef migrations add <Name> --project ../MWDashboard.Shared`
 - Auto-migrate on startup in both Web and Job
-- DbContext has 30 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
+- DbContext has 31 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
 
 ### Authentication & Authorization (src/MWDashboard.Web/)
 - **OpenID Connect** via `Microsoft.Identity.Web` — multi-tenant (`TenantId: "common"`), authorization code flow (`ResponseType: "code"`)
@@ -137,6 +145,7 @@ azd deploy
 - `IGraphReportService` → `GraphReportService` (Scoped)
 - `TenantFilterService` → Scoped (shared state per circuit, supports `SetTenantScope` for data isolation)
 - `IDataCollectionService` → `HttpCollectorClient` (typed HttpClient, calls Collector container) / fallback to `OnDemandDataCollectionService` if no `CollectorBaseUrl` configured
+- `ICopilotAuditClient` → `HttpCopilotAuditClient` (typed HttpClient, calls CopilotAudit container) / fallback to `LocalCopilotAuditClient` if no `CopilotAuditBaseUrl` configured; `IManagementActivityClient` + `ICopilotAuditCollectionService` registered for the local fallback
 - `RedisCacheInvalidationService` → Singleton (Redis pub/sub for cross-replica invalidation)
 - `CacheWarmupService` → Hosted service (pre-populates cache on startup)
 - `IConnectionMultiplexer` → Singleton (Redis connection for pub/sub, if Redis configured)

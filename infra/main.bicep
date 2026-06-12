@@ -173,6 +173,7 @@ module web './modules/container-app-web.bicep' = {
     azureAdTenantId: azureAdTenantId
     managedIdentityId: identity.outputs.id
     collectorFqdn: ondemand.outputs.fqdn
+    copilotAuditFqdn: copilotaudit.outputs.fqdn
     appInsightsConnectionString: appInsights.outputs.connectionString
     consentRedirectUri: consentStatic.outputs.uri
   }
@@ -204,6 +205,28 @@ module ondemand './modules/container-app-collector.bicep' = {
   dependsOn: [acrPullUami, kvSecretsUami]
   params: {
     name: '${abbrs.appContainerApps}collect-${resourceToken}'
+    location: location
+    tags: tags
+    containerAppsEnvironmentId: containerEnv.outputs.id
+    containerRegistryLoginServer: acr.outputs.loginServer
+    imageName: ''
+    sqlConnectionString: sql.outputs.connectionString
+    keyVaultUri: keyVault.outputs.uri
+    azureAdTenantId: azureAdTenantId
+    managedIdentityId: identity.outputs.id
+    appInsightsConnectionString: appInsights.outputs.connectionString
+  }
+}
+
+// Copilot Audit Container App (unlicensed Copilot Chat usage via Office 365 Management Activity API)
+// HTTP API for on-demand collection + an internal cron scheduler that advances each tenant's
+// 7-day audit cursor. imageName '' falls back to a placeholder image on first provision.
+module copilotaudit './modules/container-app-copilotaudit.bicep' = {
+  name: 'container-app-copilotaudit'
+  scope: rg
+  dependsOn: [acrPullUami, kvSecretsUami]
+  params: {
+    name: '${abbrs.appContainerApps}cpaudit-${resourceToken}'
     location: location
     tags: tags
     containerAppsEnvironmentId: containerEnv.outputs.id
@@ -290,6 +313,16 @@ module acrPullConsent './modules/role-assignment.bicep' = {
   }
 }
 
+module acrPullCopilotAudit './modules/role-assignment.bicep' = {
+  name: 'acr-pull-copilotaudit'
+  scope: rg
+  params: {
+    principalId: copilotaudit.outputs.principalId
+    roleDefinitionId: '7f951dda-4ed3-4680-a7ca-43fe172d538d' // AcrPull
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // Role assignments - Key Vault Secrets User for container apps
 module kvSecretsWeb './modules/role-assignment.bicep' = {
   name: 'kv-secrets-web'
@@ -331,9 +364,20 @@ module kvSecretsConsent './modules/role-assignment.bicep' = {
   }
 }
 
+module kvSecretsCopilotAudit './modules/role-assignment.bicep' = {
+  name: 'kv-secrets-copilotaudit'
+  scope: rg
+  params: {
+    principalId: copilotaudit.outputs.principalId
+    roleDefinitionId: '4633458b-17de-408a-b874-0445c86b69e6' // Key Vault Secrets User
+    principalType: 'ServicePrincipal'
+  }
+}
+
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = acr.outputs.loginServer
 output AZURE_CONTAINER_REGISTRY_NAME string = acr.outputs.name
 output COLLECTOR_FQDN string = ondemand.outputs.fqdn
+output COPILOT_AUDIT_FQDN string = copilotaudit.outputs.fqdn
 output CONSENT_CALLBACK_FQDN string = consent.outputs.fqdn
 output CONSENT_STATIC_NAME string = consentStatic.outputs.name
 output CONSENT_STATIC_URI string = consentStatic.outputs.uri

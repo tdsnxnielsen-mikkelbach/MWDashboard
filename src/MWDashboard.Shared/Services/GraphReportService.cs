@@ -33,6 +33,13 @@ public interface IGraphReportService
     Task<YammerActivitySnapshot?> GetYammerActivityAsync(string tenantId);
     Task<GroupSnapshot?> GetGroupSprawlAsync(string tenantId);
     Task<List<string>> CheckMissingPermissionsAsync(string tenantId);
+
+    /// <summary>
+    /// Returns the set of user principal names (lower-cased) that hold an assigned Microsoft 365
+    /// Copilot license. Used to split Copilot-Chat audit activity into licensed vs. unlicensed.
+    /// Returns an empty set if the tenant has no Copilot SKU (so all chat users are unlicensed).
+    /// </summary>
+    Task<HashSet<string>> GetCopilotLicensedUpnsAsync(string tenantId);
 }
 
 public class GraphReportService : IGraphReportService
@@ -1924,6 +1931,50 @@ public class GraphReportService : IGraphReportService
     }
 
     // Consent health — probes each required Graph application permission with a minimal call.
+    // Microsoft 365 Copilot license SKU IDs (assigning any of these grants a paid Copilot seat).
+    // Used to determine which Copilot-Chat audit users are licensed vs. unlicensed.
+    private static readonly HashSet<Guid> CopilotSkuIds =
+    [
+        Guid.Parse("639dec6b-bb19-468b-871c-c5c441c4b0cb"), // Microsoft 365 Copilot
+    ];
+
+    public async Task<HashSet<string>> GetCopilotLicensedUpnsAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var upns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var page = await client.Users.GetAsync(config =>
+            {
+                config.QueryParameters.Select = ["userPrincipalName", "assignedLicenses"];
+                config.QueryParameters.Top = 999;
+            });
+
+            if (page?.Value == null)
+                return upns;
+
+            void Accumulate(Microsoft.Graph.Models.User u)
+            {
+                if (string.IsNullOrEmpty(u.UserPrincipalName) || u.AssignedLicenses == null)
+                    return;
+                if (u.AssignedLicenses.Any(l => l.SkuId.HasValue && CopilotSkuIds.Contains(l.SkuId.Value)))
+                    upns.Add(u.UserPrincipalName);
+            }
+
+            var iterator = Microsoft.Graph.PageIterator<Microsoft.Graph.Models.User, Microsoft.Graph.Models.UserCollectionResponse>
+                .CreatePageIterator(client, page, u => { Accumulate(u); return true; });
+            await iterator.IterateAsync();
+        }
+        catch (Exception ex)
+        {
+            // Missing license/permission/data just means we can't confirm licensing — treat all as unlicensed.
+            _logger.LogWarning(ex, "Failed to resolve Copilot-licensed users for tenant {TenantId}; treating all Copilot Chat users as unlicensed", tenantId);
+        }
+
+        return upns;
+    }
+
     // Returns the display names of permissions that are NOT consented in the target tenant
     // (i.e. the tenant admin needs to re-consent). An empty list means all permissions are present.
     public async Task<List<string>> CheckMissingPermissionsAsync(string tenantId)

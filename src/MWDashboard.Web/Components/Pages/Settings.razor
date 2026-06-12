@@ -45,12 +45,13 @@ else
                 </div>
             }
             <MudFileUpload T="IBrowserFile" Accept=".png,.jpg,.jpeg,.svg,.webp" FilesChanged="OnLogoUpload">
-                <ActivatorContent>
+                <CustomContent>
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" 
-                               StartIcon="@Icons.Material.Filled.CloudUpload">
+                               StartIcon="@Icons.Material.Filled.CloudUpload"
+                               OnClick="@(() => context.OpenFilePickerAsync())">
                         Upload Logo
                     </MudButton>
-                </ActivatorContent>
+                </CustomContent>
             </MudFileUpload>
             @if (!string.IsNullOrEmpty(_settings.LogoBase64))
             {
@@ -68,12 +69,13 @@ else
                 </div>
             }
             <MudFileUpload T="IBrowserFile" Accept=".png,.ico,.svg" FilesChanged="OnFaviconUpload">
-                <ActivatorContent>
+                <CustomContent>
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" 
-                               StartIcon="@Icons.Material.Filled.CloudUpload">
+                               StartIcon="@Icons.Material.Filled.CloudUpload"
+                               OnClick="@(() => context.OpenFilePickerAsync())">
                         Upload Favicon
                     </MudButton>
-                </ActivatorContent>
+                </CustomContent>
             </MudFileUpload>
             @if (!string.IsNullOrEmpty(_settings.FaviconBase64))
             {
@@ -87,18 +89,18 @@ else
             <MudText Typo="Typo.h6" Class="mb-3">Light Theme</MudText>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">Primary</MudText>
-                <MudColorPicker @bind-Value="_lightPrimary" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
-                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+                <MudColorPicker @bind-Value="_lightPrimary" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">Secondary</MudText>
-                <MudColorPicker @bind-Value="_lightSecondary" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
-                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+                <MudColorPicker @bind-Value="_lightSecondary" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">AppBar</MudText>
-                <MudColorPicker @bind-Value="_lightAppbar" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
-                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+                <MudColorPicker @bind-Value="_lightAppbar" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
         </MudPaper>
     </MudItem>
@@ -108,18 +110,18 @@ else
             <MudText Typo="Typo.h6" Class="mb-3">Dark Theme</MudText>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">Primary</MudText>
-                <MudColorPicker @bind-Value="_darkPrimary" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
-                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+                <MudColorPicker @bind-Value="_darkPrimary" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">Secondary</MudText>
-                <MudColorPicker @bind-Value="_darkSecondary" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
-                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+                <MudColorPicker @bind-Value="_darkSecondary" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">AppBar</MudText>
-                <MudColorPicker @bind-Value="_darkAppbar" DisableAlpha="true" ColorPickerMode="ColorPickerMode.HEX" 
-                               PickerVariant="PickerVariant.Inline" DisableToolbar="true" Style="width:200px;" />
+                <MudColorPicker @bind-Value="_darkAppbar" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
+                               PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
         </MudPaper>
     </MudItem>

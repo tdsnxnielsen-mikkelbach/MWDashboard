@@ -29,7 +29,7 @@
             @tenantsNeedingConsent.Count tenant@(tenantsNeedingConsent.Count == 1 ? "" : "s") @(tenantsNeedingConsent.Count == 1 ? "is" : "are")
             missing consent for one or more Graph permissions. Some data will not be collected until the customer's Global Admin re-runs admin consent.
         </MudText>
-        <MudList T="string" Dense="true" DisablePadding="true">
+        <MudList T="string" Dense="true">
             @foreach (var t in tenantsNeedingConsent)
             {
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Warning" IconColor="Color.Warning">

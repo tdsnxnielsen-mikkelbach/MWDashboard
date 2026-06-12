@@ -115,6 +115,12 @@ public interface IMauDataService
 
     // Tenant consent health
     Task UpdateTenantPermissionStatusAsync(string tenantId, IEnumerable<string> missingPermissions);
+
+    // Copilot Chat (unlicensed) usage — Office 365 Management Activity API
+    Task<List<CopilotChatUsageSnapshot>> GetCopilotChatUsageAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveCopilotChatUsageAsync(IEnumerable<CopilotChatUsageSnapshot> snapshots);
+    Task<DateTime?> GetCopilotAuditCursorAsync(string tenantId);
+    Task UpdateCopilotAuditCursorAsync(string tenantId, DateTime cursorUtc);
 }
 
 public class MauDataService : IMauDataService
@@ -1538,5 +1544,69 @@ public class MauDataService : IMauDataService
         tenant.MissingPermissions = string.Join(",", missingPermissions);
         tenant.PermissionsCheckedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+    }
+
+    // Copilot Chat (unlicensed) usage — Office 365 Management Activity API
+    public async Task<List<CopilotChatUsageSnapshot>> GetCopilotChatUsageAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var query = db.CopilotChatUsageSnapshots.AsNoTracking().Where(s => s.ReportDate >= cutoff);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveCopilotChatUsageAsync(IEnumerable<CopilotChatUsageSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.CopilotChatUsageSnapshots
+                .FirstOrDefaultAsync(s =>
+                    s.TenantId == snapshot.TenantId &&
+                    s.AppHost == snapshot.AppHost &&
+                    s.ReportDate == snapshot.ReportDate);
+
+            if (existing != null)
+            {
+                existing.TenantName = snapshot.TenantName;
+                existing.ActiveUsers = snapshot.ActiveUsers;
+                existing.InteractionCount = snapshot.InteractionCount;
+                existing.UnlicensedUsers = snapshot.UnlicensedUsers;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.CopilotChatUsageSnapshots.Add(snapshot);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<DateTime?> GetCopilotAuditCursorAsync(string tenantId)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        return tenant?.CopilotAuditCursorUtc;
+    }
+
+    public async Task UpdateCopilotAuditCursorAsync(string tenantId, DateTime cursorUtc)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        if (tenant == null) return;
+
+        // Never move the cursor backwards.
+        if (tenant.CopilotAuditCursorUtc == null || cursorUtc > tenant.CopilotAuditCursorUtc)
+        {
+            tenant.CopilotAuditCursorUtc = cursorUtc;
+            await db.SaveChangesAsync();
+        }
     }
 }
