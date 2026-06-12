@@ -93,12 +93,11 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        // Keep only rows from the latest ReportDate per tenant.
-        return all
-            .LatestDateRowsPerKey(s => s.TenantId, s => s.ReportDate)
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
             .OrderBy(s => s.DaysToExpiry)
-            .ToList();
+            .ToListAsync();
     }
 
     public async Task SaveAppCredentialsAsync(string tenantId, DateTime reportDate, IEnumerable<AppCredentialSnapshot> snapshots)
@@ -184,11 +183,11 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        return all
-            .LatestDateRowsPerKey(s => s.TenantId, s => s.ReportDate)
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
             .OrderByDescending(s => s.MemberCount)
-            .ToList();
+            .ToListAsync();
     }
 
     public async Task SavePrivilegedRolesAsync(string tenantId, DateTime reportDate, IEnumerable<PrivilegedRoleSnapshot> snapshots)
@@ -214,10 +213,10 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        return all
-            .LatestDateRowsPerKey(s => s.TenantId, s => s.ReportDate)
-            .ToList();
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .ToListAsync();
     }
 
     public async Task SaveDefenderAlertsAsync(string tenantId, DateTime reportDate, IEnumerable<DefenderAlertSnapshot> snapshots)

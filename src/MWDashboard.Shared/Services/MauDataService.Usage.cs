@@ -16,9 +16,11 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        // Latest snapshot per tenant
-        return all.LatestPerKey(s => s.TenantId, s => s.ReportDate);
+        // Latest snapshot per tenant, reduced in SQL.
+        return await query
+            .GroupBy(s => s.TenantId)
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToListAsync();
     }
 
     public async Task SaveMailboxUsageAsync(MailboxUsageSnapshot snapshot)
@@ -55,12 +57,11 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        // Only the latest collection per tenant
-        return all
-            .LatestDateRowsPerKey(s => s.TenantId, s => s.ReportDate)
+        // Keep only rows from each tenant's most recent collection date (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
             .OrderBy(s => s.TenantId).ThenBy(s => s.Rank)
-            .ToList();
+            .ToListAsync();
     }
 
     public async Task SaveTopMailboxesAsync(IEnumerable<TopMailboxSnapshot> snapshots)
@@ -97,9 +98,11 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        // Latest snapshot per tenant
-        return all.LatestPerKey(s => s.TenantId, s => s.ReportDate);
+        // Latest snapshot per tenant, reduced in SQL.
+        return await query
+            .GroupBy(s => s.TenantId)
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToListAsync();
     }
 
     public async Task SaveTeamsDeviceUsageAsync(TeamsDeviceUsageSnapshot snapshot)
@@ -137,9 +140,11 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        // Latest per (tenant, workload)
-        return all.LatestPerKey(s => new { s.TenantId, s.Workload }, s => s.ReportDate);
+        // Latest per (tenant, workload), reduced in SQL.
+        return await query
+            .GroupBy(s => new { s.TenantId, s.Workload })
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToListAsync();
     }
 
     public async Task SaveSiteUsageAsync(IEnumerable<SiteUsageSnapshot> snapshots)
@@ -176,12 +181,13 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        // Latest collection per (tenant, workload)
-        return all
-            .LatestDateRowsPerKey(s => new { s.TenantId, s.Workload }, s => s.ReportDate)
+        // Keep only rows from the latest collection per (tenant, workload) (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query
+                .Where(x => x.TenantId == s.TenantId && x.Workload == s.Workload)
+                .Max(x => x.ReportDate))
             .OrderBy(s => s.TenantId).ThenBy(s => s.Workload).ThenBy(s => s.Rank)
-            .ToList();
+            .ToListAsync();
     }
 
     public async Task SaveSiteUsageDetailAsync(IEnumerable<SiteUsageDetailSnapshot> snapshots)
@@ -220,9 +226,11 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        // Latest snapshot per tenant
-        return all.LatestPerKey(s => s.TenantId, s => s.ReportDate);
+        // Latest snapshot per tenant, reduced in SQL.
+        return await query
+            .GroupBy(s => s.TenantId)
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToListAsync();
     }
 
     public async Task SaveYammerActivityAsync(YammerActivitySnapshot snapshot)
@@ -255,9 +263,11 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        var all = await query.ToListAsync();
-        // Latest snapshot per tenant
-        return all.LatestPerKey(s => s.TenantId, s => s.ReportDate);
+        // Latest snapshot per tenant, reduced in SQL.
+        return await query
+            .GroupBy(s => s.TenantId)
+            .Select(g => g.OrderByDescending(s => s.ReportDate).First())
+            .ToListAsync();
     }
 
     public async Task SaveGroupSprawlAsync(GroupSnapshot snapshot)

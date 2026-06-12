@@ -129,12 +129,7 @@ public partial class GraphReportService
 
         try
         {
-            var credential = new ClientSecretCredential(
-                tenantId,
-                _config["AzureAd:ClientId"],
-                _config["AzureAd:ClientSecret"]);
-
-            var betaClient = new BetaGraphClient(credential, ["https://graph.microsoft.com/.default"]);
+            var betaClient = CreateBetaClientForTenant(tenantId);
 
             var fromDate = DateTime.UtcNow.AddDays(-days);
             var filter = $"createdDateTime ge {fromDate:yyyy-MM-ddTHH:mm:ssZ}";

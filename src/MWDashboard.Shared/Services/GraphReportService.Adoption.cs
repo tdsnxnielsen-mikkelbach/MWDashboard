@@ -104,12 +104,7 @@ public partial class GraphReportService
 
         try
         {
-            var credential = new ClientSecretCredential(
-                tenantId,
-                _config["AzureAd:ClientId"],
-                _config["AzureAd:ClientSecret"]);
-
-            var betaClient = new BetaGraphClient(credential, ["https://graph.microsoft.com/.default"]);
+            var betaClient = CreateBetaClientForTenant(tenantId);
 
             var report = await betaClient.Reports
                 .GetMicrosoft365CopilotUsageUserDetailWithPeriod("D30")

@@ -196,9 +196,10 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        // Latest report date per tenant, then return that date's per-service rows
-        var all = await query.ToListAsync();
-        return all.LatestDateRowsPerKey(s => s.TenantId, s => s.ReportDate).ToList();
+        // Latest report date per tenant, then return that date's per-service rows (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .ToListAsync();
     }
 
     public async Task SaveServiceHealthAsync(IEnumerable<ServiceHealthSnapshot> snapshots)
@@ -236,9 +237,10 @@ public partial class MauDataService
             var ids = tenantIds.ToList();
             query = query.Where(s => ids.Contains(s.TenantId));
         }
-        // Only the most recent collection per tenant (prunes issues resolved since last run)
-        var all = await query.ToListAsync();
-        return all.LatestDateRowsPerKey(s => s.TenantId, s => s.ReportDate).ToList();
+        // Only the most recent collection per tenant (prunes issues resolved since last run), reduced in SQL.
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .ToListAsync();
     }
 
     public async Task SaveServiceHealthIssuesAsync(IEnumerable<ServiceHealthIssueSnapshot> snapshots)

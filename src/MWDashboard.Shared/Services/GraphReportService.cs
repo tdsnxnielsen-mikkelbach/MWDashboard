@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -50,19 +51,31 @@ public partial class GraphReportService : IGraphReportService
     private readonly IConfiguration _config;
     private readonly ILogger<GraphReportService> _logger;
 
+    // Per-tenant caches. The OAuth token cache lives on the ClientSecretCredential instance, so
+    // reusing one credential (and the clients built from it) across a tenant's collection run
+    // avoids re-acquiring the same token ~27 times. The service is registered Scoped, so these
+    // caches live only for the duration of a single request (collector) or one-shot run (job).
+    private readonly ConcurrentDictionary<string, ClientSecretCredential> _credentialCache = new();
+    private readonly ConcurrentDictionary<string, GraphServiceClient> _clientCache = new();
+    private readonly ConcurrentDictionary<string, BetaGraphClient> _betaClientCache = new();
+
     public GraphReportService(IConfiguration config, ILogger<GraphReportService> logger)
     {
         _config = config;
         _logger = logger;
     }
 
-    private GraphServiceClient CreateClientForTenant(string tenantId)
-    {
-        var credential = new ClientSecretCredential(
-            tenantId,
+    private ClientSecretCredential GetCredentialForTenant(string tenantId)
+        => _credentialCache.GetOrAdd(tenantId, tid => new ClientSecretCredential(
+            tid,
             _config["AzureAd:ClientId"],
-            _config["AzureAd:ClientSecret"]);
+            _config["AzureAd:ClientSecret"]));
 
-        return new GraphServiceClient(credential, ["https://graph.microsoft.com/.default"]);
-    }
+    private GraphServiceClient CreateClientForTenant(string tenantId)
+        => _clientCache.GetOrAdd(tenantId, tid =>
+            new GraphServiceClient(GetCredentialForTenant(tid), ["https://graph.microsoft.com/.default"]));
+
+    private BetaGraphClient CreateBetaClientForTenant(string tenantId)
+        => _betaClientCache.GetOrAdd(tenantId, tid =>
+            new BetaGraphClient(GetCredentialForTenant(tid), ["https://graph.microsoft.com/.default"]));
 }
