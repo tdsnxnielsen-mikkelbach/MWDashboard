@@ -159,15 +159,19 @@ public partial class GraphReportService
             () => client.Applications.GetAsync(c => { c.QueryParameters.Top = 1; c.QueryParameters.Select = ["id"]; }));
         await ProbePermissionAsync(missing, "RoleManagement.Read.Directory",
             () => client.DirectoryRoles.GetAsync());
+        // /security/alerts_v2 returns a bare 403 on tenants that aren't onboarded to Microsoft
+        // Defender XDR even when SecurityAlert.Read.All IS granted, so a blanket 403 would produce
+        // a false "re-consent" flag. Only flag it on a genuine authorization-denied code.
         await ProbePermissionAsync(missing, "SecurityAlert.Read.All",
-            () => client.Security.Alerts_v2.GetAsync(c => c.QueryParameters.Top = 1));
+            () => client.Security.Alerts_v2.GetAsync(c => c.QueryParameters.Top = 1),
+            treatBare403AsConsentGap: false);
         // IdentityRiskyUser.Read.All is intentionally NOT probed here: it is Entra ID P2-gated,
         // so a 403 on a non-P2 tenant is a licensing limit, not a consent gap, and would produce
         // a false "re-consent" flag. The risky-user collection logs that case on its own.
 
         return missing;
     }
-    private async Task ProbePermissionAsync(List<string> missing, string permission, Func<Task> probe)
+    private async Task ProbePermissionAsync(List<string> missing, string permission, Func<Task> probe, bool treatBare403AsConsentGap = true)
     {
         try
         {
@@ -175,7 +179,7 @@ public partial class GraphReportService
         }
         catch (Exception ex)
         {
-            if (IsPermissionError(ex))
+            if (IsPermissionError(ex, treatBare403AsConsentGap))
             {
                 missing.Add(permission);
             }
@@ -187,7 +191,7 @@ public partial class GraphReportService
         }
     }
 
-    private static bool IsPermissionError(Exception ex)
+    private static bool IsPermissionError(Exception ex, bool treatBare403AsConsentGap = true)
     {
         if (ex is Microsoft.Graph.Models.ODataErrors.ODataError odata)
         {
@@ -198,12 +202,17 @@ public partial class GraphReportService
             if (IsPremiumLicenseError(detail))
                 return false;
 
-            if (odata.ResponseStatusCode == 403) return true;
+            // An explicit authorization-denied code always means the permission is missing.
             var code = odata.Error?.Code ?? string.Empty;
             if (code.Contains("Unauthorized", StringComparison.OrdinalIgnoreCase) ||
                 code.Contains("AccessDenied", StringComparison.OrdinalIgnoreCase) ||
                 code.Contains("Authorization_RequestDenied", StringComparison.OrdinalIgnoreCase))
                 return true;
+
+            // A bare 403 with no auth-specific code can be a service-onboarding/licensing limit
+            // rather than a consent gap (e.g. /security/alerts_v2 on tenants not onboarded to
+            // Microsoft Defender XDR). Only treat it as a consent gap when the caller opts in.
+            if (odata.ResponseStatusCode == 403) return treatBare403AsConsentGap;
         }
 
         var msg = ex.Message ?? string.Empty;
