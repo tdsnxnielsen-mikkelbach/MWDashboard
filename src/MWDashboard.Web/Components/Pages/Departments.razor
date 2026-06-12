@@ -8,7 +8,10 @@
 
 <PageTitle>Department Adoption</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4">Department Adoption</MudText>
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h4">Department Adoption</MudText>
+    <ExportButton Feature="departments" />
+</div>
 
 @if (_loading)
 {

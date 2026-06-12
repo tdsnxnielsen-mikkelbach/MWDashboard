@@ -7,7 +7,12 @@
 
 <PageTitle>Service Health</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-2">Microsoft 365 Service Health</MudText>
+<div class="d-flex justify-space-between align-center mb-2">
+    <MudText Typo="Typo.h4">Microsoft 365 Service Health</MudText>
+    <ExportMenu Items="@(new[] {
+        ("Service Status", "service-health"),
+        ("Incidents &amp; Advisories", "service-health-issues") })" />
+</div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Current operational status of Microsoft 365 services and active incidents/advisories.
     Requires <PermissionTag Scope="ServiceHealth.Read.All" />.

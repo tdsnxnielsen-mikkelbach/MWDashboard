@@ -20,7 +20,10 @@ else
 {
 <MudGrid>
     <MudItem xs="12">
-        <MudText Typo="Typo.h5">M365 App Platform Usage</MudText>
+        <div class="d-flex justify-space-between align-center">
+            <MudText Typo="Typo.h5">M365 App Platform Usage</MudText>
+            <ExportButton Feature="m365apps" />
+        </div>
     </MudItem>
 
     @* App Usage Bar Chart *@

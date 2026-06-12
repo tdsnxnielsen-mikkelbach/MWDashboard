@@ -9,7 +9,17 @@
 
 <PageTitle>Usage & Governance</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-2">Usage &amp; Governance</MudText>
+<div class="d-flex justify-space-between align-center mb-2">
+    <MudText Typo="Typo.h4">Usage &amp; Governance</MudText>
+    <ExportMenu Items="@(new[] {
+        ("Mailbox Usage", "mailbox-usage"),
+        ("Top Mailboxes", "top-mailboxes"),
+        ("Teams Devices", "teams-devices"),
+        ("SharePoint &amp; OneDrive", "site-usage"),
+        ("Top Sites / Accounts", "site-usage-detail"),
+        ("Viva Engage", "yammer"),
+        ("Groups &amp; Teams", "groups") })" />
+</div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Mailbox storage, Teams device adoption, SharePoint &amp; OneDrive usage, Viva Engage activity, and Microsoft 365 group sprawl.
     Requires <PermissionTag Scope="Reports.Read.All" /> and (for group governance) <PermissionTag Scope="Group.Read.All" />.

@@ -24,11 +24,7 @@ else
     <MudItem xs="12">
         <div class="d-flex justify-space-between align-center">
             <MudText Typo="Typo.h5">Consumption Overview</MudText>
-            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.Download"
-                       Href="/api/export/consumption" Target="_blank">
-                Export CSV
-            </MudButton>
+            <ExportButton Feature="consumption" />
         </div>
     </MudItem>
 

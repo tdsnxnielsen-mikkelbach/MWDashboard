@@ -8,7 +8,12 @@
 
 <PageTitle>Secure Score</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-2">Microsoft Secure Score</MudText>
+<div class="d-flex justify-space-between align-center mb-2">
+    <MudText Typo="Typo.h4">Microsoft Secure Score</MudText>
+    <ExportMenu Items="@(new[] {
+        ("Score History", "secure-scores"),
+        ("Control Details", "secure-score-controls") })" />
+</div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Security posture score and prioritized remediation actions from Microsoft Defender.
     Requires <PermissionTag Scope="SecurityEvents.Read.All" />.

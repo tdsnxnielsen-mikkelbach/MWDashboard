@@ -7,6 +7,7 @@ using MudBlazor.Services;
 using MWDashboard.Shared.Data;
 using MWDashboard.Shared.Services;
 using MWDashboard.Web.Components;
+using MWDashboard.Web.Endpoints;
 using MWDashboard.Web.Services;
 using StackExchange.Redis;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
@@ -195,22 +196,7 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .RequireAuthorization();
 
-// Export endpoint for consumption data (CSV)
-app.MapGet("/api/export/consumption", async (IMauDataService dataService, HttpContext ctx) =>
-{
-    var consumption = await dataService.GetConsumptionAsync(null, months: 12);
-    ctx.Response.ContentType = "text/csv";
-    ctx.Response.Headers.Append("Content-Disposition", "attachment; filename=consumption-report.csv");
-
-    await using var writer = new StreamWriter(ctx.Response.Body);
-    await writer.WriteLineAsync("TenantId,TenantName,ReportDate,ConsumptionScore,ActiveUsers,LicensedUsers,AdoptionPct,StorageUsedGB,AvgWorkloads,TotalActivity");
-    foreach (var c in consumption)
-    {
-        var adoptionPct = c.LicensedUserCount > 0 ? (double)c.ActiveUserCount / c.LicensedUserCount * 100 : 0;
-        await writer.WriteLineAsync($"{c.TenantId},{EscapeCsv(c.TenantName)},{c.ReportDate:yyyy-MM-dd},{c.ConsumptionScore:F1},{c.ActiveUserCount},{c.LicensedUserCount},{adoptionPct:F1},{c.StorageUsedBytes / 1073741824.0:F2},{c.AvgWorkloadsPerUser:F2},{c.TotalActivityCount}");
-    }
-}).RequireAuthorization();
-
-static string EscapeCsv(string value) => value.Contains(',') ? $"\"{value}\"" : value;
+// Export endpoints for dashboard data (CSV) — tenant scope enforced server-side
+app.MapExportEndpoints();
 
 app.Run();

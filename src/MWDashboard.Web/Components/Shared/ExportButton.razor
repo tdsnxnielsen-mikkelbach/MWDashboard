@@ -1,0 +1,20 @@
+@*
+    Renders a consistent "Export CSV" button that downloads a page's dataset from
+    the matching /api/export/{Feature} endpoint. Tenant-data isolation is enforced
+    server-side by the endpoint based on the signed-in user's claims.
+
+    Usage: <ExportButton Feature="licenses" />
+*@
+@using Color = MudBlazor.Color
+
+<MudButton Variant="Variant.Outlined" Color="Color.Primary"
+           StartIcon="@Icons.Material.Filled.Download"
+           Href="@($"/api/export/{Feature}")" Target="_blank"
+           rel="noopener">
+    @Label
+</MudButton>
+
+@code {
+    [Parameter, EditorRequired] public string Feature { get; set; } = string.Empty;
+    [Parameter] public string Label { get; set; } = "Export CSV";
+}

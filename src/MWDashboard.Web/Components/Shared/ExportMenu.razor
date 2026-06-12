@@ -1,0 +1,27 @@
+@*
+    Renders a dropdown "Export CSV" menu for pages that expose several datasets
+    (e.g. tabbed pages). Each item downloads one dataset from /api/export/{feature}.
+    Tenant-data isolation is enforced server-side based on the signed-in user's claims.
+
+    Usage:
+      <ExportMenu Items="@(new[] {
+          ("Device Compliance", "device-compliance"),
+          ("Conditional Access", "conditional-access") })" />
+*@
+@using Color = MudBlazor.Color
+
+<MudMenu StartIcon="@Icons.Material.Filled.Download" Label="@Label"
+         Variant="Variant.Outlined" Color="Color.Primary"
+         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+    @foreach (var (label, feature) in Items)
+    {
+        <MudMenuItem Href="@($"/api/export/{feature}")" Target="_blank" rel="noopener">
+            @label
+        </MudMenuItem>
+    }
+</MudMenu>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<(string Label, string Feature)> Items { get; set; } = [];
+    [Parameter] public string Label { get; set; } = "Export CSV";
+}

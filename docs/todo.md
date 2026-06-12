@@ -104,6 +104,7 @@ Copilot Chat interactions land in `Audit.General` content blobs as records with:
 - [x] Redis caching for consumption/storage queries (TTL 15 min) — `CachedMauDataService` decorator wraps `MauDataService`
 - [x] M365 App Platform usage (`getM365AppUserCounts`) for cross-app engagement metrics — model, Graph endpoint, collection pipeline
 - [x] Export consumption report to CSV — `/api/export/consumption` endpoint with download button on page
+- [x] CSV export for all datasets — per-page "Export CSV" buttons (`ExportButton`), per-dataset dropdowns on tabbed pages (`ExportMenu`), and a "Export All Data" ZIP (`/api/export-all`) on the Dashboard. All endpoints (`ExportEndpoints.cs`) enforce tenant-data isolation from the user's claims
 - [x] Separate on-demand collector container app (scales 0→3 independently, internal HTTP, with Web fallback)
 - [x] Cache warm-up hosted service — pre-populates common queries on startup to avoid thundering herd
 - [x] Sliding + absolute expiration — active dashboards stay warm (5/15 min or 20/60 min)

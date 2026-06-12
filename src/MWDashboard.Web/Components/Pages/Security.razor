@@ -8,7 +8,10 @@
 
 <PageTitle>Security Services</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-2">Security Services</MudText>
+<div class="d-flex justify-space-between align-center mb-2">
+    <MudText Typo="Typo.h4">Security Services</MudText>
+    <ExportButton Feature="security" />
+</div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Sign-in activity and MFA metrics from Entra audit logs. Requires <PermissionTag Scope="AuditLog.Read.All" />.
 </MudText>

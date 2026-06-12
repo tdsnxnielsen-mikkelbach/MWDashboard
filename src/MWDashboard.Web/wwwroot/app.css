@@ -50,6 +50,23 @@ html, body {
     fill: #cccccc !important;
 }
 
+/* Chart toolbar download menu (hamburger) — ensure items are visible.
+   ApexCharts menu items are HTML elements with no explicit color, so they
+   inherit the page text color and become invisible on the menu's background. */
+.apexcharts-menu {
+    background: var(--mud-palette-surface, #ffffff) !important;
+    border: 1px solid var(--mud-palette-lines-default, #ddd) !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;
+}
+
+.apexcharts-menu-item {
+    color: var(--mud-palette-text-primary, #1e1e2e) !important;
+}
+
+.apexcharts-menu-item:hover {
+    background: var(--mud-palette-action-default-hover, rgba(0, 0, 0, 0.08)) !important;
+}
+
 a, .btn-link {
     color: #006bb7;
 }

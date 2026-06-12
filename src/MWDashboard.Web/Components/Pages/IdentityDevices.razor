@@ -8,7 +8,14 @@
 
 <PageTitle>Identity & Devices</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-2">Identity &amp; Devices</MudText>
+<div class="d-flex justify-space-between align-center mb-2">
+    <MudText Typo="Typo.h4">Identity &amp; Devices</MudText>
+    <ExportMenu Items="@(new[] {
+        ("Device Compliance", "device-compliance"),
+        ("Conditional Access", "conditional-access"),
+        ("Guest Users", "guests"),
+        ("Risky Users", "risky-users") })" />
+</div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Device compliance, Conditional Access coverage, guest/external accounts, and identity risk.
     Requires <PermissionTag Scope="DeviceManagementManagedDevices.Read.All" />, <PermissionTag Scope="Policy.Read.All" />,

@@ -28,6 +28,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 
 ## Dashboard (`/`)
 
+- **Export All Data** — "Export All Data" button downloads every dashboard dataset as a single ZIP (`/api/export-all`), one CSV per dataset (24 files). Tenant scope is enforced server-side: home-tenant admins get all tenants, customer-tenant users get only their own tenant
 - **KPI cards** showing total active users, Teams/Exchange/SharePoint/OneDrive counts — each card displays active users vs total licensed seats with a color-coded progress bar (green ≥70%, yellow ≥40%, red <40% adoption)
 - **Active Users by Service** — shows per-service active users vs **service-relevant** license seats (only counts SKUs that include that service, not all tenant licenses). Uses dynamic `IncludedServices` field auto-detected from Graph API service plans, with static `ServiceSkuMap` fallback for older data
 - 12-month MAU trend line chart (per-tenant series in multi-tenant view)
@@ -104,7 +105,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
   - Storage Utilization (20%) — used storage / estimated allocation
   - Workload Breadth (20%) — avg services used per user (from segmentation)
 - **KPI cards with month-over-month deltas** — Overall score, adoption %, total storage, avg workloads; each shows a color-coded chip indicating change vs previous month (+green / -red)
-- **Export CSV** — "Export CSV" button downloads all consumption data as `/api/export/consumption` (TenantId, Score, Adoption, Storage, Workloads, Activity)
+- **Export CSV** — "Export CSV" button downloads all consumption data as `/api/export/consumption` (TenantId, Score, Adoption, Storage, Workloads, Activity); tenant scope enforced server-side from the signed-in user's claims
 - **Per-tenant score comparison** — horizontal progress bars ranked by score
 - **Radar chart** — 4-axis breakdown (Adoption, Activity, Storage, Breadth) per tenant
 - **Score trend** — line chart tracking consumption score over time (up to 6 months); per-tenant series in multi-tenant view
@@ -164,6 +165,20 @@ A single page with five tabs covering workload adoption and Microsoft 365 govern
 - **Groups & Teams** — group governance: total groups, Microsoft 365 groups, Teams-connected groups, ownerless M365 groups (governance-risk warning when > 0); groups-by-type donut (Microsoft 365 / Security / Distribution Lists / Other) and per-tenant table. Group types are classified from Graph properties: Microsoft 365 = `groupTypes` contains `Unified`; Security = security-enabled non-unified; Distribution Lists = mail-enabled non-security non-unified; Other = any remaining edge cases. Data source: `GET /groups` with `owners` expand; requires `Group.Read.All` (**new permission** — must be re-consented by each tenant)
 - **Tenant-scoped** — customer-tenant users see only their own tenant's data
 - Data models: `MailboxUsageSnapshot`, `TopMailboxSnapshot`, `TeamsDeviceUsageSnapshot`, `SiteUsageSnapshot`, `SiteUsageDetailSnapshot`, `YammerActivitySnapshot`, `GroupSnapshot` (aggregates one row per tenant per day; top-N rows ranked per tenant per day)
+
+## Data Export (CSV / ZIP)
+
+Every dashboard dataset can be exported to CSV. Exports are served from minimal-API endpoints (`MWDashboard.Web/Endpoints/ExportEndpoints.cs`) and use the same authentication and tenant-data isolation as the UI.
+
+- **Per-page Export CSV buttons** — single-dataset pages (Dashboard/Services, Licenses, Feature Usage, Copilot, Departments, Segmentation, M365 Apps, Security, Consumption) show an "Export CSV" button (`ExportButton.razor`) that downloads `/api/export/{feature}`
+- **Per-dataset Export menus** — multi-dataset (tabbed) pages show an "Export CSV" dropdown (`ExportMenu.razor`) with one item per dataset:
+  - **Secure Score** — Score History, Control Details
+  - **Service Health** — Service Status, Incidents & Advisories
+  - **Identity & Devices** — Device Compliance, Conditional Access, Guest Users, Risky Users
+  - **Usage & Governance** — Mailbox Usage, Top Mailboxes, Teams Devices, SharePoint & OneDrive, Top Sites/Accounts, Viva Engage, Groups & Teams
+- **Export All Data (ZIP)** — the Dashboard page has an "Export All Data" button (`/api/export-all`) that streams a single ZIP containing every dataset as its own CSV (24 files), named `mwdashboard-export-{date}.zip`
+- **Tenant isolation enforced server-side** — every export endpoint derives tenant scope from the signed-in user's `tenantid` claim (mirroring `MainLayout`): home-tenant admins export all tenants; customer-tenant users export only their own tenant. Client-supplied input is never trusted, so altering a URL cannot leak another tenant's data
+- **Single source of truth** — `ExportEndpoints.cs` defines each dataset once (filename, header, row builder); both the individual `/api/export/{feature}` endpoints and the `/api/export-all` ZIP reuse those definitions. CSV fields are escaped for commas/quotes/newlines
 
 ## Branding & Appearance (`/settings`)
 
