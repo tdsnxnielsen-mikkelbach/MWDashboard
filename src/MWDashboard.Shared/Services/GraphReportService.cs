@@ -1644,7 +1644,10 @@ public class GraphReportService : IGraphReportService
                     int iSend = Array.IndexOf(h, "Send Prohibited");
                     int iSendRecv = Array.IndexOf(h, "Send/Receive Prohibited");
 
-                    var latest = LatestByDate(rows, iDate);
+                    // These time-series count reports always emit the current refresh-date row with
+                    // EMPTY count columns; the populated figures sit on an earlier day. Pick the most
+                    // recent row that actually carries count data rather than the strictly latest date.
+                    var latest = LatestRowWithData(rows, iDate, iUnder, iWarn, iSend, iSendRecv);
                     if (latest != null)
                     {
                         aggregate ??= new MailboxUsageSnapshot { TenantId = tenantId, ReportDate = reportDate, CollectedAt = DateTime.UtcNow };
@@ -1895,6 +1898,30 @@ public class GraphReportService : IGraphReportService
             }
         }
         return best;
+    }
+
+    /// <summary>
+    /// Like <see cref="LatestByDate"/>, but skips rows where every supplied value column is empty.
+    /// Graph time-series "counts" reports emit the current refresh-date row with blank columns, so
+    /// the most recent row carrying data is typically one or two days behind the latest date.
+    /// </summary>
+    private static string[]? LatestRowWithData(List<string[]> rows, int dateIndex, params int[] valueIndexes)
+    {
+        string[]? best = null;
+        var bestDate = DateTime.MinValue;
+        for (int r = 1; r < rows.Count; r++)
+        {
+            var hasData = valueIndexes.Any(i => !string.IsNullOrWhiteSpace(GetValue(rows[r], i)));
+            if (!hasData) continue;
+
+            if (DateTime.TryParse(GetValue(rows[r], dateIndex), out var d) && d >= bestDate)
+            {
+                bestDate = d;
+                best = rows[r];
+            }
+        }
+        // Fall back to the strictly latest row if no row carried any value (preserves prior behaviour).
+        return best ?? LatestByDate(rows, dateIndex);
     }
 
     // Quote-aware CSV parser (usage-detail reports may contain quoted fields with embedded commas).
