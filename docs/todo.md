@@ -57,10 +57,11 @@ Unlike every existing feature, this is **not** a new Graph endpoint slotted into
 ### What the data looks like
 Copilot Chat interactions land in `Audit.General` content blobs as records with:
 - `Operation: "CopilotInteraction"`, `Workload: "Copilot"`, `RecordType: "CopilotInteraction"`
-- `AppHost` identifies the surface — the **free Copilot Chat** values are `BizChat`, `Bing`, `Edge`, `Office`, `M365App`, `OfficeCopilotSearchAnswer` (all map to "Microsoft 365 Copilot Chat")
+- `AppHost` identifies the surface — the **free Copilot Chat** values are `BizChat`, `Bing`, `Edge`, `Office`, `M365App`, `OfficeCopilotSearchAnswer` (all map to "Microsoft 365 Copilot Chat"). **`AppHost` is nested inside the `CopilotEventData` object**, not at the top level of the record (older/edge payloads may also expose it at the top level — read nested first, fall back to top-level)
 - `AppIdentity` e.g. `Copilot.MicrosoftCopilot.BizChat`
 - `UserId`, `CreationTime` — aggregate into active-user / interaction counts
 - The audit record does **not** state whether the user is licensed; cross-reference `UserId` against assigned Copilot SKUs (already collected in `LicenseSnapshot`) to split licensed vs. unlicensed.
+- **Record matching**: identify Copilot records resiliently via `Workload == "Copilot"` **or** `Operation == "CopilotInteraction"` **or** `RecordType == 261` — relying on `Workload`/`AppHost` alone silently drops every record on tenants whose payloads differ.
 
 ### Prerequisites (customer-side, per tenant)
 - **Unified audit logging must be ON** (default-on for new tenants, but not guaranteed). *(verified / enabled)*

@@ -137,11 +137,14 @@ public class CopilotAuditCollectionService : ICopilotAuditCollectionService
 
     private void AccumulateRecord(JsonElement record, Dictionary<(string, DateTime), Aggregate> aggregates)
     {
-        var workload = GetString(record, "Workload");
-        if (!string.Equals(workload, "Copilot", StringComparison.OrdinalIgnoreCase))
+        // Copilot interactions surface as RecordType 261 / Operation "CopilotInteraction" with
+        // Workload "Copilot". Match on any of these to be resilient to schema variations.
+        if (!IsCopilotInteraction(record))
             return;
 
-        var appHost = GetString(record, "AppHost");
+        // AppHost identifies the surface. In the Copilot audit schema it lives inside the nested
+        // "CopilotEventData" object (older/edge payloads may also expose it at the top level).
+        var appHost = GetCopilotAppHost(record);
         if (string.IsNullOrEmpty(appHost) || !CopilotChatAppHosts.Contains(appHost))
             return;
 
@@ -160,6 +163,29 @@ public class CopilotAuditCollectionService : ICopilotAuditCollectionService
         }
         agg.Users.Add(userId);
         agg.InteractionCount++;
+    }
+
+    private static bool IsCopilotInteraction(JsonElement record)
+    {
+        if (string.Equals(GetString(record, "Workload"), "Copilot", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(GetString(record, "Operation"), "CopilotInteraction", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return record.TryGetProperty("RecordType", out var rt)
+            && rt.ValueKind == JsonValueKind.Number
+            && rt.TryGetInt32(out var recordType)
+            && recordType == 261;
+    }
+
+    private static string GetCopilotAppHost(JsonElement record)
+    {
+        if (record.TryGetProperty("CopilotEventData", out var eventData) && eventData.ValueKind == JsonValueKind.Object)
+        {
+            var nested = GetString(eventData, "AppHost");
+            if (!string.IsNullOrEmpty(nested))
+                return nested;
+        }
+        return GetString(record, "AppHost");
     }
 
     private static string GetString(JsonElement element, string property)
