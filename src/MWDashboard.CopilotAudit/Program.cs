@@ -29,6 +29,7 @@ builder.Services.AddScoped<IGraphReportService, GraphReportService>();
 builder.Services.AddScoped<IMauDataService, MauDataService>();
 builder.Services.AddHttpClient<IManagementActivityClient, ManagementActivityClient>();
 builder.Services.AddScoped<ICopilotAuditCollectionService, CopilotAuditCollectionService>();
+builder.Services.AddScoped<IExternalSharingCollectionService, ExternalSharingCollectionService>();
 
 // Internal cron scheduler — advances the per-tenant cursor on a fixed interval.
 builder.Services.AddHostedService<CopilotAuditScheduleService>();
@@ -59,6 +60,22 @@ app.MapPost("/collect/{tenantId}", async (string tenantId, HttpContext ctx, ISer
     await collectionService.CollectForTenantAsync(tenantId, tenantName, ctx.RequestAborted);
 
     logger.LogInformation("Copilot Chat audit collection completed for tenant {TenantName} ({TenantId})", tenantName, tenantId);
+
+    // External sharing audit shares the same Management Activity API plumbing — collect it too.
+    var sharingService = scope.ServiceProvider.GetRequiredService<IExternalSharingCollectionService>();
+    try
+    {
+        await sharingService.CollectForTenantAsync(tenantId, tenantName, ctx.RequestAborted);
+    }
+    catch (CopilotAuditConfigurationException ex)
+    {
+        logger.LogWarning("External sharing audit not yet available for tenant {TenantName} ({TenantId}): {Message}", tenantName, tenantId, ex.Message);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "External sharing audit collection failed for tenant {TenantName} ({TenantId})", tenantName, tenantId);
+    }
+
     return Results.Ok(new { status = "completed", tenantId, tenantName });
 });
 

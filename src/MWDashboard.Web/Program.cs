@@ -143,6 +143,7 @@ else
 // and on-demand polling. The Management Activity client needs a typed HttpClient.
 builder.Services.AddHttpClient<IManagementActivityClient, ManagementActivityClient>();
 builder.Services.AddScoped<ICopilotAuditCollectionService, CopilotAuditCollectionService>();
+builder.Services.AddScoped<IExternalSharingCollectionService, ExternalSharingCollectionService>();
 
 var copilotAuditBaseUrl = builder.Configuration["CopilotAuditBaseUrl"];
 if (!string.IsNullOrEmpty(copilotAuditBaseUrl))

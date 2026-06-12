@@ -37,6 +37,10 @@ public class MauDbContext : DbContext
     public DbSet<GroupSnapshot> GroupSnapshots => Set<GroupSnapshot>();
     public DbSet<BrandingSettings> BrandingSettings => Set<BrandingSettings>();
     public DbSet<CopilotChatUsageSnapshot> CopilotChatUsageSnapshots => Set<CopilotChatUsageSnapshot>();
+    public DbSet<AppCredentialSnapshot> AppCredentialSnapshots => Set<AppCredentialSnapshot>();
+    public DbSet<ExternalSharingSnapshot> ExternalSharingSnapshots => Set<ExternalSharingSnapshot>();
+    public DbSet<PrivilegedRoleSnapshot> PrivilegedRoleSnapshots => Set<PrivilegedRoleSnapshot>();
+    public DbSet<DefenderAlertSnapshot> DefenderAlertSnapshots => Set<DefenderAlertSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -292,6 +296,45 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantId).HasMaxLength(100);
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.AppHost).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<AppCredentialSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate, e.AppObjectId, e.KeyId }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.AppId).HasMaxLength(100);
+            entity.Property(e => e.AppObjectId).HasMaxLength(100);
+            entity.Property(e => e.AppDisplayName).HasMaxLength(250);
+            entity.Property(e => e.CredentialType).HasMaxLength(20);
+            entity.Property(e => e.KeyId).HasMaxLength(100);
+            entity.Property(e => e.DisplayName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<ExternalSharingSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ShareType, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.ShareType).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<PrivilegedRoleSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.RoleName, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.RoleName).HasMaxLength(200);
+            entity.Property(e => e.RoleTemplateId).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<DefenderAlertSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.Severity, e.Status, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.Severity).HasMaxLength(30);
+            entity.Property(e => e.Status).HasMaxLength(30);
         });
     }
 }

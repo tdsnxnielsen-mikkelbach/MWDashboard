@@ -33,6 +33,13 @@ public class TenantInfo
     /// Null means no Copilot-Chat collection has run for this tenant yet.
     /// </summary>
     public DateTime? CopilotAuditCursorUtc { get; set; }
+
+    /// <summary>
+    /// Cursor for the Office 365 Management Activity API <c>Audit.SharePoint</c> external-sharing
+    /// collection: the <c>contentCreated</c> timestamp (UTC) of the most recent content blob already
+    /// processed. Only newer blobs are pulled. Null means no external-sharing collection has run yet.
+    /// </summary>
+    public DateTime? SharePointAuditCursorUtc { get; set; }
 }
 
 public class LicenseSnapshot
@@ -517,4 +524,88 @@ public class BrandingSettings
     public string DarkAppbar { get; set; } = "#1e1e2e";
     public string? AppTitle { get; set; }
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// One row per app-registration / service-principal secret or certificate, capturing its
+/// expiry so admins can rotate credentials before they lapse. Sourced from Microsoft Graph
+/// <c>/applications</c> + <c>/servicePrincipals</c> (requires <c>Application.Read.All</c>).
+/// </summary>
+public class AppCredentialSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    /// <summary>The application's <c>appId</c> (client id).</summary>
+    public string AppId { get; set; } = string.Empty;
+    /// <summary>The directory object id of the application or service principal.</summary>
+    public string AppObjectId { get; set; } = string.Empty;
+    public string AppDisplayName { get; set; } = string.Empty;
+    /// <summary><c>Secret</c> (client secret / password) or <c>Certificate</c> (key credential).</summary>
+    public string CredentialType { get; set; } = string.Empty;
+    /// <summary>The credential's <c>keyId</c> (unique within the app).</summary>
+    public string KeyId { get; set; } = string.Empty;
+    /// <summary>Optional friendly hint/display name set on the credential.</summary>
+    public string DisplayName { get; set; } = string.Empty;
+    public DateTime EndDateTime { get; set; }
+    /// <summary>Whole days until expiry (negative if already expired).</summary>
+    public int DaysToExpiry { get; set; }
+    public bool IsExpired { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Daily aggregate of external file/folder sharing activity by share type, sourced from the
+/// Office 365 Management Activity API <c>Audit.SharePoint</c> feed (requires <c>ActivityFeed.Read</c>).
+/// </summary>
+public class ExternalSharingSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    /// <summary><c>Anonymous</c> (anyone-with-the-link), <c>External</c> (specific guests), or <c>Organization</c> (people-in-your-org links).</summary>
+    public string ShareType { get; set; } = string.Empty;
+    public int EventCount { get; set; }
+    public int DistinctUsers { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// One row per Entra directory role per collection, capturing how many members hold each
+/// privileged role. Sourced from Microsoft Graph <c>/directoryRoles</c> (requires
+/// <c>RoleManagement.Read.Directory</c>).
+/// </summary>
+public class PrivilegedRoleSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string RoleName { get; set; } = string.Empty;
+    public string RoleTemplateId { get; set; } = string.Empty;
+    /// <summary>Number of standing (active) members assigned to the role.</summary>
+    public int MemberCount { get; set; }
+    /// <summary>True for high-impact roles (e.g. Global Administrator, Privileged Role Administrator).</summary>
+    public bool IsPrivileged { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Daily aggregate of Microsoft Defender / Microsoft 365 security alerts by severity and status,
+/// sourced from Microsoft Graph <c>/security/alerts_v2</c> (requires <c>SecurityAlert.Read.All</c>).
+/// </summary>
+public class DefenderAlertSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    /// <summary><c>high</c>, <c>medium</c>, <c>low</c>, or <c>informational</c>.</summary>
+    public string Severity { get; set; } = string.Empty;
+    /// <summary><c>new</c>, <c>inProgress</c>, or <c>resolved</c>.</summary>
+    public string Status { get; set; } = string.Empty;
+    public int AlertCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }

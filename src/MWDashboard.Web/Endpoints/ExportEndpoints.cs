@@ -163,6 +163,28 @@ public static class ExportEndpoints
             async (data, scope) => (await data.GetGroupSprawlAsync(scope)).Select(r =>
                 Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), r.TotalGroups, r.M365Groups, r.SecurityGroups,
                     r.DistributionGroups, r.TeamsConnectedGroups, r.OwnerlessGroups))),
+
+        ["app-credential-expiry"] = new("app-credential-expiry-report.csv",
+            "TenantId,TenantName,ReportDate,AppDisplayName,AppId,CredentialType,KeyId,DisplayName,EndDateTime,DaysToExpiry,IsExpired",
+            async (data, scope) => (await data.GetAppCredentialsAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.AppDisplayName), F(r.AppId),
+                    F(r.CredentialType), F(r.KeyId), F(r.DisplayName), D(r.EndDateTime), r.DaysToExpiry, r.IsExpired))),
+
+        ["external-sharing"] = new("external-sharing-report.csv",
+            "TenantId,TenantName,ReportDate,ShareType,EventCount,DistinctUsers",
+            async (data, scope) => (await data.GetExternalSharingAsync(scope, days: 30)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.ShareType), r.EventCount, r.DistinctUsers))),
+
+        ["privileged-roles"] = new("privileged-roles-report.csv",
+            "TenantId,TenantName,ReportDate,RoleName,RoleTemplateId,MemberCount,IsPrivileged",
+            async (data, scope) => (await data.GetPrivilegedRolesAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.RoleName), F(r.RoleTemplateId),
+                    r.MemberCount, r.IsPrivileged))),
+
+        ["defender-alerts"] = new("defender-alerts-report.csv",
+            "TenantId,TenantName,ReportDate,Severity,Status,AlertCount",
+            async (data, scope) => (await data.GetDefenderAlertsAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.Severity), F(r.Status), r.AlertCount))),
     };
 
     public static void MapExportEndpoints(this WebApplication app)

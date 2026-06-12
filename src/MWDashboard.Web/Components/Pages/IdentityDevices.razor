@@ -14,13 +14,15 @@
         ("Device Compliance", "device-compliance"),
         ("Conditional Access", "conditional-access"),
         ("Guest Users", "guests"),
-        ("Risky Users", "risky-users") })" />
+        ("Risky Users", "risky-users"),
+        ("App Credential Expiry", "app-credential-expiry"),
+        ("Privileged Roles", "privileged-roles") })" />
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-    Device compliance, Conditional Access coverage, guest/external accounts, and identity risk.
+    Device compliance, Conditional Access coverage, guest/external accounts, identity risk, app credential expiry, and privileged role membership.
     Requires <PermissionTag Scope="DeviceManagementManagedDevices.Read.All" />, <PermissionTag Scope="Policy.Read.All" />,
-    <PermissionTag Scope="User.Read.All" />, and (for risk) <PermissionTag Scope="IdentityRiskyUser.Read.All" />.
-    <strong>Entra ID license:</strong> Conditional Access requires <strong>P1 or P2</strong>; Risky Users (Identity Protection) requires <strong>P2</strong>; Device Compliance (Intune) and Guest Users are available on all tiers.
+    <PermissionTag Scope="User.Read.All" />, <PermissionTag Scope="Application.Read.All" />, <PermissionTag Scope="RoleManagement.Read.Directory" />, and (for risk) <PermissionTag Scope="IdentityRiskyUser.Read.All" />.
+    <strong>Entra ID license:</strong> Conditional Access requires <strong>P1 or P2</strong>; Risky Users (Identity Protection) requires <strong>P2</strong>; Device Compliance (Intune), Guest Users, App Credentials, and Privileged Roles are available on all tiers.
 </MudText>
 
 @if (_loading)
@@ -387,6 +389,163 @@ else
         }
     </MudTabPanel>
 
+    @* ---------------- App Credential Expiry ---------------- *@
+    <MudTabPanel Text="App Credential Expiry" Icon="@Icons.Material.Filled.VpnKey">
+        @if (_appCredentials.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No app credential data available. Requires <PermissionTag Scope="Application.Read.All" />.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Credentials</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_appCredentials.Count.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">secrets &amp; certificates</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Expired</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_expiredCreds > 0 ? Color.Error : Color.Success)">@_expiredCreds.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">already lapsed</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Expiring ≤ 30 days</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_expiring30 > 0 ? Color.Warning : Color.Success)">@_expiring30.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">rotate soon</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Expiring ≤ 90 days</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_expiring90 > 0 ? Color.Warning : Color.Success)">@_expiring90.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">plan rotation</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Credentials by Expiry</MudText>
+                    <MudTable Items="_appCredentials" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                              SortLabel="Sort" Filter="null">
+                        <HeaderContent>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                            <MudTh>Application</MudTh>
+                            <MudTh>Type</MudTh>
+                            <MudTh>Name</MudTh>
+                            <MudTh Style="text-align:right">Expires</MudTh>
+                            <MudTh Style="text-align:right">Days</MudTh>
+                            <MudTh>Status</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                            <MudTd DataLabel="Application">@context.AppDisplayName</MudTd>
+                            <MudTd DataLabel="Type">@context.CredentialType</MudTd>
+                            <MudTd DataLabel="Name">@(string.IsNullOrEmpty(context.DisplayName) ? "—" : context.DisplayName)</MudTd>
+                            <MudTd DataLabel="Expires" Style="text-align:right">@context.EndDateTime.ToString("yyyy-MM-dd")</MudTd>
+                            <MudTd DataLabel="Days" Style="text-align:right">@context.DaysToExpiry.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Status">
+                                @if (context.IsExpired)
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">Expired</MudChip>
+                                }
+                                else if (context.DaysToExpiry <= 30)
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">Expiring soon</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">Valid</MudChip>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Privileged Roles ---------------- *@
+    <MudTabPanel Text="Privileged Roles" Icon="@Icons.Material.Filled.AdminPanelSettings">
+        @if (_privilegedRoles.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No privileged role data available. Requires <PermissionTag Scope="RoleManagement.Read.Directory" />.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Active Roles</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_privilegedRoles.Count.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">with members</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Global Admins</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_globalAdmins > 5 ? Color.Warning : Color.Primary)">@_globalAdmins.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">standing assignments</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Privileged Members</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_privilegedMembers.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">across high-impact roles</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">High-Impact Roles</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_privilegedRoles.Count(r => r.IsPrivileged).ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">flagged sensitive</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Role Membership</MudText>
+                    <MudTable Items="_privilegedRoles" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                            <MudTh>Role</MudTh>
+                            <MudTh Style="text-align:right">Members</MudTh>
+                            <MudTh>Sensitivity</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                            <MudTd DataLabel="Role">@context.RoleName</MudTd>
+                            <MudTd DataLabel="Members" Style="text-align:right">@context.MemberCount.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Sensitivity">
+                                @if (context.IsPrivileged)
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">High-impact</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">Standard</MudChip>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
 </MudTabs>
 }
 
@@ -399,6 +558,8 @@ else
     private List<ConditionalAccessSnapshot> _conditionalAccess = [];
     private List<GuestUserSnapshot> _guests = [];
     private List<RiskyUserSnapshot> _riskyUsers = [];
+    private List<AppCredentialSnapshot> _appCredentials = [];
+    private List<PrivilegedRoleSnapshot> _privilegedRoles = [];
 
     // Device KPIs
     private int _totalDevices, _compliantDevices, _nonCompliantDevices, _graceErrorDevices;
@@ -420,6 +581,12 @@ else
     private int _totalAtRisk, _highRisk, _mediumRisk, _lowRisk;
     private List<LabelValue> _riskBreakdown = [];
     private List<string> _nonP2Tenants = [];
+
+    // App credential KPIs
+    private int _expiredCreds, _expiring30, _expiring90;
+
+    // Privileged role KPIs
+    private int _globalAdmins, _privilegedMembers;
 
     private readonly ApexChartOptions<LabelValue> _donutOptions = new()
     {
@@ -465,6 +632,10 @@ else
         _conditionalAccess = await MauDataService.GetConditionalAccessAsync(tenantIds);
         _guests = await MauDataService.GetGuestUsersAsync(tenantIds);
         _riskyUsers = await MauDataService.GetRiskyUsersAsync(tenantIds);
+        _appCredentials = (await MauDataService.GetAppCredentialsAsync(tenantIds))
+            .OrderBy(c => c.DaysToExpiry).ToList();
+        _privilegedRoles = (await MauDataService.GetPrivilegedRolesAsync(tenantIds))
+            .OrderByDescending(r => r.IsPrivileged).ThenByDescending(r => r.MemberCount).ToList();
 
         // Tier info so the Risky Users tab can explain why P2-only data is missing
         var tiers = await MauDataService.GetTenantEntraIdTiersAsync();
@@ -475,15 +646,31 @@ else
             .OrderBy(n => n)
             .ToList();
 
-        _hasAnyData = _devices.Count > 0 || _conditionalAccess.Count > 0 || _guests.Count > 0 || _riskyUsers.Count > 0;
+        _hasAnyData = _devices.Count > 0 || _conditionalAccess.Count > 0 || _guests.Count > 0 || _riskyUsers.Count > 0
+            || _appCredentials.Count > 0 || _privilegedRoles.Count > 0;
 
         BuildDeviceMetrics();
         BuildConditionalAccessMetrics();
         BuildGuestMetrics();
         BuildRiskyUserMetrics();
+        BuildGovernanceMetrics();
 
         _chartKey++;
         _loading = false;
+    }
+
+    private void BuildGovernanceMetrics()
+    {
+        _expiredCreds = _appCredentials.Count(c => c.IsExpired);
+        _expiring30 = _appCredentials.Count(c => !c.IsExpired && c.DaysToExpiry <= 30);
+        _expiring90 = _appCredentials.Count(c => !c.IsExpired && c.DaysToExpiry <= 90);
+
+        _globalAdmins = _privilegedRoles
+            .Where(r => r.RoleName == "Global Administrator")
+            .Sum(r => r.MemberCount);
+        _privilegedMembers = _privilegedRoles
+            .Where(r => r.IsPrivileged)
+            .Sum(r => r.MemberCount);
     }
 
     private void BuildDeviceMetrics()

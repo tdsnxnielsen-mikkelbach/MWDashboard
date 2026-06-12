@@ -428,6 +428,71 @@ public class CachedMauDataService : IMauDataService
     public Task UpdateCopilotAuditCursorAsync(string tenantId, DateTime cursorUtc)
         => _inner.UpdateCopilotAuditCursorAsync(tenantId, cursorUtc);
 
+    // --- App registration / service-principal credential expiry (60 min — daily-changing) ---
+    public Task<List<AppCredentialSnapshot>> GetAppCredentialsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("app-credentials", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetAppCredentialsAsync(tenantIds), options);
+    }
+
+    public async Task SaveAppCredentialsAsync(string tenantId, DateTime reportDate, IEnumerable<AppCredentialSnapshot> snapshots)
+    {
+        await _inner.SaveAppCredentialsAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("app-credentials", new[] { tenantId }), BuildKey("app-credentials", null));
+    }
+
+    // --- External sharing audit (60 min — daily-changing audit aggregate) ---
+    public Task<List<ExternalSharingSnapshot>> GetExternalSharingAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        var key = BuildKey("external-sharing", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetExternalSharingAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveExternalSharingAsync(IEnumerable<ExternalSharingSnapshot> snapshots)
+    {
+        await _inner.SaveExternalSharingAsync(snapshots);
+        foreach (var tid in snapshots.Select(s => s.TenantId).Distinct())
+            await InvalidateAsync(BuildKey("external-sharing", new[] { tid }));
+        await InvalidateAsync(BuildKey("external-sharing", null));
+    }
+
+    // The SharePoint audit cursor is collection state, never cached.
+    public Task<DateTime?> GetSharePointAuditCursorAsync(string tenantId)
+        => _inner.GetSharePointAuditCursorAsync(tenantId);
+
+    public Task UpdateSharePointAuditCursorAsync(string tenantId, DateTime cursorUtc)
+        => _inner.UpdateSharePointAuditCursorAsync(tenantId, cursorUtc);
+
+    // --- Privileged role inventory (60 min — daily-changing) ---
+    public Task<List<PrivilegedRoleSnapshot>> GetPrivilegedRolesAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("privileged-roles", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetPrivilegedRolesAsync(tenantIds), options);
+    }
+
+    public async Task SavePrivilegedRolesAsync(string tenantId, DateTime reportDate, IEnumerable<PrivilegedRoleSnapshot> snapshots)
+    {
+        await _inner.SavePrivilegedRolesAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("privileged-roles", new[] { tenantId }), BuildKey("privileged-roles", null));
+    }
+
+    // --- Defender / M365 security alerts (60 min — daily-changing) ---
+    public Task<List<DefenderAlertSnapshot>> GetDefenderAlertsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("defender-alerts", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetDefenderAlertsAsync(tenantIds), options);
+    }
+
+    public async Task SaveDefenderAlertsAsync(string tenantId, DateTime reportDate, IEnumerable<DefenderAlertSnapshot> snapshots)
+    {
+        await _inner.SaveDefenderAlertsAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("defender-alerts", new[] { tenantId }), BuildKey("defender-alerts", null));
+    }
+
     // --- Pass-through for write operations; cached reads below ---
 
     // --- MAU History (15 min — dashboard-level, queried frequently) ---

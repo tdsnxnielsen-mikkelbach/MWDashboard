@@ -10,10 +10,14 @@
 
 <div class="d-flex justify-space-between align-center mb-2">
     <MudText Typo="Typo.h4">Security Services</MudText>
-    <ExportButton Feature="security" />
+    <ExportMenu Items="@(new[] {
+        ("Sign-ins & MFA", "security"),
+        ("Defender Alerts", "defender-alerts"),
+        ("External Sharing", "external-sharing") })" />
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-    Sign-in activity and MFA metrics from Entra audit logs. Requires <PermissionTag Scope="AuditLog.Read.All" />.
+    Sign-in activity and MFA metrics from Entra audit logs, Microsoft Defender alerts, and external file-sharing activity.
+    Requires <PermissionTag Scope="AuditLog.Read.All" />, <PermissionTag Scope="SecurityAlert.Read.All" /> (Defender), and <PermissionTag Scope="ActivityFeed.Read" /> (external sharing, via the Office 365 unified audit log).
 </MudText>
 
 @if (_loading)
@@ -342,6 +346,130 @@ else
         </MudGrid>
     </MudPaper>
 }
+
+@* Microsoft Defender Alerts *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.GppMaybe" Class="mr-2" />
+        Microsoft Defender Alerts (last 30 days)
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Aggregated from <PermissionTag Scope="SecurityAlert.Read.All" />. Requires a Microsoft Defender / Defender XDR subscription on the tenant.
+    </MudText>
+    @if (_defenderAlerts.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No Defender alerts available for the selected tenant(s).</MudText>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Alerts</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_alertTotal.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">High / Critical</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_alertHigh > 0 ? Color.Error : Color.Success)">@_alertHigh.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Active</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_alertActive > 0 ? Color.Warning : Color.Success)">@_alertActive.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">new or in progress</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Resolved</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_alertResolved.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTable Items="_defenderAlerts" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                        <MudTh>Severity</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh Style="text-align:right">Alerts</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                        <MudTd DataLabel="Severity">
+                            <MudChip T="string" Size="Size.Small" Color="@GetSeverityColor(context.Severity)" Variant="Variant.Filled">@context.Severity</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Status">@context.Status</MudTd>
+                        <MudTd DataLabel="Alerts" Style="text-align:right">@context.AlertCount.ToString("N0")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
+
+@* External Sharing Activity *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.Share" Class="mr-2" />
+        External Sharing Activity (last 30 days)
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        SharePoint &amp; OneDrive sharing events from the Office 365 unified audit log (<PermissionTag Scope="ActivityFeed.Read" />). Requires unified audit logging enabled on the tenant.
+    </MudText>
+    @if (_externalSharing.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No external sharing activity recorded for the selected tenant(s).</MudText>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Anonymous Links</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_shareAnonymous > 0 ? Color.Error : Color.Success)">@_shareAnonymous.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">anyone-with-the-link</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">External (Guest)</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_shareExternal > 0 ? Color.Warning : Color.Success)">@_shareExternal.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">shared outside org</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Organization</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_shareOrganization.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">people-in-org links</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTable Items="_externalSharing" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                        <MudTh>Report Date</MudTh>
+                        <MudTh>Share Type</MudTh>
+                        <MudTh Style="text-align:right">Events</MudTh>
+                        <MudTh Style="text-align:right">Distinct Users</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                        <MudTd DataLabel="Report Date">@context.ReportDate.ToString("yyyy-MM-dd")</MudTd>
+                        <MudTd DataLabel="Share Type">
+                            <MudChip T="string" Size="Size.Small" Color="@GetShareColor(context.ShareType)" Variant="Variant.Filled">@context.ShareType</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Events" Style="text-align:right">@context.EventCount.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Distinct Users" Style="text-align:right">@context.DistinctUsers.ToString("N0")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
 }
 
 @code {
@@ -367,6 +495,14 @@ else
     private int _inactive30;
     private int _inactive90;
     private int _inactiveNever;
+
+    // Defender alert aggregates
+    private List<DefenderAlertSnapshot> _defenderAlerts = [];
+    private int _alertTotal, _alertHigh, _alertActive, _alertResolved;
+
+    // External sharing aggregates
+    private List<ExternalSharingSnapshot> _externalSharing = [];
+    private int _shareAnonymous, _shareExternal, _shareOrganization;
 
     private ApexChartOptions<DailySignIn> _signInChartOptions = new()
     {
@@ -432,6 +568,21 @@ else
         _inactive90 = inactiveSnapshots.Sum(s => s.Inactive90);
         _inactiveNever = inactiveSnapshots.Sum(s => s.NeverSignedIn);
 
+        // Defender alert aggregates (latest snapshot per tenant)
+        _defenderAlerts = (await MauDataService.GetDefenderAlertsAsync(tenantIds))
+            .OrderBy(a => SeverityRank(a.Severity)).ThenBy(a => a.Status).ToList();
+        _alertTotal = _defenderAlerts.Sum(a => a.AlertCount);
+        _alertHigh = _defenderAlerts.Where(a => a.Severity is "High" or "Critical").Sum(a => a.AlertCount);
+        _alertActive = _defenderAlerts.Where(a => a.Status is "new" or "inProgress" or "New" or "InProgress").Sum(a => a.AlertCount);
+        _alertResolved = _defenderAlerts.Where(a => a.Status is "resolved" or "Resolved").Sum(a => a.AlertCount);
+
+        // External sharing aggregates (last 30 days)
+        _externalSharing = (await MauDataService.GetExternalSharingAsync(tenantIds, days: 30))
+            .OrderByDescending(s => s.ReportDate).ThenBy(s => s.ShareType).ToList();
+        _shareAnonymous = _externalSharing.Where(s => s.ShareType == "Anonymous").Sum(s => s.EventCount);
+        _shareExternal = _externalSharing.Where(s => s.ShareType == "External").Sum(s => s.EventCount);
+        _shareOrganization = _externalSharing.Where(s => s.ShareType == "Organization").Sum(s => s.EventCount);
+
         _dailySignIns = _summaries
             .GroupBy(s => s.ReportDate.ToString("MM-dd"))
             .Select(g => new DailySignIn
@@ -469,6 +620,30 @@ else
             _ => Color.Warning
         };
     }
+
+    private static int SeverityRank(string severity) => severity switch
+    {
+        "Critical" => 0,
+        "High" => 1,
+        "Medium" => 2,
+        "Low" => 3,
+        _ => 4
+    };
+
+    private static Color GetSeverityColor(string severity) => severity switch
+    {
+        "Critical" or "High" => Color.Error,
+        "Medium" => Color.Warning,
+        "Low" => Color.Info,
+        _ => Color.Default
+    };
+
+    private static Color GetShareColor(string shareType) => shareType switch
+    {
+        "Anonymous" => Color.Error,
+        "External" => Color.Warning,
+        _ => Color.Info
+    };
 
     private Color GetRateColor(double rate)
     {

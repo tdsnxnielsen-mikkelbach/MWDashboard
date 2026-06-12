@@ -50,6 +50,7 @@ public class CopilotAuditScheduleService : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<MauDbContext>>();
             var collector = scope.ServiceProvider.GetRequiredService<ICopilotAuditCollectionService>();
+            var sharingCollector = scope.ServiceProvider.GetRequiredService<IExternalSharingCollectionService>();
 
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var tenants = await db.Tenants.AsNoTracking().Where(t => t.IsActive).ToListAsync(ct);
@@ -69,6 +70,26 @@ public class CopilotAuditScheduleService : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Scheduled Copilot Chat audit collection failed for tenant {TenantName} ({TenantId})",
+                        tenant.TenantName, tenant.TenantId);
+                }
+
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    await sharingCollector.CollectForTenantAsync(tenant.TenantId, tenant.TenantName, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (CopilotAuditConfigurationException ex)
+                {
+                    _logger.LogWarning("External sharing audit not yet available for tenant {TenantName} ({TenantId}): {Message}",
+                        tenant.TenantName, tenant.TenantId, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Scheduled external sharing audit collection failed for tenant {TenantName} ({TenantId})",
                         tenant.TenantName, tenant.TenantId);
                 }
             }

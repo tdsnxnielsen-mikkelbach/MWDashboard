@@ -134,6 +134,8 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **True MFA data** — uses Microsoft Graph Beta API `AuthenticationDetails` (counts non-password auth methods that succeeded). Only available from tenants with Entra ID P1/P2
 - **MFA & Authentication Method Registration** — tenant-wide registration gauges for member accounts (guests excluded): MFA registered, MFA capable, passwordless capable, SSPR registered (with raw counts). Available on **all tiers** via `AuditLog.Read.All` — does not require P1/P2. Data source: Microsoft Graph `GET /reports/authenticationMethods/userRegistrationDetails`
 - **Inactive / Stale Licensed Accounts** — KPI cards for enabled, licensed member accounts: total licensed, inactive 30+ days, inactive 90+ days, never signed in (each with % of licensed). Surfaces license-reclamation opportunities. **Requires Microsoft Entra ID P1/P2** — the underlying `signInActivity` property is premium-gated and returns 403 on the free tier even when `AuditLog.Read.All` + `User.Read.All` are consented. The dashboard detects the tenant tier from its SKUs and **skips this collection entirely on free-tier tenants** (logged at Information, not as a permission error). Data source: Microsoft Graph `GET /users` with `signInActivity`
+- **Microsoft Defender Alerts** (last 30 days) — KPI cards for total alerts, high/critical, active (new + in-progress), and resolved, plus a severity/status breakdown table (color-coded severity chips; Tenant column in multi-tenant view). Requires a Microsoft Defender / Defender XDR subscription on the tenant. Data source: Microsoft Graph `GET /security/alerts_v2` (aggregated by severity + status); requires `SecurityAlert.Read.All` (**new permission** — must be re-consented). `DefenderAlertSnapshot`, one row per (severity, status) per tenant per day
+- **External Sharing Activity** (last 30 days) — KPI cards for anonymous-link, external/guest, and organization shares, plus a per-day share-type table (event count + distinct users). Sourced from the **Office 365 Management Activity API** `Audit.SharePoint` feed (not Graph) via the same `ActivityFeed.Read` permission already used for unlicensed Copilot Chat — collected by the `MWDashboard.CopilotAudit` container. Requires unified audit logging enabled on the tenant. `ExternalSharingSnapshot`, one row per (share type) per tenant per day
 - **Clear data availability notes** — explains exactly what's available per license tier and that Free-tier tenants cannot expose sign-in/audit-derived data via Graph
 
 ## Secure Score (`/securescore`)
@@ -156,14 +158,16 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 
 ## Identity & Devices (`/identity`)
 
-A single page with four tabs covering endpoint and identity governance. Each tab degrades gracefully with an info alert when its data/permission is unavailable, shows KPI cards plus charts, and adds a per-tenant comparison table in multi-tenant view.
+A single page with six tabs covering endpoint and identity governance. Each tab degrades gracefully with an info alert when its data/permission is unavailable, shows KPI cards plus charts, and adds a per-tenant comparison table in multi-tenant view.
 
 - **Device Compliance** — Intune-managed device posture: managed device count, compliant %, non-compliant count, in-grace/error count; compliance-status donut and devices-by-platform bar chart. Data source: `GET /deviceManagement/managedDevices`; requires `DeviceManagementManagedDevices.Read.All` (available on all tiers)
 - **Conditional Access** — policy inventory and coverage gaps: total/enabled/report-only policy counts, MFA-enforced indicator, legacy-auth-blocked indicator (aggregated across tenants); policy-state donut and per-tenant coverage table with MFA/legacy-block icons (icon legend + per-icon tooltips explain enforced vs. coverage-gap states). Data source: `GET /identity/conditionalAccess/policies`; requires `Policy.Read.All` **and Entra ID P1/P2** — Conditional Access is a premium feature, so Free-tier tenants have no policies to report
 - **Guest Users** — external-collaboration governance: total guests, accepted vs. pending-acceptance, recently-added (last 30 days); invitation-status donut. Data source: `GET /users?$filter=userType eq 'Guest'`; reuses the already-granted `User.Read.All` (all tiers)
 - **Risky Users** — Identity Protection risk: at-risk users by High/Medium/Low risk level; risk-level donut. Data source: `GET /identityProtection/riskyUsers`; requires `IdentityRiskyUser.Read.All` **and Entra ID P2** — tenants below P2 are skipped during collection (logged at Information)
+- **App Credential Expiry** — app-registration secret/certificate hygiene: total credentials, expired count, expiring ≤ 30 days, expiring ≤ 90 days; full table with red/amber/green status chips sorted by days-to-expiry (Tenant column in multi-tenant view). Surfaces credentials that will silently break integrations before they lapse. Data source: `GET /applications` (`passwordCredentials` + `keyCredentials`); requires `Application.Read.All` (**new permission** — must be re-consented; all tiers)
+- **Privileged Roles** — standing directory-role membership: active role count, Global Administrator count (warns above 5), total privileged members, high-impact role count; role-membership table with sensitivity chips. Helps enforce least-privilege / Global Admin ≤ 4 best practice. Data source: `GET /directoryRoles` with members; requires `RoleManagement.Read.Directory` (**new permission** — must be re-consented; all tiers). PIM eligible-assignment depth is deferred
 - **Tenant-scoped** — customer-tenant users see only their own tenant's data
-- Data models: `DeviceComplianceSnapshot`, `ConditionalAccessSnapshot`, `GuestUserSnapshot`, `RiskyUserSnapshot` (one row per tenant per day)
+- Data models: `DeviceComplianceSnapshot`, `ConditionalAccessSnapshot`, `GuestUserSnapshot`, `RiskyUserSnapshot`, `AppCredentialSnapshot`, `PrivilegedRoleSnapshot` (one row per tenant per day; app credentials/privileged roles delete-then-insert per tenant per day)
 
 ## Usage & Governance (`/usage`)
 
@@ -181,13 +185,14 @@ A single page with five tabs covering workload adoption and Microsoft 365 govern
 
 Every dashboard dataset can be exported to CSV. Exports are served from minimal-API endpoints (`MWDashboard.Web/Endpoints/ExportEndpoints.cs`) and use the same authentication and tenant-data isolation as the UI.
 
-- **Per-page Export CSV buttons** — single-dataset pages (Dashboard/Services, Licenses, Feature Usage, Copilot, Departments, Segmentation, M365 Apps, Security, Consumption) show an "Export CSV" button (`ExportButton.razor`) that downloads `/api/export/{feature}`
+- **Per-page Export CSV buttons** — single-dataset pages (Dashboard/Services, Licenses, Feature Usage, Copilot, Departments, Segmentation, M365 Apps, Consumption) show an "Export CSV" button (`ExportButton.razor`) that downloads `/api/export/{feature}`
 - **Per-dataset Export menus** — multi-dataset (tabbed) pages show an "Export CSV" dropdown (`ExportMenu.razor`) with one item per dataset:
   - **Secure Score** — Score History, Control Details
   - **Service Health** — Service Status, Incidents & Advisories
-  - **Identity & Devices** — Device Compliance, Conditional Access, Guest Users, Risky Users
+  - **Identity & Devices** — Device Compliance, Conditional Access, Guest Users, Risky Users, App Credential Expiry, Privileged Roles
+  - **Security** — Sign-ins & MFA, Defender Alerts, External Sharing
   - **Usage & Governance** — Mailbox Usage, Top Mailboxes, Teams Devices, SharePoint & OneDrive, Top Sites/Accounts, Viva Engage, Groups & Teams
-- **Export All Data (ZIP)** — the Dashboard page has an "Export All Data" button (`/api/export-all`) that streams a single ZIP containing every dataset as its own CSV (24 files), named `mwdashboard-export-{date}.zip`
+- **Export All Data (ZIP)** — the Dashboard page has an "Export All Data" button (`/api/export-all`) that streams a single ZIP containing every dataset as its own CSV (27 files), named `mwdashboard-export-{date}.zip`
 - **Tenant isolation enforced server-side** — every export endpoint derives tenant scope from the signed-in user's `tenantid` claim (mirroring `MainLayout`): home-tenant admins export all tenants; customer-tenant users export only their own tenant. Client-supplied input is never trusted, so altering a URL cannot leak another tenant's data
 - **Single source of truth** — `ExportEndpoints.cs` defines each dataset once (filename, header, row builder); both the individual `/api/export/{feature}` endpoints and the `/api/export-all` ZIP reuse those definitions. CSV fields are escaped for commas/quotes/newlines
 

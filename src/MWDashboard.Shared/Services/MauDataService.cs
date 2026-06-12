@@ -121,6 +121,24 @@ public interface IMauDataService
     Task SaveCopilotChatUsageAsync(IEnumerable<CopilotChatUsageSnapshot> snapshots);
     Task<DateTime?> GetCopilotAuditCursorAsync(string tenantId);
     Task UpdateCopilotAuditCursorAsync(string tenantId, DateTime cursorUtc);
+
+    // App registration / service-principal credential expiry
+    Task<List<AppCredentialSnapshot>> GetAppCredentialsAsync(IEnumerable<string>? tenantIds);
+    Task SaveAppCredentialsAsync(string tenantId, DateTime reportDate, IEnumerable<AppCredentialSnapshot> snapshots);
+
+    // External sharing audit — Office 365 Management Activity API (Audit.SharePoint)
+    Task<List<ExternalSharingSnapshot>> GetExternalSharingAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveExternalSharingAsync(IEnumerable<ExternalSharingSnapshot> snapshots);
+    Task<DateTime?> GetSharePointAuditCursorAsync(string tenantId);
+    Task UpdateSharePointAuditCursorAsync(string tenantId, DateTime cursorUtc);
+
+    // Privileged role inventory
+    Task<List<PrivilegedRoleSnapshot>> GetPrivilegedRolesAsync(IEnumerable<string>? tenantIds);
+    Task SavePrivilegedRolesAsync(string tenantId, DateTime reportDate, IEnumerable<PrivilegedRoleSnapshot> snapshots);
+
+    // Defender / M365 security alerts
+    Task<List<DefenderAlertSnapshot>> GetDefenderAlertsAsync(IEnumerable<string>? tenantIds);
+    Task SaveDefenderAlertsAsync(string tenantId, DateTime reportDate, IEnumerable<DefenderAlertSnapshot> snapshots);
 }
 
 public class MauDataService : IMauDataService
@@ -1608,5 +1626,170 @@ public class MauDataService : IMauDataService
             tenant.CopilotAuditCursorUtc = cursorUtc;
             await db.SaveChangesAsync();
         }
+    }
+
+    // App registration / service-principal credential expiry
+    public async Task<List<AppCredentialSnapshot>> GetAppCredentialsAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.AppCredentialSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        var all = await query.ToListAsync();
+        // Keep only rows from the latest ReportDate per tenant.
+        return all
+            .GroupBy(s => s.TenantId)
+            .SelectMany(g =>
+            {
+                var latest = g.Max(s => s.ReportDate);
+                return g.Where(s => s.ReportDate == latest);
+            })
+            .OrderBy(s => s.DaysToExpiry)
+            .ToList();
+    }
+
+    public async Task SaveAppCredentialsAsync(string tenantId, DateTime reportDate, IEnumerable<AppCredentialSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        // Replace the day's rows so removed credentials don't linger.
+        var existing = await db.AppCredentialSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.AppCredentialSnapshots.RemoveRange(existing);
+
+        db.AppCredentialSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
+
+    // External sharing audit — Office 365 Management Activity API (Audit.SharePoint)
+    public async Task<List<ExternalSharingSnapshot>> GetExternalSharingAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var query = db.ExternalSharingSnapshots.AsNoTracking().Where(s => s.ReportDate >= cutoff);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveExternalSharingAsync(IEnumerable<ExternalSharingSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.ExternalSharingSnapshots.FirstOrDefaultAsync(s =>
+                s.TenantId == snapshot.TenantId &&
+                s.ShareType == snapshot.ShareType &&
+                s.ReportDate == snapshot.ReportDate);
+            if (existing != null)
+            {
+                existing.TenantName = snapshot.TenantName;
+                existing.EventCount = snapshot.EventCount;
+                existing.DistinctUsers = snapshot.DistinctUsers;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.ExternalSharingSnapshots.Add(snapshot);
+            }
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<DateTime?> GetSharePointAuditCursorAsync(string tenantId)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        return tenant?.SharePointAuditCursorUtc;
+    }
+
+    public async Task UpdateSharePointAuditCursorAsync(string tenantId, DateTime cursorUtc)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        if (tenant == null) return;
+
+        // Never move the cursor backwards.
+        if (tenant.SharePointAuditCursorUtc == null || cursorUtc > tenant.SharePointAuditCursorUtc)
+        {
+            tenant.SharePointAuditCursorUtc = cursorUtc;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    // Privileged role inventory
+    public async Task<List<PrivilegedRoleSnapshot>> GetPrivilegedRolesAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.PrivilegedRoleSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        var all = await query.ToListAsync();
+        return all
+            .GroupBy(s => s.TenantId)
+            .SelectMany(g =>
+            {
+                var latest = g.Max(s => s.ReportDate);
+                return g.Where(s => s.ReportDate == latest);
+            })
+            .OrderByDescending(s => s.MemberCount)
+            .ToList();
+    }
+
+    public async Task SavePrivilegedRolesAsync(string tenantId, DateTime reportDate, IEnumerable<PrivilegedRoleSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.PrivilegedRoleSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.PrivilegedRoleSnapshots.RemoveRange(existing);
+
+        db.PrivilegedRoleSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
+
+    // Defender / M365 security alerts
+    public async Task<List<DefenderAlertSnapshot>> GetDefenderAlertsAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.DefenderAlertSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        var all = await query.ToListAsync();
+        return all
+            .GroupBy(s => s.TenantId)
+            .SelectMany(g =>
+            {
+                var latest = g.Max(s => s.ReportDate);
+                return g.Where(s => s.ReportDate == latest);
+            })
+            .ToList();
+    }
+
+    public async Task SaveDefenderAlertsAsync(string tenantId, DateTime reportDate, IEnumerable<DefenderAlertSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.DefenderAlertSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.DefenderAlertSnapshots.RemoveRange(existing);
+
+        db.DefenderAlertSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
     }
 }

@@ -249,6 +249,30 @@ public class OnDemandDataCollectionService : IDataCollectionService
             await _dataService.SaveGroupSprawlAsync(groups);
         }
 
+        // App registration / service-principal credential expiry (requires Application.Read.All)
+        var appCredentials = await _graphService.GetAppCredentialsAsync(tenantId);
+        if (appCredentials.Count > 0)
+        {
+            foreach (var c in appCredentials) c.TenantName = tenantName;
+            await _dataService.SaveAppCredentialsAsync(tenantId, DateTime.UtcNow.Date, appCredentials);
+        }
+
+        // Privileged role inventory (requires RoleManagement.Read.Directory)
+        var privilegedRoles = await _graphService.GetPrivilegedRolesAsync(tenantId);
+        if (privilegedRoles.Count > 0)
+        {
+            foreach (var r in privilegedRoles) r.TenantName = tenantName;
+            await _dataService.SavePrivilegedRolesAsync(tenantId, DateTime.UtcNow.Date, privilegedRoles);
+        }
+
+        // Defender / M365 security alerts (requires SecurityAlert.Read.All)
+        var defenderAlerts = await _graphService.GetDefenderAlertsAsync(tenantId);
+        if (defenderAlerts.Count > 0)
+        {
+            foreach (var a in defenderAlerts) a.TenantName = tenantName;
+            await _dataService.SaveDefenderAlertsAsync(tenantId, DateTime.UtcNow.Date, defenderAlerts);
+        }
+
         // Compute and save consumption score
         await ComputeConsumptionScoreAsync(tenantId, tenantName, storage, activities, segments, licenses);
 

@@ -48,7 +48,7 @@ public class CopilotAuditCollectionService : ICopilotAuditCollectionService
     {
         _logger.LogInformation("Copilot Chat audit collection started for tenant {TenantName} ({TenantId})", tenantName, tenantId);
 
-        await _activity.EnsureSubscriptionAsync(tenantId, ct);
+        await _activity.EnsureSubscriptionAsync(tenantId, "Audit.General", ct);
 
         var now = DateTime.UtcNow;
         var earliest = now - RetentionWindow + TimeSpan.FromMinutes(5); // small buffer inside the retention edge
@@ -88,7 +88,7 @@ public class CopilotAuditCollectionService : ICopilotAuditCollectionService
             var windowEnd = windowStart + MaxQueryWindow;
             if (windowEnd > now) windowEnd = now;
 
-            var blobs = await _activity.ListContentAsync(tenantId, windowStart, windowEnd, ct);
+            var blobs = await _activity.ListContentAsync(tenantId, "Audit.General", windowStart, windowEnd, ct);
             foreach (var blob in blobs)
             {
                 // Skip blobs already processed in a previous run.

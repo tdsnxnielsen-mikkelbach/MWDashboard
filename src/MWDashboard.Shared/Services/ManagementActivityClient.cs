@@ -35,14 +35,14 @@ public sealed record AuditContentBlob(
 
 public interface IManagementActivityClient
 {
-    /// <summary>Ensures the <c>Audit.General</c> subscription is started for the tenant (idempotent).</summary>
-    Task EnsureSubscriptionAsync(string tenantId, CancellationToken ct = default);
+    /// <summary>Ensures the given content-type subscription is started for the tenant (idempotent).</summary>
+    Task EnsureSubscriptionAsync(string tenantId, string contentType, CancellationToken ct = default);
 
     /// <summary>
-    /// Lists available content blobs for <c>Audit.General</c> in the [startUtc, endUtc] window
+    /// Lists available content blobs for the given content type in the [startUtc, endUtc] window
     /// (the API requires the window to be ≤ 24 h and within the last 7 days). Follows NextPageUri.
     /// </summary>
-    Task<List<AuditContentBlob>> ListContentAsync(string tenantId, DateTime startUtc, DateTime endUtc, CancellationToken ct = default);
+    Task<List<AuditContentBlob>> ListContentAsync(string tenantId, string contentType, DateTime startUtc, DateTime endUtc, CancellationToken ct = default);
 
     /// <summary>Retrieves and deserializes the audit records contained in a single content blob.</summary>
     Task<List<JsonElement>> GetBlobRecordsAsync(string tenantId, string contentUri, CancellationToken ct = default);
@@ -57,7 +57,6 @@ public interface IManagementActivityClient
 public class ManagementActivityClient : IManagementActivityClient
 {
     private const string Audience = "https://manage.office.com/.default";
-    private const string ContentType = "Audit.General";
 
     private readonly HttpClient _http;
     private readonly IConfiguration _config;
@@ -133,14 +132,14 @@ public class ManagementActivityClient : IManagementActivityClient
         }
     }
 
-    public async Task EnsureSubscriptionAsync(string tenantId, CancellationToken ct = default)
+    public async Task EnsureSubscriptionAsync(string tenantId, string contentType, CancellationToken ct = default)
     {
-        var url = $"{BaseUrl(tenantId)}/subscriptions/start?contentType={ContentType}";
+        var url = $"{BaseUrl(tenantId)}/subscriptions/start?contentType={contentType}";
         using var response = await SendWithRetryAsync(HttpMethod.Post, url, tenantId, ct);
 
         if (response.IsSuccessStatusCode)
         {
-            _logger.LogInformation("Started Audit.General subscription for tenant {TenantId}", tenantId);
+            _logger.LogInformation("Started {ContentType} subscription for tenant {TenantId}", contentType, tenantId);
             return;
         }
 
@@ -149,26 +148,26 @@ public class ManagementActivityClient : IManagementActivityClient
         if (body.Contains("AF20024", StringComparison.OrdinalIgnoreCase) ||
             body.Contains("already enabled", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogDebug("Audit.General subscription already enabled for tenant {TenantId}", tenantId);
+            _logger.LogDebug("{ContentType} subscription already enabled for tenant {TenantId}", contentType, tenantId);
             return;
         }
 
-        _logger.LogWarning("Failed to start Audit.General subscription for tenant {TenantId}: {Status} {Body}",
-            tenantId, (int)response.StatusCode, body);
+        _logger.LogWarning("Failed to start {ContentType} subscription for tenant {TenantId}: {Status} {Body}",
+            contentType, tenantId, (int)response.StatusCode, body);
         var detail = DescribeApiError(body, out var recognized);
-        var msg = $"Office 365 Management Activity API rejected the Audit.General subscription start for tenant {tenantId} " +
+        var msg = $"Office 365 Management Activity API rejected the {contentType} subscription start for tenant {tenantId} " +
                   $"({(int)response.StatusCode} {response.ReasonPhrase}). {detail}";
         throw recognized
             ? new CopilotAuditConfigurationException(msg)
             : new InvalidOperationException(msg);
     }
 
-    public async Task<List<AuditContentBlob>> ListContentAsync(string tenantId, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
+    public async Task<List<AuditContentBlob>> ListContentAsync(string tenantId, string contentType, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
     {
         var blobs = new List<AuditContentBlob>();
         var start = startUtc.ToString("yyyy-MM-ddTHH:mm:ss");
         var end = endUtc.ToString("yyyy-MM-ddTHH:mm:ss");
-        string? url = $"{BaseUrl(tenantId)}/subscriptions/content?contentType={ContentType}&startTime={start}&endTime={end}";
+        string? url = $"{BaseUrl(tenantId)}/subscriptions/content?contentType={contentType}&startTime={start}&endTime={end}";
 
         var subscriptionRetried = false;
         while (!string.IsNullOrEmpty(url))
@@ -183,14 +182,14 @@ public class ManagementActivityClient : IManagementActivityClient
                     (body.Contains("AF20022", StringComparison.OrdinalIgnoreCase) ||
                      body.Contains("subscription", StringComparison.OrdinalIgnoreCase) && response.StatusCode == HttpStatusCode.BadRequest))
                 {
-                    _logger.LogInformation("No active subscription for tenant {TenantId}; starting and retrying content listing", tenantId);
-                    await EnsureSubscriptionAsync(tenantId, ct);
+                    _logger.LogInformation("No active {ContentType} subscription for tenant {TenantId}; starting and retrying content listing", contentType, tenantId);
+                    await EnsureSubscriptionAsync(tenantId, contentType, ct);
                     subscriptionRetried = true;
                     continue;
                 }
 
-                _logger.LogWarning("Failed to list Audit.General content for tenant {TenantId}: {Status} {Body}",
-                    tenantId, (int)response.StatusCode, body);
+                _logger.LogWarning("Failed to list {ContentType} content for tenant {TenantId}: {Status} {Body}",
+                    contentType, tenantId, (int)response.StatusCode, body);
                 var detail = DescribeApiError(body, out var recognized);
                 var msg = $"Office 365 Management Activity API rejected the content listing for tenant {tenantId} " +
                           $"({(int)response.StatusCode} {response.ReasonPhrase}). {detail}";
@@ -204,7 +203,7 @@ public class ManagementActivityClient : IManagementActivityClient
             {
                 if (string.IsNullOrEmpty(item.ContentUri)) continue;
                 blobs.Add(new AuditContentBlob(
-                    item.ContentType ?? ContentType,
+                    item.ContentType ?? contentType,
                     item.ContentId ?? string.Empty,
                     item.ContentUri,
                     item.ContentCreated,

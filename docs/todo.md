@@ -36,10 +36,10 @@
 
 ---
 
-## Unlicensed Copilot Chat Usage via Office 365 Management Activity API
+## Unlicensed Copilot Chat Usage via Office 365 Management Activity API ✅ COMPLETED
 
 **Priority**: Medium
-**Status**: Implemented (collection pipeline + dedicated container app + `/copilot` UI)
+**Status**: ✅ **Completed** — collection pipeline + dedicated `MWDashboard.CopilotAudit` container app + `/copilot` UI section (tenant-aware), shipped and in production
 **Context**: The Microsoft Graph Copilot usage reports API (`getMicrosoft365CopilotUsageUserDetail`) **only returns data for users holding a Microsoft 365 Copilot license**. Free, unlicensed **Copilot Chat** usage (e.g. on Business Standard tenants without the Copilot add-on) is *not* exposed by Graph. The only programmatic source is the **Office 365 Management Activity API** (raw `CopilotInteraction` audit events) or Microsoft Purview audit logs (`Search-UnifiedAuditLog`). This is the only data source in the app that isn't a stateless Graph read, so it warrants its own topic.
 
 ### Why it's a separate, larger project
@@ -176,3 +176,71 @@ Copilot Chat interactions land in `Audit.General` content blobs as records with:
   - Endpoints: `GET /groups`, `GET /groups/{id}/owners`
   - Permission: `Group.Read.All` (new)
   - Surfaced on the **Usage & Governance** page (`/usage`) with tabs for all five features
+
+---
+
+## Untapped Data Sources — Next Wave (security, governance & adoption depth)
+
+**Context**: The Tier 1–3 Graph reporting/security backlog above is essentially complete. The remaining high-value data falls into two buckets the app has barely touched: (1) the **Office 365 Management Activity API's *other* content types** — today only the `Audit.General` Copilot feed is consumed, but the same `ManagementActivityClient` subscription model exposes SharePoint/Exchange/DLP audit events; and (2) **directory & app-governance endpoints** in Graph. Each item follows the existing scaffolding pattern: new `*Snapshot` model + DbSet + migration → a `GraphReportService` (or `ManagementActivityClient`) method → a cached `MauDataService` save/query pair → a page or tab. Reuse the existing P1/P2 premium gating and tenant-isolation (`GetFilteredTenantIds`) conventions. Ordered by ROI (value vs. effort).
+
+> **Note on `graphify`** (https://github.com/safishamsi/graphify): evaluated and **not adopted**. It is a *code-knowledge-graph* tool for AI coding assistants ("Graph" as in graph theory) — unrelated to Microsoft Graph / the Management Activity API. It cannot read M365 tenants and adds no dashboard data. At most a developer code-navigation aid, already covered by VS Code semantic search + `copilot-instructions.md`. Skipped.
+
+### Tier A — Highest ROI, low effort
+
+- [x] **App registration & secret/certificate expiry monitoring** — flag client secrets/certs expiring in 30/60/90 days (expired credentials are a top cause of sudden integration outages) + inventory over-privileged/third-party OAuth apps (illicit-consent attack surface). Strong proactive MSP/QBR deliverable. ✅ **Shipped** — `AppCredentialSnapshot` + **App Credential Expiry** tab on `/identity` + `app-credential-expiry` export.
+  - Endpoints: `GET /applications` (`passwordCredentials`, `keyCredentials` end dates), `GET /servicePrincipals` (enterprise app permissions/grants)
+  - Permission: `Application.Read.All` (new — requires re-consent)
+  - Model: `AppCredentialSnapshot` (`TenantId`, `TenantName`, `AppId`, `AppDisplayName`, `CredentialType` [Secret/Certificate], `KeyId`, `EndDateTime`, `DaysToExpiry`, `CollectedAt`); composite unique index `(TenantId, AppId, KeyId)`
+  - UI: tab on the **Identity & Devices** page (`/identity`) or a new `/governance` page — expiry table with red/amber/green chips + "expiring soon" KPI
+
+- [x] **External sharing & anonymous-link activity** — who shared what externally, anonymous-link creation, external-user file access. A data-exposure security narrative the Graph reports API cannot provide. **Reuses the existing `ManagementActivityClient` subscription plumbing** (different content type + record parser). ✅ **Shipped** — `ExternalSharingSnapshot` via the generalized `ManagementActivityClient` (`Audit.SharePoint`) + `ExternalSharingCollectionService` in the CopilotAudit container + **External Sharing** section on `/security` + `external-sharing` export.
+  - Source: **Office 365 Management Activity API**, content type `Audit.SharePoint` (`SharingSet`, `AnonymousLinkCreated`, `AddedToSecureLink` operations)
+  - Permission: `ActivityFeed.Read` (**already granted** for the Copilot audit feed — no new consent)
+  - Model: `ExternalSharingSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `ShareType` [External/Anonymous/Guest], `EventCount`, `DistinctUsers`, `CollectedAt`); composite unique index `(TenantId, ShareType, ReportDate)`
+  - Implementation note: add an `Audit.SharePoint` subscription + a sibling collection service alongside `CopilotAuditCollectionService` in the **CopilotAudit container** (rename concept to a generic "audit collector"), reusing the cursor/retention/`Retry-After` logic
+
+### Tier B — Strong security story, moderate effort
+
+- [x] **Privileged role / Global Admin inventory** — count of standing Global Admins (best practice ≤ 4), stale/eligible admin assignments, PIM activation usage. Pairs with Secure Score + Identity pages. ✅ **Shipped** — `PrivilegedRoleSnapshot` (`/directoryRoles` standing members) + **Privileged Roles** tab on `/identity` + `privileged-roles` export. (PIM eligible-assignment depth deferred.)
+  - Endpoints: `GET /directoryRoles` + `GET /directoryRoles/{id}/members`; PIM `GET /roleManagement/directory/roleAssignmentScheduleInstances` / `roleEligibilityScheduleInstances`
+  - Permission: `RoleManagement.Read.Directory` (new — requires re-consent)
+  - Model: `PrivilegedRoleSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `RoleName`, `StandingMembers`, `EligibleMembers`, `CollectedAt`); composite unique index `(TenantId, RoleName, ReportDate)`
+
+- [x] **Defender / Identity Protection security alerts** — active alert counts by severity per tenant; complements Risky Users. ✅ **Shipped** — `DefenderAlertSnapshot` (`/security/alerts_v2`) + **Defender Alerts** section on `/security` + `defender-alerts` export.
+  - Endpoints: `GET /security/alerts_v2`, `GET /security/incidents`
+  - Permission: `SecurityAlert.Read.All` (new — requires re-consent)
+  - Model: `SecurityAlertSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `Severity`, `Status`, `AlertCount`, `CollectedAt`); composite unique index `(TenantId, Severity, Status, ReportDate)`
+  - UI: surface on the **Security** page alongside existing posture metrics
+
+- [ ] **Suspicious inbox / auto-forwarding rules** — mailbox forwarding-rule creation is a classic Business Email Compromise (BEC) indicator. High MSP security value.
+  - Source: **Office 365 Management Activity API**, content type `Audit.Exchange` (`New-InboxRule`, `Set-InboxRule`, `Set-Mailbox ForwardingSmtpAddress`)
+  - Permission: `ActivityFeed.Read` (**already granted**)
+  - Model: `MailRuleEventSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `RuleType` [Forwarding/Redirect/Delete], `EventCount`, `DistinctMailboxes`, `CollectedAt`)
+
+- [ ] **DLP policy matches** — Purview DLP sensitive-data exposure events (only for tenants running DLP).
+  - Source: **Office 365 Management Activity API**, content type `DLP.All`
+  - Permission: `ActivityFeed.Read` (**already granted**)
+  - Model: `DlpEventSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `PolicyName`, `MatchCount`, `Severity`, `CollectedAt`)
+
+### Tier C — Adoption / quality depth (mostly existing permissions)
+
+- [ ] **License renewal / expiry dates** — track subscription renewal dates (counts already collected); complements the planned Partner Center billing work.
+  - Endpoint: `GET /directory/subscriptions` (`nextLifecycleDateTime`, `status`)
+  - Permission: existing license/org scopes — verify (`Organization.Read.All` / `Directory.Read.All`)
+  - Model: extend `LicenseSnapshot` or new `SubscriptionSnapshot` (`TenantId`, `SkuId`, `Status`, `NextLifecycleDateTime`, `TotalSeats`, `CollectedAt`)
+
+- [ ] **Teams team & channel activity** — per-team activity detail (per-user/device already collected).
+  - Endpoint: `getTeamsTeamActivityDetail`
+  - Permission: `Reports.Read.All` (**already granted**)
+  - UI: tab/drill-down on the **Activity** page
+
+- [ ] **Teams call quality (CQD-style)** — poor-call detection and meeting-experience metrics.
+  - Endpoint: `GET /communications/callRecords` (+ `/sessions`)
+  - Permission: `CallRecords.Read.All` (new — requires re-consent)
+  - Model: `CallQualitySnapshot` (`TenantId`, `TenantName`, `ReportDate`, `TotalCalls`, `PoorCalls`, `GoodCallPercent`, `CollectedAt`)
+
+### Suggested implementation order
+1. ✅ **App secret/cert expiry** (Tier A) — cheapest, prevents real outages, instant MSP value. **Done.**
+2. ✅ **External sharing audit** (Tier A) — reuses the Management Activity collector, top security story, no new consent. **Done.**
+3. ✅ **Privileged role inventory** (Tier B) + **Defender alerts** (Tier B) — complete the security posture. **Done.**
+4. Remaining Tier B/C items (suspicious inbox/forwarding rules, DLP matches, license renewal dates, Teams team activity, call quality) as customer demand dictates.

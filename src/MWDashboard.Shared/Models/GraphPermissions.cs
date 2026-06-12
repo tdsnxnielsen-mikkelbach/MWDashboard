@@ -23,6 +23,9 @@ public static class GraphPermissions
         ["DeviceManagementManagedDevices.Read.All"] = "Read Microsoft Intune devices",
         ["Policy.Read.All"] = "Read your organization's policies",
         ["IdentityRiskyUser.Read.All"] = "Read all identity risky user information",
+        ["Application.Read.All"] = "Read all applications",
+        ["RoleManagement.Read.Directory"] = "Read all directory RBAC settings",
+        ["SecurityAlert.Read.All"] = "Read all security alerts",
         // Office 365 Management APIs resource (not Graph) — powers unlicensed Copilot Chat collection.
         ["ActivityFeed.Read"] = "Read activity data for your organization",
     };

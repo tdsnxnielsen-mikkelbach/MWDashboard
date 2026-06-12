@@ -285,6 +285,30 @@ try
                 await dataService.SaveGroupSprawlAsync(groups);
             }
 
+            // App registration / service-principal credential expiry (requires Application.Read.All)
+            var appCredentials = await graphService.GetAppCredentialsAsync(tenant.TenantId);
+            if (appCredentials.Count > 0)
+            {
+                foreach (var c in appCredentials) c.TenantName = tenant.TenantName;
+                await dataService.SaveAppCredentialsAsync(tenant.TenantId, DateTime.UtcNow.Date, appCredentials);
+            }
+
+            // Privileged role inventory (requires RoleManagement.Read.Directory)
+            var privilegedRoles = await graphService.GetPrivilegedRolesAsync(tenant.TenantId);
+            if (privilegedRoles.Count > 0)
+            {
+                foreach (var r in privilegedRoles) r.TenantName = tenant.TenantName;
+                await dataService.SavePrivilegedRolesAsync(tenant.TenantId, DateTime.UtcNow.Date, privilegedRoles);
+            }
+
+            // Defender / M365 security alerts (requires SecurityAlert.Read.All)
+            var defenderAlerts = await graphService.GetDefenderAlertsAsync(tenant.TenantId);
+            if (defenderAlerts.Count > 0)
+            {
+                foreach (var a in defenderAlerts) a.TenantName = tenant.TenantName;
+                await dataService.SaveDefenderAlertsAsync(tenant.TenantId, DateTime.UtcNow.Date, defenderAlerts);
+            }
+
             // Compute consumption score
             {
                 var totalLicenses = licenses.Sum(l => l.TotalLicenses);
