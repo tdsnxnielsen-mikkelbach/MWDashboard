@@ -126,8 +126,10 @@ sequenceDiagram
     Admin->>Web: Click "Collect Now" for tenant
     Web->>Collector: POST /collect/{tenantId} (internal HTTP)
     Collector->>Graph: Fetch all data for tenant
-    Collector->>DB: Store results immediately
+    Collector->>DB: Store results immediately (non-caching data service)
     Collector-->>Web: 200 OK (completed)
+    Web->>Cache: FlushAllAsync() — drop all MWDashboard:* keys
+    Note over Cache: Collector can't invalidate per-key, so Web flushes after remote success
 
     Note over Web, Cache: Dashboard Display (with warm-up + pub/sub)
     Web->>Cache: Check cached data
@@ -284,6 +286,8 @@ flowchart TD
 | Output Cache | HTTP responses | 5–15 min | Avoids re-rendering identical dashboard pages |
 | Redis Distributed Cache | Cross-instance | Configurable | Shared cache between scaled web replicas |
 | In-Memory (fallback) | Single instance | Session lifetime | Local dev when Redis is unavailable |
+
+**Invalidation**: `Save*` methods invalidate affected keys and publish them on the Redis pub/sub channel `MWDashboard:cache-invalidation` so every Web replica drops them. Because the Collector/Job collect in a separate process using the non-caching data service, they can't invalidate per-key — so after a successful **remote** collection the Web calls `RedisCacheInvalidationService.FlushAllAsync()` to drop all `MWDashboard:*` keys at once (the local-fallback path already invalidates per-key via `CachedMauDataService`).
 
 ## Observability (OpenTelemetry + Azure Monitor)
 

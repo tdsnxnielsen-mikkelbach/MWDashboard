@@ -53,6 +53,43 @@ public class RedisCacheInvalidationService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Drops every MWDashboard cache entry from the shared Redis store. Used after a data
+    /// collection run (which writes via the non-caching data service in the Collector/Job
+    /// process and therefore cannot invalidate individual keys) so the dashboard immediately
+    /// reflects freshly collected data instead of serving stale projections until the TTL
+    /// expires. Because Redis is shared across all Web replicas, deleting the keys here
+    /// invalidates them for every replica at once. No-op when Redis is unavailable (the
+    /// in-memory fallback relies on per-key invalidation + TTL).
+    /// </summary>
+    public async Task FlushAllAsync()
+    {
+        if (_redis == null) return;
+
+        try
+        {
+            var db = _redis.GetDatabase();
+            // Cache keys are stored with the "MWDashboard:" InstanceName prefix plus the
+            // app-level "MWDashboard:" key prefix, so every entry matches "MWDashboard:*".
+            foreach (var endpoint in _redis.GetEndPoints())
+            {
+                var server = _redis.GetServer(endpoint);
+                if (!server.IsConnected || server.IsReplica) continue;
+
+                await foreach (var key in server.KeysAsync(pattern: "MWDashboard:*"))
+                {
+                    await db.KeyDeleteAsync(key);
+                }
+            }
+
+            _logger.LogInformation("Flushed MWDashboard cache after data collection");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to flush cache after data collection");
+        }
+    }
+
     private void OnInvalidationMessage(RedisChannel channel, RedisValue message)
     {
         var key = message.ToString();
