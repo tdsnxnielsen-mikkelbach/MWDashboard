@@ -72,9 +72,22 @@ public class ManagementActivityClient : IManagementActivityClient
         var credential = _credentials.GetOrAdd(tenantId, tid => new ClientSecretCredential(
             tid, _config["AzureAd:ClientId"], _config["AzureAd:ClientSecret"]));
 
-        var token = await credential.GetTokenAsync(new TokenRequestContext([Audience]), ct);
-        _tokens[tenantId] = token;
-        return token.Token;
+        try
+        {
+            var token = await credential.GetTokenAsync(new TokenRequestContext([Audience]), ct);
+            _tokens[tenantId] = token;
+            return token.Token;
+        }
+        catch (AuthenticationFailedException ex)
+        {
+            // Most common after moving the app registration: the customer tenant has not
+            // admin-consented the (new) app, or the configured client secret is wrong/expired.
+            throw new InvalidOperationException(
+                $"Could not acquire an Office 365 Management Activity API token for tenant {tenantId}. " +
+                "Verify the app registration is admin-consented in this tenant (ActivityFeed.Read on the " +
+                "Office 365 Management APIs) and that the configured client secret is current. " +
+                $"Underlying error: {ex.Message}", ex);
+        }
     }
 
     private async Task<HttpRequestMessage> CreateRequestAsync(HttpMethod method, string url, string tenantId, CancellationToken ct)
@@ -130,7 +143,9 @@ public class ManagementActivityClient : IManagementActivityClient
 
         _logger.LogError("Failed to start Audit.General subscription for tenant {TenantId}: {Status} {Body}",
             tenantId, (int)response.StatusCode, body);
-        response.EnsureSuccessStatusCode();
+        throw new InvalidOperationException(
+            $"Office 365 Management Activity API rejected the Audit.General subscription start for tenant {tenantId} " +
+            $"({(int)response.StatusCode} {response.ReasonPhrase}). {DescribeApiError(body)}");
     }
 
     public async Task<List<AuditContentBlob>> ListContentAsync(string tenantId, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
@@ -161,7 +176,9 @@ public class ManagementActivityClient : IManagementActivityClient
 
                 _logger.LogError("Failed to list Audit.General content for tenant {TenantId}: {Status} {Body}",
                     tenantId, (int)response.StatusCode, body);
-                response.EnsureSuccessStatusCode();
+                throw new InvalidOperationException(
+                    $"Office 365 Management Activity API rejected the content listing for tenant {tenantId} " +
+                    $"({(int)response.StatusCode} {response.ReasonPhrase}). {DescribeApiError(body)}");
             }
 
             var items = await response.Content.ReadFromJsonAsync<List<ContentListItem>>(cancellationToken: ct) ?? [];
@@ -203,5 +220,51 @@ public class ManagementActivityClient : IManagementActivityClient
         public string? ContentUri { get; set; }
         public DateTime ContentCreated { get; set; }
         public DateTime ContentExpiration { get; set; }
+    }
+
+    /// <summary>
+    /// Turns a Management Activity API error body (<c>{ "error": { "code", "message" } }</c>) into a
+    /// concise, actionable sentence, adding hints for the well-known <c>AFxxxxx</c> failure codes.
+    /// </summary>
+    private static string DescribeApiError(string body)
+    {
+        string code = string.Empty, message = string.Empty;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.Object)
+            {
+                if (err.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String)
+                    code = c.GetString() ?? string.Empty;
+                if (err.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String)
+                    message = m.GetString() ?? string.Empty;
+            }
+        }
+        catch (JsonException)
+        {
+            // Non-JSON body (e.g. an HTML error page) — fall back to the raw text below.
+        }
+
+        var hint = code switch
+        {
+            _ when code.Contains("AF20022", StringComparison.OrdinalIgnoreCase)
+                => "The Audit.General subscription is not enabled for this tenant.",
+            _ when code.Contains("AF20023", StringComparison.OrdinalIgnoreCase)
+                => "Unified audit logging is turned off for this tenant — enable it (Set-AdminAuditLogConfig -UnifiedAuditLogIngestionEnabled $true) before polling.",
+            _ when code.Contains("AF20055", StringComparison.OrdinalIgnoreCase)
+                => "The tenant context is invalid — confirm the app is admin-consented in this tenant with ActivityFeed.Read on the Office 365 Management APIs.",
+            _ => string.Empty,
+        };
+
+        var detail = (code, message) switch
+        {
+            ("", "") => string.IsNullOrWhiteSpace(body) ? "No error detail returned." : body.Trim(),
+            ("", _) => message,
+            (_, "") => code,
+            _ => $"{code}: {message}",
+        };
+
+        return string.IsNullOrEmpty(hint) ? detail : $"{detail} {hint}";
     }
 }

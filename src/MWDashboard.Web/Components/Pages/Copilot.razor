@@ -291,12 +291,20 @@ else
             <MudText Typo="Typo.h6" Class="mb-3">Activity by Surface (latest day)</MudText>
             <MudTable Items="_chatBySurface" Dense="true" Hover="true" Striped="true">
                 <HeaderContent>
+                    @if (TenantFilter.IsMultiTenantView)
+                    {
+                        <MudTh>Tenant</MudTh>
+                    }
                     <MudTh>Surface</MudTh>
                     <MudTh Style="text-align:right">Active Users</MudTh>
                     <MudTh Style="text-align:right">Unlicensed Users</MudTh>
                     <MudTh Style="text-align:right">Interactions</MudTh>
                 </HeaderContent>
                 <RowTemplate>
+                    @if (TenantFilter.IsMultiTenantView)
+                    {
+                        <MudTd DataLabel="Tenant">@context.TenantName</MudTd>
+                    }
                     <MudTd DataLabel="Surface">@context.AppHost</MudTd>
                     <MudTd DataLabel="Active Users" Style="text-align:right">@context.ActiveUsers.ToString("N0")</MudTd>
                     <MudTd DataLabel="Unlicensed Users" Style="text-align:right">@context.UnlicensedUsers.ToString("N0")</MudTd>
@@ -477,21 +485,42 @@ else
         var latestDate = _chatData.Max(c => c.ReportDate.Date);
         var latest = _chatData.Where(c => c.ReportDate.Date == latestDate).ToList();
 
-        _chatBySurface = latest
-            .GroupBy(c => c.AppHost)
-            .Select(g => new ChatSurfaceRow
-            {
-                AppHost = g.Key,
-                ActiveUsers = g.Sum(x => x.ActiveUsers),
-                UnlicensedUsers = g.Sum(x => x.UnlicensedUsers),
-                Interactions = g.Sum(x => x.InteractionCount)
-            })
-            .OrderByDescending(r => r.ActiveUsers)
-            .ToList();
+        // In multi-tenant view, break the surface table down per tenant (mirrors the
+        // licensed adoption table); otherwise aggregate across the single tenant in scope.
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _chatBySurface = latest
+                .GroupBy(c => new { c.TenantName, c.AppHost })
+                .Select(g => new ChatSurfaceRow
+                {
+                    TenantName = g.Key.TenantName,
+                    AppHost = g.Key.AppHost,
+                    ActiveUsers = g.Sum(x => x.ActiveUsers),
+                    UnlicensedUsers = g.Sum(x => x.UnlicensedUsers),
+                    Interactions = g.Sum(x => x.InteractionCount)
+                })
+                .OrderBy(r => r.TenantName)
+                .ThenByDescending(r => r.ActiveUsers)
+                .ToList();
+        }
+        else
+        {
+            _chatBySurface = latest
+                .GroupBy(c => c.AppHost)
+                .Select(g => new ChatSurfaceRow
+                {
+                    AppHost = g.Key,
+                    ActiveUsers = g.Sum(x => x.ActiveUsers),
+                    UnlicensedUsers = g.Sum(x => x.UnlicensedUsers),
+                    Interactions = g.Sum(x => x.InteractionCount)
+                })
+                .OrderByDescending(r => r.ActiveUsers)
+                .ToList();
+        }
 
         _chatUnlicensedLatest = latest.Sum(c => c.UnlicensedUsers);
         _chatActiveLatest = latest.Sum(c => c.ActiveUsers);
-        _chatSurfaceCount = _chatBySurface.Count;
+        _chatSurfaceCount = latest.Select(c => c.AppHost).Distinct().Count();
     }
 
     private async Task PollCopilotChatAsync()
@@ -629,6 +658,7 @@ else
 
     public class ChatSurfaceRow
     {
+        public string TenantName { get; set; } = string.Empty;
         public string AppHost { get; set; } = string.Empty;
         public int ActiveUsers { get; set; }
         public int UnlicensedUsers { get; set; }
