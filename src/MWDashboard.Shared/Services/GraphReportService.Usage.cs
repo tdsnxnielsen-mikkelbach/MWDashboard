@@ -84,6 +84,7 @@ public partial class GraphReportService
                 {
                     var h = rows[0];
                     int iDate = Array.IndexOf(h, "Report Date");
+                    int iRefresh = Array.IndexOf(h, "Report Refresh Date");
                     int iUnder = Array.IndexOf(h, "Under Limit");
                     int iWarn = Array.IndexOf(h, "Warning Issued");
                     int iSend = Array.IndexOf(h, "Send Prohibited");
@@ -92,7 +93,10 @@ public partial class GraphReportService
                     // These time-series count reports always emit the current refresh-date row with
                     // EMPTY count columns; the populated figures sit on an earlier day. Pick the most
                     // recent row that actually carries count data rather than the strictly latest date.
-                    var latest = LatestRowWithData(rows, iDate, iUnder, iWarn, iSend, iSendRecv);
+                    // This aggregate report also commonly leaves "Report Date" blank (only
+                    // "Report Refresh Date" is populated), so fall back to it for row selection.
+                    var latest = LatestRowWithData(rows, iDate, iUnder, iWarn, iSend, iSendRecv)
+                              ?? LatestRowWithData(rows, iRefresh, iUnder, iWarn, iSend, iSendRecv);
                     if (latest != null)
                     {
                         aggregate ??= new MailboxUsageSnapshot { TenantId = tenantId, ReportDate = reportDate, CollectedAt = DateTime.UtcNow };

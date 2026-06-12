@@ -18,6 +18,9 @@ public class MauDbContext : DbContext
     public DbSet<StorageSnapshot> StorageSnapshots => Set<StorageSnapshot>();
     public DbSet<ConsumptionSnapshot> ConsumptionSnapshots => Set<ConsumptionSnapshot>();
     public DbSet<M365AppUsageSnapshot> M365AppUsageSnapshots => Set<M365AppUsageSnapshot>();
+    public DbSet<M365AppUserDetailSnapshot> M365AppUserDetailSnapshots => Set<M365AppUserDetailSnapshot>();
+    public DbSet<Office365ActivationSnapshot> Office365ActivationSnapshots => Set<Office365ActivationSnapshot>();
+    public DbSet<Office365ActivationUserSnapshot> Office365ActivationUserSnapshots => Set<Office365ActivationUserSnapshot>();
     public DbSet<SecureScoreSnapshot> SecureScoreSnapshots => Set<SecureScoreSnapshot>();
     public DbSet<SecureScoreControlSnapshot> SecureScoreControlSnapshots => Set<SecureScoreControlSnapshot>();
     public DbSet<MfaRegistrationSnapshot> MfaRegistrationSnapshots => Set<MfaRegistrationSnapshot>();
@@ -140,6 +143,31 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.AppName).HasMaxLength(100);
             entity.Property(e => e.Platform).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<M365AppUserDetailSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.UserKey, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.UserKey).HasMaxLength(64);
+        });
+
+        modelBuilder.Entity<Office365ActivationSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ProductType, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.ProductType).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<Office365ActivationUserSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.UserKey, e.ProductType, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.UserKey).HasMaxLength(64);
+            entity.Property(e => e.ProductType).HasMaxLength(200);
         });
 
         modelBuilder.Entity<SecureScoreSnapshot>(entity =>

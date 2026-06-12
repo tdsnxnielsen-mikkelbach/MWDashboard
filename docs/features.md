@@ -67,7 +67,9 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Users by Platform** — donut chart of active users by platform (Windows, Mac, Mobile, Web)
 - **App usage details table** — searchable/sortable per-app user counts with report date; Tenant column in multi-tenant view. In multi-tenant view the table is grouped into expandable sections by tenant (initially expanded) for easier scanning across tenants
 - **All apps always shown** — every app column present in the report is recorded even when its count is 0 or blank, so apps with no recent activity (e.g. PowerPoint) still appear with a 0 value rather than silently disappearing
-- Data source: Graph Reports API (`getM365AppUserCounts` with D30 period); usage data lags ~2–3 days and depends on tenant telemetry/diagnostic-data settings
+- **App × Platform Adoption matrix** — per-application active-user counts split by platform (Windows / Mac / Mobile / Web), derived from the per-user detail report (`getM365AppUserDetail`). Aggregated to counts only — **user identities are anonymized** with irreversible, per-tenant pseudonyms (no UPNs or display names are ever stored)
+- **Office Desktop Activations by Product & Device** — grouped bar chart of Office desktop install/activation counts per product (e.g. Microsoft 365 Apps for enterprise) across devices (Windows, Mac, Android, iOS, Windows Mobile), from `getOffice365ActivationCounts`; backed by anonymized per-user activation detail (`getOffice365ActivationsUserDetail`)
+- Data source: Graph Reports API (`getM365AppUserCounts` + `getM365AppPlatformUserCounts` + `getM365AppUserDetail` with D30 period; `getOffice365ActivationCounts` + `getOffice365ActivationsUserDetail` have no period parameter); usage data lags ~2–3 days and depends on tenant telemetry/diagnostic-data settings
 
 ## Copilot Adoption (`/copilot`)
 
@@ -191,8 +193,9 @@ Every dashboard dataset can be exported to CSV. Exports are served from minimal-
   - **Service Health** — Service Status, Incidents & Advisories
   - **Identity & Devices** — Device Compliance, Conditional Access, Guest Users, Risky Users, App Credential Expiry, Privileged Roles
   - **Security** — Sign-ins & MFA, Defender Alerts, External Sharing
+  - **M365 Apps** — App × Platform Detail (anonymized), Office Activations (counts), Office Activations (anonymized users)
   - **Usage & Governance** — Mailbox Usage, Top Mailboxes, Teams Devices, SharePoint & OneDrive, Top Sites/Accounts, Viva Engage, Groups & Teams
-- **Export All Data (ZIP)** — the Dashboard page has an "Export All Data" button (`/api/export-all`) that streams a single ZIP containing every dataset as its own CSV (27 files), named `mwdashboard-export-{date}.zip`
+- **Export All Data (ZIP)** — the Dashboard page has an "Export All Data" button (`/api/export-all`) that streams a single ZIP containing every dataset as its own CSV (30 files), named `mwdashboard-export-{date}.zip`
 - **Tenant isolation enforced server-side** — every export endpoint derives tenant scope from the signed-in user's `tenantid` claim (mirroring `MainLayout`): home-tenant admins export all tenants; customer-tenant users export only their own tenant. Client-supplied input is never trusted, so altering a URL cannot leak another tenant's data
 - **Single source of truth** — `ExportEndpoints.cs` defines each dataset once (filename, header, row builder); both the individual `/api/export/{feature}` endpoints and the `/api/export-all` ZIP reuse those definitions. CSV fields are escaped for commas/quotes/newlines
 
@@ -216,7 +219,7 @@ Every dashboard dataset can be exported to CSV. Exports are served from minimal-
 - Register/deregister tenants — form auto-resets after successful registration with auto-dismissing success message
 - **Inline display name editing** — pencil icon next to each tenant name opens an inline text field with save/cancel buttons; updates propagate to the global tenant selector immediately
 - Admin consent URL generator with clipboard copy — redirect URI points to the Static Web App consent-complete page (configured via `ConsentCallback:RedirectUri`)
-- **Collect Now button** — triggers immediate data collection for a specific tenant via the dedicated Collector container app (internal HTTP call); automatically falls back to local collection if the collector is unavailable. Collects MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments, storage, M365 app usage, and consumption score
+- **Collect Now button** — triggers immediate data collection for a specific tenant via the dedicated Collector container app (internal HTTP call); automatically falls back to local collection if the collector is unavailable. Collects MAU, licenses, Message Center, sign-ins, activity, Copilot, segmentation, departments, storage, M365 app usage (incl. anonymized per-user app × platform detail and Office desktop activations), and consumption score
 - Toggle tenant active/inactive — global tenant selector updates immediately when toggling or deleting tenants; deactivating blocks login for that tenant's users
 - **Login access tied to tenant status** — adding a tenant allows users from that tenant to sign in; removing/deactivating blocks their access immediately
 - **Consent health indicator** — a per-tenant "Consent" column shows a green check when all required Graph permissions are consented, or a "Re-consent" warning chip (with tooltip listing the missing permissions) when a tenant admin needs to re-approve. A warning banner at the top of the page lists all affected tenants with direct re-consent links. Status is refreshed automatically on every data collection and on-demand via a per-row "Check permissions" button. The probe distinguishes genuine consent gaps from premium-license limitations (e.g. `signInActivity` needing P1/P2) so consented permissions are never falsely flagged

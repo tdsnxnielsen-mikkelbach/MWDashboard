@@ -4,7 +4,7 @@ The app registration needs the following **Application** permissions (not Delega
 
 | Permission | Purpose | Notes |
 |-----------|---------|-------|
-| `Reports.Read.All` | MAU usage reports, workload activity, user detail | Core functionality + Activity + Segmentation pages |
+| `Reports.Read.All` | MAU usage reports, workload activity, user detail; M365 app per-user detail (`getM365AppUserDetail`) and Office desktop activations (`getOffice365ActivationCounts` / `getOffice365ActivationsUserDetail`) | Core functionality + Activity + Segmentation + M365 Apps pages. Per-user rows are anonymized at collection time (UPNs pseudonymized, names dropped) |
 | `Organization.Read.All` | Subscribed SKUs / license data, organization info | License page + Consent callback (verify tenant domain) |
 | `ServiceMessage.Read.All` | M365 Message Center posts | License page — Message Center section |
 | `AuditLog.Read.All` | Entra sign-in logs; MFA/auth method registration (`/reports/authenticationMethods/userRegistrationDetails`); inactive-account `signInActivity` | Security page — sign-in logs and inactive accounts require Entra ID P1/P2 on target tenant (the `signInActivity` property is premium-gated); MFA registration works on all tiers |

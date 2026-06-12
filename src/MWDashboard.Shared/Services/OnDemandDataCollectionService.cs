@@ -106,6 +106,30 @@ public class OnDemandDataCollectionService : IDataCollectionService
             await _dataService.SaveM365AppUsageAsync(appUsage);
         }
 
+        // M365 App per-user detail (anonymized app x platform matrix)
+        var appUserDetail = await _graphService.GetM365AppUserDetailAsync(tenantId);
+        if (appUserDetail.Count > 0)
+        {
+            foreach (var a in appUserDetail)
+                a.TenantName = tenantName;
+            await _dataService.SaveM365AppUserDetailAsync(appUserDetail);
+        }
+
+        // Office desktop activations (counts per product/device + anonymized per-user detail)
+        var (activationCounts, activationUsers) = await _graphService.GetOffice365ActivationsAsync(tenantId);
+        if (activationCounts.Count > 0)
+        {
+            foreach (var a in activationCounts)
+                a.TenantName = tenantName;
+            await _dataService.SaveOffice365ActivationsAsync(activationCounts);
+        }
+        if (activationUsers.Count > 0)
+        {
+            foreach (var a in activationUsers)
+                a.TenantName = tenantName;
+            await _dataService.SaveOffice365ActivationUsersAsync(activationUsers);
+        }
+
         // Microsoft Secure Score (daily score trend + per-control remediation actions)
         var (secureScores, secureControls) = await _graphService.GetSecureScoreAsync(tenantId);
         if (secureScores.Count > 0)

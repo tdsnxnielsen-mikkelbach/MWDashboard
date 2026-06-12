@@ -342,4 +342,144 @@ public partial class MauDataService
 
         await db.SaveChangesAsync();
     }
+
+    // M365 App per-user detail (anonymized) — returns the latest collection per tenant.
+    public async Task<List<M365AppUserDetailSnapshot>> GetM365AppUserDetailAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.M365AppUserDetailSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .ToListAsync();
+    }
+
+    public async Task SaveM365AppUserDetailAsync(IEnumerable<M365AppUserDetailSnapshot> snapshots)
+    {
+        var list = snapshots as IList<M365AppUserDetailSnapshot> ?? snapshots.ToList();
+        if (list.Count == 0) return;
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        // Batch-upsert by (TenantId, UserKey, ReportDate): load the existing rows for the affected
+        // tenant/date once, then update or insert in memory (avoids one query per user).
+        var tenantId = list[0].TenantId;
+        var reportDate = list[0].ReportDate;
+        var existing = await db.M365AppUserDetailSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToDictionaryAsync(s => s.UserKey);
+
+        foreach (var snapshot in list)
+        {
+            if (existing.TryGetValue(snapshot.UserKey, out var row))
+            {
+                snapshot.Id = row.Id;
+                db.Entry(row).CurrentValues.SetValues(snapshot);
+            }
+            else
+            {
+                db.M365AppUserDetailSnapshots.Add(snapshot);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // Office 365 activation counts (aggregate per product/device) — latest collection per tenant.
+    public async Task<List<Office365ActivationSnapshot>> GetOffice365ActivationsAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.Office365ActivationSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .OrderBy(s => s.ProductType)
+            .ToListAsync();
+    }
+
+    public async Task SaveOffice365ActivationsAsync(IEnumerable<Office365ActivationSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.Office365ActivationSnapshots
+                .FirstOrDefaultAsync(s =>
+                    s.TenantId == snapshot.TenantId &&
+                    s.ProductType == snapshot.ProductType &&
+                    s.ReportDate == snapshot.ReportDate);
+
+            if (existing != null)
+            {
+                existing.WindowsCount = snapshot.WindowsCount;
+                existing.MacCount = snapshot.MacCount;
+                existing.AndroidCount = snapshot.AndroidCount;
+                existing.IosCount = snapshot.IosCount;
+                existing.WindowsMobileCount = snapshot.WindowsMobileCount;
+                existing.TenantName = snapshot.TenantName;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.Office365ActivationSnapshots.Add(snapshot);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    // Office 365 activation per-user detail (anonymized) — latest collection per tenant.
+    public async Task<List<Office365ActivationUserSnapshot>> GetOffice365ActivationUsersAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.Office365ActivationUserSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .ToListAsync();
+    }
+
+    public async Task SaveOffice365ActivationUsersAsync(IEnumerable<Office365ActivationUserSnapshot> snapshots)
+    {
+        var list = snapshots as IList<Office365ActivationUserSnapshot> ?? snapshots.ToList();
+        if (list.Count == 0) return;
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var tenantId = list[0].TenantId;
+        var reportDate = list[0].ReportDate;
+        var existing = await db.Office365ActivationUserSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        var existingByKey = existing
+            .GroupBy(s => (s.UserKey, s.ProductType))
+            .ToDictionary(g => g.Key, g => g.First());
+
+        foreach (var snapshot in list)
+        {
+            if (existingByKey.TryGetValue((snapshot.UserKey, snapshot.ProductType), out var row))
+            {
+                snapshot.Id = row.Id;
+                db.Entry(row).CurrentValues.SetValues(snapshot);
+            }
+            else
+            {
+                db.Office365ActivationUserSnapshots.Add(snapshot);
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
 }

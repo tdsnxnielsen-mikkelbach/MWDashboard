@@ -53,6 +53,14 @@ public interface IMauDataService
     Task<List<M365AppUsageSnapshot>> GetM365AppUsageAsync(IEnumerable<string>? tenantIds);
     Task SaveM365AppUsageAsync(IEnumerable<M365AppUsageSnapshot> snapshots);
 
+    // M365 App per-user detail (anonymized) + Office activations
+    Task<List<M365AppUserDetailSnapshot>> GetM365AppUserDetailAsync(IEnumerable<string>? tenantIds);
+    Task SaveM365AppUserDetailAsync(IEnumerable<M365AppUserDetailSnapshot> snapshots);
+    Task<List<Office365ActivationSnapshot>> GetOffice365ActivationsAsync(IEnumerable<string>? tenantIds);
+    Task SaveOffice365ActivationsAsync(IEnumerable<Office365ActivationSnapshot> snapshots);
+    Task<List<Office365ActivationUserSnapshot>> GetOffice365ActivationUsersAsync(IEnumerable<string>? tenantIds);
+    Task SaveOffice365ActivationUsersAsync(IEnumerable<Office365ActivationUserSnapshot> snapshots);
+
     // Secure Score
     Task<List<SecureScoreSnapshot>> GetSecureScoresAsync(IEnumerable<string>? tenantIds, int days = 90);
     Task SaveSecureScoresAsync(IEnumerable<SecureScoreSnapshot> snapshots);

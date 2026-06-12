@@ -20,6 +20,8 @@ public interface IGraphReportService
     Task<List<DepartmentUsageSnapshot>> GetDepartmentUsageAsync(string tenantId);
     Task<List<StorageSnapshot>> GetStorageUsageAsync(string tenantId);
     Task<List<M365AppUsageSnapshot>> GetM365AppUsageAsync(string tenantId);
+    Task<List<M365AppUserDetailSnapshot>> GetM365AppUserDetailAsync(string tenantId);
+    Task<(List<Office365ActivationSnapshot> Counts, List<Office365ActivationUserSnapshot> Users)> GetOffice365ActivationsAsync(string tenantId);
     Task<(List<SecureScoreSnapshot> Scores, List<SecureScoreControlSnapshot> Controls)> GetSecureScoreAsync(string tenantId);
     Task<MfaRegistrationSnapshot?> GetMfaRegistrationAsync(string tenantId);
     Task<InactiveAccountSnapshot?> GetInactiveAccountsAsync(string tenantId);
@@ -64,6 +66,18 @@ public partial class GraphReportService : IGraphReportService
         _config = config;
         _logger = logger;
     }
+
+    // Salt for pseudonymizing PII (UPNs, display names) in per-user reports. Prefers an explicit
+    // Anonymization:Salt; falls back to the always-present client secret so tokens are still
+    // deterministic-per-deployment and non-reversible without the secret.
+    private string AnonymizationSalt =>
+        _config["Anonymization:Salt"]
+        ?? _config["AzureAd:ClientSecret"]
+        ?? "mwdashboard";
+
+    /// <summary>Tenant-scoped, non-reversible pseudonym for a user identifier (UPN / display name).</summary>
+    private string Pseudonymize(string? value, string tenantId)
+        => PiiProtector.Pseudonymize(value, tenantId, AnonymizationSalt);
 
     private ClientSecretCredential GetCredentialForTenant(string tenantId)
         => _credentialCache.GetOrAdd(tenantId, tid => new ClientSecretCredential(

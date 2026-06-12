@@ -200,7 +200,7 @@ MWDashboard/
 ├── src/
 │   ├── MWDashboard.Shared/                # Shared class library
 │   │   ├── Data/
-│   │   │   └── MauDbContext.cs            # EF Core context — 30 DbSets
+│   │   │   └── MauDbContext.cs            # EF Core context — 38 DbSets
 │   │   ├── Models/
 │   │   │   ├── MauSnapshot.cs             # All entity models + TenantEntraTier
 │   │   │   └── M365Services.cs            # Service constants, SKU-to-service mapping, service plan auto-detection

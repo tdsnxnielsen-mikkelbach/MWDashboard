@@ -79,6 +79,34 @@ public static class ExportEndpoints
             async (data, scope) => (await data.GetM365AppUsageAsync(scope)).Select(r =>
                 Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.AppName), F(r.Platform), r.UserCount))),
 
+        ["m365app-userdetail"] = new("m365-app-user-detail-report.csv",
+            "TenantId,TenantName,ReportDate,UserKey,LastActivityDate,LastActivationDate," +
+            "OutlookWindows,WordWindows,ExcelWindows,PowerPointWindows,OneNoteWindows,TeamsWindows," +
+            "OutlookMac,WordMac,ExcelMac,PowerPointMac,OneNoteMac,TeamsMac," +
+            "OutlookMobile,WordMobile,ExcelMobile,PowerPointMobile,OneNoteMobile,TeamsMobile," +
+            "OutlookWeb,WordWeb,ExcelWeb,PowerPointWeb,OneNoteWeb,TeamsWeb",
+            async (data, scope) => (await data.GetM365AppUserDetailAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.UserKey),
+                    r.LastActivityDate.HasValue ? D(r.LastActivityDate.Value) : "",
+                    r.LastActivationDate.HasValue ? D(r.LastActivationDate.Value) : "",
+                    r.OutlookWindows, r.WordWindows, r.ExcelWindows, r.PowerPointWindows, r.OneNoteWindows, r.TeamsWindows,
+                    r.OutlookMac, r.WordMac, r.ExcelMac, r.PowerPointMac, r.OneNoteMac, r.TeamsMac,
+                    r.OutlookMobile, r.WordMobile, r.ExcelMobile, r.PowerPointMobile, r.OneNoteMobile, r.TeamsMobile,
+                    r.OutlookWeb, r.WordWeb, r.ExcelWeb, r.PowerPointWeb, r.OneNoteWeb, r.TeamsWeb))),
+
+        ["office-activations"] = new("office-activations-report.csv",
+            "TenantId,TenantName,ReportDate,ProductType,Windows,Mac,Android,iOS,WindowsMobile",
+            async (data, scope) => (await data.GetOffice365ActivationsAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.ProductType),
+                    r.WindowsCount, r.MacCount, r.AndroidCount, r.IosCount, r.WindowsMobileCount))),
+
+        ["office-activation-users"] = new("office-activation-users-report.csv",
+            "TenantId,TenantName,ReportDate,UserKey,ProductType,LastActivatedDate,Windows,Mac,WindowsMobile,iOS,Android,SharedComputer",
+            async (data, scope) => (await data.GetOffice365ActivationUsersAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.UserKey), F(r.ProductType),
+                    r.LastActivatedDate.HasValue ? D(r.LastActivatedDate.Value) : "",
+                    r.Windows, r.Mac, r.WindowsMobile, r.Ios, r.Android, r.SharedComputer))),
+
         ["device-compliance"] = new("device-compliance-report.csv",
             "TenantId,TenantName,ReportDate,TotalDevices,Compliant,NonCompliant,InGracePeriod,Error,Unknown,Windows,iOS,Android,macOS,Other",
             async (data, scope) => (await data.GetDeviceComplianceAsync(scope)).Select(r =>

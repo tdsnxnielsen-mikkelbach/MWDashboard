@@ -237,6 +237,90 @@ public class M365AppUsageSnapshot
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }
 
+// Per-user M365 Apps usage detail (anonymized). Sourced from the getM365AppUserDetail report.
+// The user's UPN is replaced with a non-reversible, tenant-scoped pseudonym (UserKey) — no raw
+// PII is ever stored. Captures which app the user used on which platform (the app x platform matrix).
+public class M365AppUserDetailSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string UserKey { get; set; } = string.Empty; // anonymized user identifier (HMAC of UPN)
+    public DateTime? LastActivityDate { get; set; }
+    public DateTime? LastActivationDate { get; set; }
+
+    // App x platform usage matrix (true = the user used that app on that platform).
+    public bool OutlookWindows { get; set; }
+    public bool WordWindows { get; set; }
+    public bool ExcelWindows { get; set; }
+    public bool PowerPointWindows { get; set; }
+    public bool OneNoteWindows { get; set; }
+    public bool TeamsWindows { get; set; }
+
+    public bool OutlookMac { get; set; }
+    public bool WordMac { get; set; }
+    public bool ExcelMac { get; set; }
+    public bool PowerPointMac { get; set; }
+    public bool OneNoteMac { get; set; }
+    public bool TeamsMac { get; set; }
+
+    public bool OutlookMobile { get; set; }
+    public bool WordMobile { get; set; }
+    public bool ExcelMobile { get; set; }
+    public bool PowerPointMobile { get; set; }
+    public bool OneNoteMobile { get; set; }
+    public bool TeamsMobile { get; set; }
+
+    public bool OutlookWeb { get; set; }
+    public bool WordWeb { get; set; }
+    public bool ExcelWeb { get; set; }
+    public bool PowerPointWeb { get; set; }
+    public bool OneNoteWeb { get; set; }
+    public bool TeamsWeb { get; set; }
+
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Aggregate Office activation counts per product type and device platform.
+// Sourced from the getOffice365ActivationCounts report. Contains no PII.
+public class Office365ActivationSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string ProductType { get; set; } = string.Empty;
+    public int WindowsCount { get; set; }
+    public int MacCount { get; set; }
+    public int AndroidCount { get; set; }
+    public int IosCount { get; set; }
+    public int WindowsMobileCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Per-user Office activation detail (anonymized). Sourced from getOffice365ActivationsUserDetail.
+// UPN is replaced with a tenant-scoped pseudonym (UserKey); the report's Display Name column
+// (pure PII) is intentionally never stored.
+public class Office365ActivationUserSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string UserKey { get; set; } = string.Empty; // anonymized user identifier (HMAC of UPN)
+    public string ProductType { get; set; } = string.Empty;
+    public DateTime? LastActivatedDate { get; set; }
+    public bool Windows { get; set; }
+    public bool Mac { get; set; }
+    public bool WindowsMobile { get; set; }
+    public bool Ios { get; set; }
+    public bool Android { get; set; }
+    public bool SharedComputer { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+
 public class SecureScoreSnapshot
 {
     public int Id { get; set; }

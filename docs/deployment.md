@@ -379,6 +379,9 @@ dotnet ef migrations add <MigrationName> --project ../MWDashboard.Shared
 | `StorageSnapshots` | Storage used per service (SharePoint, OneDrive, Exchange) |
 | `ConsumptionSnapshots` | Computed consumption score with all dimensions |
 | `M365AppUsageSnapshots` | M365 app platform usage (per-app, per-platform user counts) |
+| `M365AppUserDetailSnapshots` | Anonymized per-user M365 app activity (app × platform; UPNs pseudonymized, no PII stored) |
+| `Office365ActivationSnapshots` | Office desktop activation counts per product & device (Windows/Mac/Android/iOS/Windows Mobile) |
+| `Office365ActivationUserSnapshots` | Anonymized per-user Office activation detail (UPNs pseudonymized, no PII stored) |
 
 ## Environment Variables (Runtime)
 

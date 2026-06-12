@@ -149,6 +149,46 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("m365app", null));
     }
 
+    // --- M365 App per-user detail + Office activations (cached 60 min — daily-changing data) ---
+    public Task<List<M365AppUserDetailSnapshot>> GetM365AppUserDetailAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("m365appdetail", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetM365AppUserDetailAsync(tenantIds), options);
+    }
+
+    public async Task SaveM365AppUserDetailAsync(IEnumerable<M365AppUserDetailSnapshot> snapshots)
+    {
+        await _inner.SaveM365AppUserDetailAsync(snapshots);
+        await InvalidateAsync(BuildKey("m365appdetail", null));
+    }
+
+    public Task<List<Office365ActivationSnapshot>> GetOffice365ActivationsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("office-activations", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetOffice365ActivationsAsync(tenantIds), options);
+    }
+
+    public async Task SaveOffice365ActivationsAsync(IEnumerable<Office365ActivationSnapshot> snapshots)
+    {
+        await _inner.SaveOffice365ActivationsAsync(snapshots);
+        await InvalidateAsync(BuildKey("office-activations", null));
+    }
+
+    public Task<List<Office365ActivationUserSnapshot>> GetOffice365ActivationUsersAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("office-activation-users", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetOffice365ActivationUsersAsync(tenantIds), options);
+    }
+
+    public async Task SaveOffice365ActivationUsersAsync(IEnumerable<Office365ActivationUserSnapshot> snapshots)
+    {
+        await _inner.SaveOffice365ActivationUsersAsync(snapshots);
+        await InvalidateAsync(BuildKey("office-activation-users", null));
+    }
+
     // --- Secure Score (cached 60 min — daily-changing data) ---
     public Task<List<SecureScoreSnapshot>> GetSecureScoresAsync(IEnumerable<string>? tenantIds, int days = 90)
     {

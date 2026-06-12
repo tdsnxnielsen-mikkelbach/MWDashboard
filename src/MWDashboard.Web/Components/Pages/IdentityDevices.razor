@@ -514,15 +514,22 @@ else
             <MudItem xs="12">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Role Membership</MudText>
-                    <MudTable Items="_privilegedRoles" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <MudTable Items="_privilegedRoles" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                              GroupBy="@(TenantFilter.IsMultiTenantView ? _roleGroupDefinition : null)">
                         <HeaderContent>
-                            @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
                             <MudTh>Role</MudTh>
                             <MudTh Style="text-align:right">Members</MudTh>
                             <MudTh>Sensitivity</MudTh>
                         </HeaderContent>
+                        <GroupHeaderTemplate>
+                            <MudTh Class="mud-table-cell-custom-group" colspan="3">
+                                <MudText Typo="Typo.subtitle2">@TenantFilter.GetTenantName(context.Key?.ToString())</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-2">
+                                    @context.Items.Count() role(s), @context.Items.Sum(r => r.MemberCount).ToString("N0") member(s)
+                                </MudText>
+                            </MudTh>
+                        </GroupHeaderTemplate>
                         <RowTemplate>
-                            @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
                             <MudTd DataLabel="Role">@context.RoleName</MudTd>
                             <MudTd DataLabel="Members" Style="text-align:right">@context.MemberCount.ToString("N0")</MudTd>
                             <MudTd DataLabel="Sensitivity">
@@ -560,6 +567,15 @@ else
     private List<RiskyUserSnapshot> _riskyUsers = [];
     private List<AppCredentialSnapshot> _appCredentials = [];
     private List<PrivilegedRoleSnapshot> _privilegedRoles = [];
+
+    // Groups the Role Membership table by tenant (collapsible) in multi-tenant view.
+    private readonly TableGroupDefinition<PrivilegedRoleSnapshot> _roleGroupDefinition = new()
+    {
+        GroupName = "Tenant",
+        Indentation = false,
+        Expandable = true,
+        Selector = s => s.TenantId
+    };
 
     // Device KPIs
     private int _totalDevices, _compliantDevices, _nonCompliantDevices, _graceErrorDevices;

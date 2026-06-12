@@ -121,6 +121,77 @@ else
             }
         </MudPaper>
     </MudItem>
+
+    @* App x Platform Adoption Matrix (from anonymized per-user detail) *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <div class="d-flex justify-space-between align-center mb-3">
+                <MudText Typo="Typo.h6">App &times; Platform Adoption</MudText>
+                <ExportMenu Items="_exportItems" />
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
+                Active users per application and platform, derived from per-user activity. User identities are anonymized (irreversible per-tenant pseudonyms) &mdash; no UPNs or names are stored.
+            </MudText>
+            @if (_appPlatformMatrix.Count > 0)
+            {
+                <MudSimpleTable Dense="true" Hover="true" Striped="true">
+                    <thead>
+                        <tr>
+                            <th>Application</th>
+                            <th style="text-align:right">Windows</th>
+                            <th style="text-align:right">Mac</th>
+                            <th style="text-align:right">Mobile</th>
+                            <th style="text-align:right">Web</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _appPlatformMatrix)
+                        {
+                            <tr>
+                                <td><b>@row.AppName</b></td>
+                                <td style="text-align:right">@row.Windows.ToString("N0")</td>
+                                <td style="text-align:right">@row.Mac.ToString("N0")</td>
+                                <td style="text-align:right">@row.Mobile.ToString("N0")</td>
+                                <td style="text-align:right">@row.Web.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No per-user detail available. Refresh tenant data to collect.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
+
+    @* Office Desktop Activations by Product & Device *@
+    <MudItem xs="12">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Office Desktop Activations by Product &amp; Device</MudText>
+            @if (_activationData.Count > 0)
+            {
+                <ApexChart TItem="ActivationDataPoint"
+                           Options="_activationChartOptions"
+                           Height="350"
+                           @key="_chartKey">
+                    @foreach (var series in _activationData)
+                    {
+                        <ApexPointSeries TItem="ActivationDataPoint"
+                                         Items="series.Value"
+                                         Name="@series.Key"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Product)"
+                                         YValue="@(e => (decimal?)e.Count)" />
+                    }
+                </ApexChart>
+            }
+            else
+            {
+                <MudText Color="Color.Secondary">No activation data available. Refresh tenant data to collect.</MudText>
+            }
+        </MudPaper>
+    </MudItem>
 </MudGrid>
 }
 
@@ -132,6 +203,23 @@ else
     private List<AppTableRow> _tableData = [];
     private TableGroupDefinition<AppTableRow>? _groupDefinition;
     private int _groupColspan = 3;
+
+    private List<AppPlatformRow> _appPlatformMatrix = [];
+    private Dictionary<string, List<ActivationDataPoint>> _activationData = [];
+
+    private readonly (string Label, string Feature)[] _exportItems =
+    [
+        ("App x Platform Detail (anonymized)", "m365app-userdetail"),
+        ("Office Activations (counts)", "office-activations"),
+        ("Office Activations (anonymized users)", "office-activation-users"),
+    ];
+
+    private ApexChartOptions<ActivationDataPoint> _activationChartOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)", Stacked = false },
+        Xaxis = new XAxis { Categories = new List<string>() }
+    };
 
     private ApexChartOptions<AppDataPoint> _appChartOptions = new()
     {
@@ -177,7 +265,6 @@ else
         var tenantIds = TenantFilter.GetFilteredTenantIds();
         var data = await MauDataService.GetM365AppUsageAsync(tenantIds);
 
-        // Get the latest data per tenant + app + platform
         var latest = data
             .GroupBy(d => new { d.TenantId, d.AppName, d.Platform })
             .Select(g => g.OrderByDescending(x => x.ReportDate).First())
@@ -247,8 +334,76 @@ else
             _groupColspan = 3;
         }
 
+        // App x Platform adoption matrix (anonymized per-user detail aggregated to counts)
+        var userDetail = await MauDataService.GetM365AppUserDetailAsync(tenantIds);
+        _appPlatformMatrix = BuildAppPlatformMatrix(userDetail);
+
+        // Office desktop activations by product & device
+        var activations = await MauDataService.GetOffice365ActivationsAsync(tenantIds);
+        BuildActivationChart(activations);
+
         _chartKey = Guid.NewGuid().ToString();
         _loading = false;
+    }
+
+    private static List<AppPlatformRow> BuildAppPlatformMatrix(List<M365AppUserDetailSnapshot> detail)
+    {
+        if (detail.Count == 0) return [];
+
+        AppPlatformRow Row(string app, Func<M365AppUserDetailSnapshot, bool> win,
+            Func<M365AppUserDetailSnapshot, bool> mac, Func<M365AppUserDetailSnapshot, bool> mob,
+            Func<M365AppUserDetailSnapshot, bool> web) => new()
+        {
+            AppName = app,
+            Windows = detail.Count(win),
+            Mac = detail.Count(mac),
+            Mobile = detail.Count(mob),
+            Web = detail.Count(web)
+        };
+
+        return
+        [
+            Row("Outlook", x => x.OutlookWindows, x => x.OutlookMac, x => x.OutlookMobile, x => x.OutlookWeb),
+            Row("Word", x => x.WordWindows, x => x.WordMac, x => x.WordMobile, x => x.WordWeb),
+            Row("Excel", x => x.ExcelWindows, x => x.ExcelMac, x => x.ExcelMobile, x => x.ExcelWeb),
+            Row("PowerPoint", x => x.PowerPointWindows, x => x.PowerPointMac, x => x.PowerPointMobile, x => x.PowerPointWeb),
+            Row("OneNote", x => x.OneNoteWindows, x => x.OneNoteMac, x => x.OneNoteMobile, x => x.OneNoteWeb),
+            Row("Teams", x => x.TeamsWindows, x => x.TeamsMac, x => x.TeamsMobile, x => x.TeamsWeb),
+        ];
+    }
+
+    private void BuildActivationChart(List<Office365ActivationSnapshot> activations)
+    {
+        _activationData = [];
+        if (activations.Count == 0)
+        {
+            _activationChartOptions.Xaxis = new XAxis { Categories = new List<string>() };
+            return;
+        }
+
+        // Aggregate across tenants by product type.
+        var byProduct = activations
+            .GroupBy(a => a.ProductType)
+            .Select(g => new
+            {
+                Product = g.Key,
+                Windows = g.Sum(x => x.WindowsCount),
+                Mac = g.Sum(x => x.MacCount),
+                Android = g.Sum(x => x.AndroidCount),
+                Ios = g.Sum(x => x.IosCount),
+                WindowsMobile = g.Sum(x => x.WindowsMobileCount)
+            })
+            .OrderByDescending(p => p.Windows + p.Mac + p.Android + p.Ios + p.WindowsMobile)
+            .ToList();
+
+        var products = byProduct.Select(p => p.Product).ToList();
+        _activationChartOptions.Xaxis = new XAxis { Categories = products };
+
+        _activationData["Windows"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.Windows }).ToList();
+        _activationData["Mac"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.Mac }).ToList();
+        _activationData["Android"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.Android }).ToList();
+        _activationData["iOS"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.Ios }).ToList();
+        _activationData["Windows Mobile"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.WindowsMobile }).ToList();
     }
 
     public void Dispose()
@@ -268,5 +423,20 @@ else
         public string TenantName { get; set; } = string.Empty;
         public int UserCount { get; set; }
         public DateTime ReportDate { get; set; }
+    }
+
+    public class AppPlatformRow
+    {
+        public string AppName { get; set; } = string.Empty;
+        public int Windows { get; set; }
+        public int Mac { get; set; }
+        public int Mobile { get; set; }
+        public int Web { get; set; }
+    }
+
+    public class ActivationDataPoint
+    {
+        public string Product { get; set; } = string.Empty;
+        public int Count { get; set; }
     }
 }

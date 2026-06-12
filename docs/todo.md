@@ -106,6 +106,7 @@ Copilot Chat interactions land in `Audit.General` content blobs as records with:
 
 - [x] Redis caching for consumption/storage queries (TTL 15 min) — `CachedMauDataService` decorator wraps `MauDataService`
 - [x] M365 App Platform usage (`getM365AppUserCounts`) for cross-app engagement metrics — model, Graph endpoint, collection pipeline
+- [x] M365 App per-user detail (`getM365AppUserDetail`) app × platform adoption matrix + Office desktop activations (`getOffice365ActivationCounts` / `getOffice365ActivationsUserDetail`) by product & device — models, Graph endpoints, collection, UI on `/m365apps`, CSV exports. Per-user identities anonymized (irreversible per-tenant HMAC pseudonyms via `PiiProtector`; UPNs/names never stored)
 - [x] Export consumption report to CSV — `/api/export/consumption` endpoint with download button on page
 - [x] CSV export for all datasets — per-page "Export CSV" buttons (`ExportButton`), per-dataset dropdowns on tabbed pages (`ExportMenu`), and a "Export All Data" ZIP (`/api/export-all`) on the Dashboard. All endpoints (`ExportEndpoints.cs`) enforce tenant-data isolation from the user's claims
 - [x] Separate on-demand collector container app (scales 0→3 independently, internal HTTP, with Web fallback)
