@@ -85,7 +85,7 @@ else
                     <MudText Typo="Typo.h6" Class="mb-3">Quota Status</MudText>
                     @if (_quotaBreakdown.Count > 0)
                     {
-                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexChart TItem="LabelValue" Options="_quotaOptions" Height="320" @key="_chartKey">
                             <ApexPointSeries TItem="LabelValue" Items="_quotaBreakdown" Name="Mailboxes"
                                              SeriesType="SeriesType.Donut"
                                              XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
@@ -99,7 +99,7 @@ else
                     <MudText Typo="Typo.h6" Class="mb-3">Active vs Inactive</MudText>
                     @if (_mailboxActivityBreakdown.Count > 0)
                     {
-                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexChart TItem="LabelValue" Options="_activityOptions" Height="320" @key="_chartKey">
                             <ApexPointSeries TItem="LabelValue" Items="_mailboxActivityBreakdown" Name="Mailboxes"
                                              SeriesType="SeriesType.Donut"
                                              XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
@@ -182,9 +182,20 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Users by Device Type</MudText>
-                    @if (_teamsDeviceBreakdown.Count > 0)
+                    @if (TenantFilter.IsMultiTenantView && _teamsDeviceSeries.Count > 0)
                     {
-                        <ApexChart TItem="LabelValue" Options="_barOptions" Height="340" @key="_chartKey">
+                        <ApexChart TItem="LabelValue" Options="_teamsDeviceOptions" Height="340" @key="_chartKey">
+                            @foreach (var s in _teamsDeviceSeries)
+                            {
+                                <ApexPointSeries TItem="LabelValue" Items="s.Value" Name="@s.Key"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                            }
+                        </ApexChart>
+                    }
+                    else if (_teamsDeviceBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_teamsDeviceOptions" Height="340" @key="_chartKey">
                             <ApexPointSeries TItem="LabelValue" Items="_teamsDeviceBreakdown" Name="Users"
                                              SeriesType="SeriesType.Bar"
                                              XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
@@ -196,9 +207,20 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Platform Mix</MudText>
-                    @if (_teamsDeviceBreakdown.Count > 0)
+                    @if (TenantFilter.IsMultiTenantView && _teamsDeviceSeries.Count > 0)
                     {
-                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="340" @key="_chartKey">
+                        <ApexChart TItem="LabelValue" Options="_platformMixOptions" Height="340" @key="_chartKey">
+                            @foreach (var s in _teamsDeviceSeries)
+                            {
+                                <ApexPointSeries TItem="LabelValue" Items="s.Value" Name="@s.Key"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                            }
+                        </ApexChart>
+                    }
+                    else if (_teamsDeviceBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_platformMixOptions" Height="340" @key="_chartKey">
                             <ApexPointSeries TItem="LabelValue" Items="_teamsDeviceBreakdown" Name="Users"
                                              SeriesType="SeriesType.Donut"
                                              XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
@@ -250,9 +272,20 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Storage by Workload</MudText>
-                    @if (_storageBreakdown.Count > 0)
+                    @if (TenantFilter.IsMultiTenantView && _storageSeries.Count > 0)
                     {
-                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexChart TItem="LabelValue" Options="_storageOptions" Height="320" @key="_chartKey">
+                            @foreach (var s in _storageSeries)
+                            {
+                                <ApexPointSeries TItem="LabelValue" Items="s.Value" Name="@s.Key"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                            }
+                        </ApexChart>
+                    }
+                    else if (_storageBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_storageOptions" Height="320" @key="_chartKey">
                             <ApexPointSeries TItem="LabelValue" Items="_storageBreakdown" Name="GB"
                                              SeriesType="SeriesType.Donut"
                                              XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
@@ -264,9 +297,20 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Sites / Accounts by Workload</MudText>
-                    @if (_siteCountBreakdown.Count > 0)
+                    @if (TenantFilter.IsMultiTenantView && _siteCountSeries.Count > 0)
                     {
-                        <ApexChart TItem="LabelValue" Options="_barOptions" Height="320" @key="_chartKey">
+                        <ApexChart TItem="LabelValue" Options="_siteCountOptions" Height="320" @key="_chartKey">
+                            @foreach (var s in _siteCountSeries)
+                            {
+                                <ApexPointSeries TItem="LabelValue" Items="s.Value" Name="@s.Key"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                            }
+                        </ApexChart>
+                    }
+                    else if (_siteCountBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_siteCountOptions" Height="320" @key="_chartKey">
                             <ApexPointSeries TItem="LabelValue" Items="_siteCountBreakdown" Name="Count"
                                              SeriesType="SeriesType.Bar"
                                              XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
@@ -404,9 +448,20 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Groups by Type</MudText>
-                    @if (_groupBreakdown.Count > 0)
+                    @if (TenantFilter.IsMultiTenantView && _groupSeries.Count > 0)
                     {
-                        <ApexChart TItem="LabelValue" Options="_donutOptions" Height="320" @key="_chartKey">
+                        <ApexChart TItem="LabelValue" Options="_groupOptions" Height="320" @key="_chartKey">
+                            @foreach (var s in _groupSeries)
+                            {
+                                <ApexPointSeries TItem="LabelValue" Items="s.Value" Name="@s.Key"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                            }
+                        </ApexChart>
+                    }
+                    else if (_groupBreakdown.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_groupOptions" Height="320" @key="_chartKey">
                             <ApexPointSeries TItem="LabelValue" Items="_groupBreakdown" Name="Groups"
                                              SeriesType="SeriesType.Donut"
                                              XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
@@ -474,12 +529,15 @@ else
     // Teams device KPIs
     private int _teamsDesktop, _teamsMobile, _teamsWeb, _teamsTotal;
     private List<LabelValue> _teamsDeviceBreakdown = [];
+    private Dictionary<string, List<LabelValue>> _teamsDeviceSeries = [];
 
     // SharePoint / OneDrive KPIs
     private int _spSites, _odSites;
     private long _spStorageBytes, _odStorageBytes, _spFiles, _odFiles;
     private List<LabelValue> _storageBreakdown = [];
     private List<LabelValue> _siteCountBreakdown = [];
+    private Dictionary<string, List<LabelValue>> _storageSeries = [];
+    private Dictionary<string, List<LabelValue>> _siteCountSeries = [];
 
     // Yammer KPIs
     private int _yammerPosted, _yammerRead, _yammerLiked;
@@ -488,20 +546,62 @@ else
     // Group KPIs
     private int _totalGroups, _m365Groups, _securityGroups, _distributionGroups, _teamsGroups, _ownerlessGroups;
     private List<LabelValue> _groupBreakdown = [];
+    private Dictionary<string, List<LabelValue>> _groupSeries = [];
 
-    private readonly ApexChartOptions<LabelValue> _donutOptions = new()
+    // Each chart gets its own options instance — sharing a single ApexChartOptions object
+    // across charts rendered on the same tab causes one of them to render blank.
+    private ApexChartOptions<LabelValue> _quotaOptions = MakeDonutOptions();
+    private ApexChartOptions<LabelValue> _activityOptions = MakeDonutOptions();
+    private ApexChartOptions<LabelValue> _teamsDeviceOptions = MakeDistributedBarOptions();
+    private ApexChartOptions<LabelValue> _platformMixOptions = MakeDonutOptions();
+    private ApexChartOptions<LabelValue> _storageOptions = MakeDonutOptions();
+    private ApexChartOptions<LabelValue> _siteCountOptions = MakeDistributedBarOptions();
+    private ApexChartOptions<LabelValue> _groupOptions = MakeDonutOptions();
+
+    private readonly ApexChartOptions<LabelValue> _barOptions = MakeDistributedBarOptions();
+
+    private static ApexChartOptions<LabelValue> MakeDonutOptions() => new()
     {
         Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
         Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
     };
 
-    private readonly ApexChartOptions<LabelValue> _barOptions = new()
+    private static ApexChartOptions<LabelValue> MakeDistributedBarOptions() => new()
     {
         Legend = new Legend { Show = false },
         Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
         PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = true } },
         DataLabels = new DataLabels { Enabled = true }
     };
+
+    // Grouped/stacked bar used in multi-tenant view (one series per tenant).
+    private static ApexChartOptions<LabelValue> MakeTenantBarOptions(IEnumerable<string> categories, bool stacked) => new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)", Stacked = stacked },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = false } },
+        Xaxis = new XAxis { Categories = categories.ToList() }
+    };
+
+    // Builds one bar series per tenant from a set of component aggregators. Components that are
+    // zero for every selected tenant are dropped so the category axis stays meaningful.
+    private Dictionary<string, List<LabelValue>> BuildTenantSeries<T>(
+        IEnumerable<T> rows,
+        Func<T, string> tenantId,
+        params (string Label, Func<IEnumerable<T>, int> Value)[] components)
+    {
+        var groups = rows
+            .GroupBy(r => TenantFilter.GetTenantName(tenantId(r)))
+            .OrderBy(g => g.Key)
+            .ToList();
+        if (groups.Count == 0) return [];
+
+        var active = components.Where(c => groups.Any(g => c.Value(g) > 0)).ToList();
+        var result = new Dictionary<string, List<LabelValue>>();
+        foreach (var g in groups)
+            result[g.Key] = active.Select(c => new LabelValue(c.Label, c.Value(g))).ToList();
+        return result;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -601,6 +701,27 @@ else
             new("Chrome OS", _teamsDevices.Sum(t => t.ChromeOsCount))
         ];
         _teamsDeviceBreakdown = _teamsDeviceBreakdown.Where(x => x.Value > 0).ToList();
+
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _teamsDeviceSeries = BuildTenantSeries(_teamsDevices, t => t.TenantId,
+                ("Windows", g => g.Sum(t => t.WindowsCount)),
+                ("Mac", g => g.Sum(t => t.MacCount)),
+                ("Web", g => g.Sum(t => t.WebCount)),
+                ("iOS", g => g.Sum(t => t.IosCount)),
+                ("Android", g => g.Sum(t => t.AndroidPhoneCount)),
+                ("Linux", g => g.Sum(t => t.LinuxCount)),
+                ("Chrome OS", g => g.Sum(t => t.ChromeOsCount)));
+            var cats = _teamsDeviceSeries.Values.FirstOrDefault()?.Select(v => v.Label) ?? [];
+            _teamsDeviceOptions = MakeTenantBarOptions(cats, stacked: false);
+            _platformMixOptions = MakeTenantBarOptions(cats, stacked: true);
+        }
+        else
+        {
+            _teamsDeviceSeries = [];
+            _teamsDeviceOptions = MakeDistributedBarOptions();
+            _platformMixOptions = MakeDonutOptions();
+        }
     }
 
     private void BuildSiteMetrics()
@@ -628,6 +749,25 @@ else
             new("OneDrive Accounts", _odSites)
         ];
         _siteCountBreakdown = _siteCountBreakdown.Where(x => x.Value > 0).ToList();
+
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _storageSeries = BuildTenantSeries(_siteUsage, s => s.TenantId,
+                ("SharePoint (GB)", g => (int)(g.Where(x => x.Workload == M365Services.SharePoint).Sum(x => x.TotalStorageUsedBytes) / 1_073_741_824)),
+                ("OneDrive (GB)", g => (int)(g.Where(x => x.Workload == M365Services.OneDrive).Sum(x => x.TotalStorageUsedBytes) / 1_073_741_824)));
+            _siteCountSeries = BuildTenantSeries(_siteUsage, s => s.TenantId,
+                ("SharePoint Sites", g => g.Where(x => x.Workload == M365Services.SharePoint).Sum(x => x.TotalSites)),
+                ("OneDrive Accounts", g => g.Where(x => x.Workload == M365Services.OneDrive).Sum(x => x.TotalSites)));
+            _storageOptions = MakeTenantBarOptions(_storageSeries.Values.FirstOrDefault()?.Select(v => v.Label) ?? [], stacked: false);
+            _siteCountOptions = MakeTenantBarOptions(_siteCountSeries.Values.FirstOrDefault()?.Select(v => v.Label) ?? [], stacked: false);
+        }
+        else
+        {
+            _storageSeries = [];
+            _siteCountSeries = [];
+            _storageOptions = MakeDonutOptions();
+            _siteCountOptions = MakeDistributedBarOptions();
+        }
     }
 
     private void BuildYammerMetrics()
@@ -663,6 +803,21 @@ else
             new("Other", other > 0 ? other : 0)
         ];
         _groupBreakdown = _groupBreakdown.Where(x => x.Value > 0).ToList();
+
+        if (TenantFilter.IsMultiTenantView)
+        {
+            _groupSeries = BuildTenantSeries(_groups, g => g.TenantId,
+                ("Microsoft 365", x => x.Sum(g => g.M365Groups)),
+                ("Security", x => x.Sum(g => g.SecurityGroups)),
+                ("Distribution Lists", x => x.Sum(g => g.DistributionGroups)),
+                ("Other", x => x.Sum(g => Math.Max(0, g.TotalGroups - g.M365Groups - g.SecurityGroups - g.DistributionGroups))));
+            _groupOptions = MakeTenantBarOptions(_groupSeries.Values.FirstOrDefault()?.Select(v => v.Label) ?? [], stacked: false);
+        }
+        else
+        {
+            _groupSeries = [];
+            _groupOptions = MakeDonutOptions();
+        }
     }
 
     private static string FormatBytes(long bytes)

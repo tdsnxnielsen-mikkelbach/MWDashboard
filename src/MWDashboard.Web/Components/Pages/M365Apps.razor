@@ -58,7 +58,24 @@ else
     <MudItem xs="12" md="5">
         <MudPaper Class="pa-4" Elevation="2">
             <MudText Typo="Typo.h6" Class="mb-3">Users by Platform</MudText>
-            @if (_platformData.Count > 0)
+            @if (TenantFilter.IsMultiTenantView && _platformChartData.Count > 0)
+            {
+                <ApexChart TItem="AppDataPoint"
+                           Options="_platformBarOptions"
+                           Height="350"
+                           @key="_chartKey">
+                    @foreach (var series in _platformChartData)
+                    {
+                        <ApexPointSeries TItem="AppDataPoint"
+                                         Items="series.Value"
+                                         Name="@series.Key"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)"
+                                         YValue="@(e => (decimal?)e.Count)" />
+                    }
+                </ApexChart>
+            }
+            else if (_platformData.Count > 0)
             {
                 <ApexChart TItem="AppDataPoint"
                            Options="_platformChartOptions"
@@ -137,6 +154,10 @@ else
                 <MudSimpleTable Dense="true" Hover="true" Striped="true">
                     <thead>
                         <tr>
+                            @if (TenantFilter.IsMultiTenantView)
+                            {
+                                <th>Tenant</th>
+                            }
                             <th>Application</th>
                             <th style="text-align:right">Windows</th>
                             <th style="text-align:right">Mac</th>
@@ -148,6 +169,10 @@ else
                         @foreach (var row in _appPlatformMatrix)
                         {
                             <tr>
+                                @if (TenantFilter.IsMultiTenantView)
+                                {
+                                    <td>@row.TenantName</td>
+                                }
                                 <td><b>@row.AppName</b></td>
                                 <td style="text-align:right">@row.Windows.ToString("N0")</td>
                                 <td style="text-align:right">@row.Mac.ToString("N0")</td>
@@ -200,6 +225,7 @@ else
     private string _chartKey = Guid.NewGuid().ToString();
     private Dictionary<string, List<AppDataPoint>> _appChartData = [];
     private List<AppDataPoint> _platformData = [];
+    private Dictionary<string, List<AppDataPoint>> _platformChartData = [];
     private List<AppTableRow> _tableData = [];
     private TableGroupDefinition<AppTableRow>? _groupDefinition;
     private int _groupColspan = 3;
@@ -236,6 +262,14 @@ else
     {
         Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
         Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private ApexChartOptions<AppDataPoint> _platformBarOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false } },
+        Xaxis = new XAxis { Categories = new List<string>() }
     };
 
     protected override async Task OnInitializedAsync()
@@ -307,6 +341,22 @@ else
             .OrderByDescending(d => d.Count)
             .ToList();
 
+        // Multi-tenant: one bar series per tenant, categories = platforms.
+        _platformChartData = [];
+        if (TenantFilter.IsMultiTenantView)
+        {
+            var allPlatforms = platformRows.Select(d => d.Platform).Distinct().OrderBy(p => p).ToList();
+            _platformBarOptions.Xaxis = new XAxis { Categories = allPlatforms };
+            foreach (var group in platformRows.GroupBy(d => TenantFilter.GetTenantName(d.TenantId)).OrderBy(g => g.Key))
+            {
+                _platformChartData[group.Key] = allPlatforms.Select(p => new AppDataPoint
+                {
+                    Label = p,
+                    Count = group.Where(d => d.Platform == p).Sum(d => d.UserCount)
+                }).ToList();
+            }
+        }
+
         // Table data: app-level detail
         _tableData = appRows.Select(d => new AppTableRow
         {
@@ -346,14 +396,30 @@ else
         _loading = false;
     }
 
-    private static List<AppPlatformRow> BuildAppPlatformMatrix(List<M365AppUserDetailSnapshot> detail)
+    private List<AppPlatformRow> BuildAppPlatformMatrix(List<M365AppUserDetailSnapshot> detail)
     {
         if (detail.Count == 0) return [];
 
+        if (TenantFilter.IsMultiTenantView)
+        {
+            var rows = new List<AppPlatformRow>();
+            foreach (var g in detail.GroupBy(d => d.TenantId).OrderBy(g => TenantFilter.GetTenantName(g.Key)))
+            {
+                rows.AddRange(BuildMatrixForSet(g.ToList(), TenantFilter.GetTenantName(g.Key)));
+            }
+            return rows;
+        }
+
+        return BuildMatrixForSet(detail, string.Empty);
+    }
+
+    private static List<AppPlatformRow> BuildMatrixForSet(List<M365AppUserDetailSnapshot> detail, string tenantName)
+    {
         AppPlatformRow Row(string app, Func<M365AppUserDetailSnapshot, bool> win,
             Func<M365AppUserDetailSnapshot, bool> mac, Func<M365AppUserDetailSnapshot, bool> mob,
             Func<M365AppUserDetailSnapshot, bool> web) => new()
         {
+            TenantName = tenantName,
             AppName = app,
             Windows = detail.Count(win),
             Mac = detail.Count(mac),
@@ -381,29 +447,44 @@ else
             return;
         }
 
-        // Aggregate across tenants by product type.
-        var byProduct = activations
-            .GroupBy(a => a.ProductType)
-            .Select(g => new
-            {
-                Product = g.Key,
-                Windows = g.Sum(x => x.WindowsCount),
-                Mac = g.Sum(x => x.MacCount),
-                Android = g.Sum(x => x.AndroidCount),
-                Ios = g.Sum(x => x.IosCount),
-                WindowsMobile = g.Sum(x => x.WindowsMobileCount)
-            })
-            .OrderByDescending(p => p.Windows + p.Mac + p.Android + p.Ios + p.WindowsMobile)
-            .ToList();
+        // Single-tenant: categories are products. Multi-tenant: categories are "Tenant · Product"
+        // so each tenant's activations are distinguishable on the same chart.
+        var grouped = TenantFilter.IsMultiTenantView
+            ? activations
+                .GroupBy(a => new { a.TenantId, a.ProductType })
+                .Select(g => new
+                {
+                    Label = $"{TenantFilter.GetTenantName(g.Key.TenantId)} · {g.Key.ProductType}",
+                    Windows = g.Sum(x => x.WindowsCount),
+                    Mac = g.Sum(x => x.MacCount),
+                    Android = g.Sum(x => x.AndroidCount),
+                    Ios = g.Sum(x => x.IosCount),
+                    WindowsMobile = g.Sum(x => x.WindowsMobileCount)
+                })
+                .OrderBy(p => p.Label)
+                .ToList()
+            : activations
+                .GroupBy(a => a.ProductType)
+                .Select(g => new
+                {
+                    Label = g.Key,
+                    Windows = g.Sum(x => x.WindowsCount),
+                    Mac = g.Sum(x => x.MacCount),
+                    Android = g.Sum(x => x.AndroidCount),
+                    Ios = g.Sum(x => x.IosCount),
+                    WindowsMobile = g.Sum(x => x.WindowsMobileCount)
+                })
+                .OrderByDescending(p => p.Windows + p.Mac + p.Android + p.Ios + p.WindowsMobile)
+                .ToList();
 
-        var products = byProduct.Select(p => p.Product).ToList();
-        _activationChartOptions.Xaxis = new XAxis { Categories = products };
+        var categories = grouped.Select(p => p.Label).ToList();
+        _activationChartOptions.Xaxis = new XAxis { Categories = categories };
 
-        _activationData["Windows"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.Windows }).ToList();
-        _activationData["Mac"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.Mac }).ToList();
-        _activationData["Android"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.Android }).ToList();
-        _activationData["iOS"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.Ios }).ToList();
-        _activationData["Windows Mobile"] = byProduct.Select(p => new ActivationDataPoint { Product = p.Product, Count = p.WindowsMobile }).ToList();
+        _activationData["Windows"] = grouped.Select(p => new ActivationDataPoint { Product = p.Label, Count = p.Windows }).ToList();
+        _activationData["Mac"] = grouped.Select(p => new ActivationDataPoint { Product = p.Label, Count = p.Mac }).ToList();
+        _activationData["Android"] = grouped.Select(p => new ActivationDataPoint { Product = p.Label, Count = p.Android }).ToList();
+        _activationData["iOS"] = grouped.Select(p => new ActivationDataPoint { Product = p.Label, Count = p.Ios }).ToList();
+        _activationData["Windows Mobile"] = grouped.Select(p => new ActivationDataPoint { Product = p.Label, Count = p.WindowsMobile }).ToList();
     }
 
     public void Dispose()
@@ -427,6 +508,7 @@ else
 
     public class AppPlatformRow
     {
+        public string TenantName { get; set; } = string.Empty;
         public string AppName { get; set; } = string.Empty;
         public int Windows { get; set; }
         public int Mac { get; set; }

@@ -162,6 +162,8 @@ azd deploy
 - Use `<ApexChart>` with `ApexChartOptions<T>` for typed chart configuration
 - Always set `@key` on chart components when data/date ranges change to force re-render
 - Limit data points per series to avoid client performance issues
+- **One `ApexChartOptions<T>` instance per chart**: never share a single options object across two `<ApexChart>` components rendered on the same page/tab — doing so causes one of them to render blank (e.g. the Usage & Governance "Quota Status" vs "Active vs Inactive" donuts). Build separate instances (a `MakeDonutOptions()`/`MakeBarOptions()` factory keeps this DRY)
+- **Multi-tenant charts**: when `TenantFilter.IsMultiTenantView` is true, donuts/single-series bars should switch to one bar series per tenant (categories = the original breakdown labels) so each tenant is distinguishable. The page keeps both a single-tenant aggregate (`List<T>`) and a per-tenant series map (`Dictionary<string, List<T>>`) and picks between them in markup. For category-style bar charts where per-tenant series don't fit, prefix the category with the tenant name instead (e.g. Office Activations uses `Tenant · Product`)
 
 ## Key Documentation
 
