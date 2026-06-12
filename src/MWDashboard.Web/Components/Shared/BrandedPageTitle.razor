@@ -1,0 +1,35 @@
+@*
+    Renders the browser tab title as "<Page> · <AppTitle>", where AppTitle comes from the
+    configurable branding settings (falls back to "Modern Workplace Dashboard" when unset).
+    Keeps the per-page name first so it stays useful with multiple tabs open, while still
+    surfacing the (rebrandable) app name. Usage:  <BrandedPageTitle Page="Tenant Management" />
+*@
+@inject IDbContextFactory<MauDbContext> DbFactory
+
+<PageTitle>@(string.IsNullOrWhiteSpace(Page) ? _appTitle : $"{Page} · {_appTitle}")</PageTitle>
+
+@code {
+    /// <summary>The page name shown first in the tab title.</summary>
+    [Parameter, EditorRequired] public string Page { get; set; } = string.Empty;
+
+    private const string DefaultTitle = "Modern Workplace Dashboard";
+    private string _appTitle = DefaultTitle;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var configured = await db.BrandingSettings
+                .AsNoTracking()
+                .Select(b => b.AppTitle)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(configured))
+                _appTitle = configured;
+        }
+        catch
+        {
+            // Branding is best-effort for the tab title; fall back to the default on any failure.
+        }
+    }
+}

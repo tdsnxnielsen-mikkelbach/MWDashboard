@@ -8,7 +8,7 @@
 @inject TenantFilterService TenantFilter
 @inject NavigationManager NavigationManager
 
-<PageTitle>Tenant Management</PageTitle>
+<BrandedPageTitle Page="Tenant Management" />
 
 @if (!TenantFilter.IsHomeTenantUser)
 {
@@ -202,7 +202,8 @@
     private string _consentUrl = string.Empty;
 
     private string ClientId => Configuration["AzureAd:ClientId"] ?? string.Empty;
-    private string ConsentRedirectUri => Configuration["ConsentCallback:RedirectUri"] ?? $"{NavigationManager.BaseUri.TrimEnd('/')}/consent-complete";
+    // Consent completion is hosted on the Static Web App; the URL is injected via ConsentCallback:RedirectUri at deploy time.
+    private string ConsentRedirectUri => Configuration["ConsentCallback:RedirectUri"] ?? string.Empty;
 
     private bool IsValid => !string.IsNullOrWhiteSpace(_newTenant.TenantId) && !string.IsNullOrWhiteSpace(_newTenant.TenantName);
 
