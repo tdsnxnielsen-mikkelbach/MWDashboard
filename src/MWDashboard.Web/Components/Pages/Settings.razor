@@ -53,6 +53,9 @@ else
                     </MudButton>
                 </CustomContent>
             </MudFileUpload>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">
+                PNG, JPG, SVG or WebP · max 512&nbsp;KB · displayed ~32&nbsp;px tall in the app bar (wide/landscape works best).
+            </MudText>
             @if (!string.IsNullOrEmpty(_settings.LogoBase64))
             {
                 <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="RemoveLogo" Class="mt-1">Remove</MudButton>
@@ -77,6 +80,10 @@ else
                     </MudButton>
                 </CustomContent>
             </MudFileUpload>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">
+                PNG, ICO or SVG · max 128&nbsp;KB · square (e.g. 32×32 or 64×64).
+                After saving, browsers cache the old icon — do a hard refresh (Ctrl+F5) or reopen the tab to see it.
+            </MudText>
             @if (!string.IsNullOrEmpty(_settings.FaviconBase64))
             {
                 <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="RemoveFavicon" Class="mt-1">Remove</MudButton>
@@ -231,28 +238,92 @@ else
 
     private async Task OnLogoUpload(IBrowserFile file)
     {
-        if (file.Size > 512_000) // 512KB max
-        {
-            Snackbar.Add("Logo must be under 512KB.", Severity.Warning);
+        const long maxBytes = 512_000; // 512 KB
+        string[] allowed = [".png", ".jpg", ".jpeg", ".svg", ".webp"];
+        if (!ValidateUpload(file, allowed, maxBytes, "Logo", "512 KB"))
             return;
+
+        try
+        {
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(maxBytes).CopyToAsync(ms);
+            _settings.LogoBase64 = Convert.ToBase64String(ms.ToArray());
+            _settings.LogoContentType = ResolveContentType(file);
+            Snackbar.Add("Logo selected. Click Save Changes to apply it.", Severity.Info);
         }
-        using var ms = new MemoryStream();
-        await file.OpenReadStream(512_000).CopyToAsync(ms);
-        _settings.LogoBase64 = Convert.ToBase64String(ms.ToArray());
-        _settings.LogoContentType = file.ContentType;
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not read the logo file: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task OnFaviconUpload(IBrowserFile file)
     {
-        if (file.Size > 128_000) // 128KB max
-        {
-            Snackbar.Add("Favicon must be under 128KB.", Severity.Warning);
+        const long maxBytes = 128_000; // 128 KB
+        string[] allowed = [".png", ".ico", ".svg"];
+        if (!ValidateUpload(file, allowed, maxBytes, "Favicon", "128 KB"))
             return;
+
+        try
+        {
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(maxBytes).CopyToAsync(ms);
+            _settings.FaviconBase64 = Convert.ToBase64String(ms.ToArray());
+            _settings.FaviconContentType = ResolveContentType(file);
+            Snackbar.Add("Favicon selected. Click Save Changes, then hard-refresh (Ctrl+F5) to see it.", Severity.Info);
         }
-        using var ms = new MemoryStream();
-        await file.OpenReadStream(128_000).CopyToAsync(ms);
-        _settings.FaviconBase64 = Convert.ToBase64String(ms.ToArray());
-        _settings.FaviconContentType = file.ContentType;
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not read the favicon file: {ex.Message}", Severity.Error);
+        }
+    }
+
+    /// <summary>Validates an uploaded image against allowed extensions and a size cap, reporting failures via snackbar.</summary>
+    private bool ValidateUpload(IBrowserFile? file, string[] allowedExtensions, long maxBytes, string label, string maxLabel)
+    {
+        if (file is null)
+        {
+            Snackbar.Add($"No {label.ToLowerInvariant()} file was selected.", Severity.Warning);
+            return false;
+        }
+
+        var ext = Path.GetExtension(file.Name);
+        if (string.IsNullOrEmpty(ext) || !allowedExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
+        {
+            Snackbar.Add($"{label} must be one of: {string.Join(", ", allowedExtensions)}. '{file.Name}' is not supported.", Severity.Warning);
+            return false;
+        }
+
+        if (file.Size == 0)
+        {
+            Snackbar.Add($"The selected {label.ToLowerInvariant()} file is empty.", Severity.Warning);
+            return false;
+        }
+
+        if (file.Size > maxBytes)
+        {
+            Snackbar.Add($"{label} must be under {maxLabel} (selected file is {file.Size / 1024.0:N0} KB).", Severity.Warning);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>Returns the browser-supplied content type, falling back to a type inferred from the file extension.</summary>
+    private static string ResolveContentType(IBrowserFile file)
+    {
+        if (!string.IsNullOrWhiteSpace(file.ContentType))
+            return file.ContentType;
+
+        return Path.GetExtension(file.Name).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".svg" => "image/svg+xml",
+            ".webp" => "image/webp",
+            ".ico" => "image/x-icon",
+            _ => "application/octet-stream",
+        };
     }
 
     private void RemoveLogo()

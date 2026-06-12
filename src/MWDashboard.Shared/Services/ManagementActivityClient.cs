@@ -270,6 +270,11 @@ public class ManagementActivityClient : IManagementActivityClient
                    "First-time enablement can take up to 24 hours before polling will succeed.";
         }
 
+        // When we recognise the failure, the hint is self-explanatory — don't append the
+        // verbose server-side stack trace the API returns in the message.
+        if (!string.IsNullOrEmpty(hint))
+            return hint;
+
         var detail = (code, message) switch
         {
             ("", "") => string.IsNullOrWhiteSpace(body) ? "No error detail returned." : body.Trim(),
@@ -278,6 +283,27 @@ public class ManagementActivityClient : IManagementActivityClient
             _ => $"{code}: {message}",
         };
 
-        return string.IsNullOrEmpty(hint) ? detail : $"{detail} {hint}";
+        return Shorten(detail);
+    }
+
+    /// <summary>
+    /// Strips the server-side stack trace and bounds the length of an API error detail so it is
+    /// usable in a UI snackbar / log line.
+    /// </summary>
+    private static string Shorten(string detail, int maxLength = 300)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return "No error detail returned.";
+
+        // The audit API embeds a full .NET stack trace after the exception message; cut it off.
+        var cut = detail.IndexOf(" at Microsoft.", StringComparison.OrdinalIgnoreCase);
+        if (cut < 0) cut = detail.IndexOf(" at System.", StringComparison.OrdinalIgnoreCase);
+        if (cut > 0) detail = detail[..cut];
+
+        detail = detail.Trim();
+        if (detail.Length > maxLength)
+            detail = detail[..maxLength].TrimEnd() + "…";
+
+        return detail;
     }
 }
