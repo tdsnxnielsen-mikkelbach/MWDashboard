@@ -53,6 +53,24 @@ public class CopilotAuditCollectionService : ICopilotAuditCollectionService
         var now = DateTime.UtcNow;
         var earliest = now - RetentionWindow + TimeSpan.FromMinutes(5); // small buffer inside the retention edge
         var cursor = await _data.GetCopilotAuditCursorAsync(tenantId);
+
+        // Self-heal a stale/poisoned cursor. A previous version advanced the cursor to "now" even when
+        // no audit content had been ingested yet (e.g. the tenant was polled before its Copilot audit
+        // content had propagated — that can take >12h after enabling). That left the cursor pointing at
+        // the leading edge of the retention window, so every later run queried an empty [cursor, now]
+        // window and never found anything. If the cursor is set but we have never stored a single
+        // snapshot for this tenant, ignore it and re-scan the full retention window.
+        if (cursor.HasValue)
+        {
+            var existing = await _data.GetCopilotChatUsageAsync([tenantId], days: (int)RetentionWindow.TotalDays + 1);
+            if (existing.Count == 0)
+            {
+                _logger.LogInformation(
+                    "Ignoring stale Copilot audit cursor for tenant {TenantId}: no snapshots ingested yet, re-scanning full retention window", tenantId);
+                cursor = null;
+            }
+        }
+
         var start = cursor.HasValue && cursor.Value > earliest ? cursor.Value : earliest;
 
         if (start >= now)
@@ -109,10 +127,12 @@ public class CopilotAuditCollectionService : ICopilotAuditCollectionService
             _logger.LogInformation("Saved {Count} Copilot Chat usage snapshots for tenant {TenantName}", snapshots.Count, tenantName);
         }
 
-        // Advance the cursor so the next run only pulls newer blobs. When no blobs were seen,
-        // move it forward to "now" so we don't re-scan an empty window indefinitely.
-        var newCursor = maxContentCreated > (cursor ?? DateTime.MinValue) ? maxContentCreated : now;
-        await _data.UpdateCopilotAuditCursorAsync(tenantId, newCursor);
+        // Advance the cursor only to the newest content we actually ingested. Never push it to "now"
+        // on an empty run — doing so would skip past audit content that has not propagated yet and is
+        // the cause of tenants that perpetually report "no activity". Leaving the cursor where it is
+        // means the next run re-scans the retention window and picks up late-arriving data.
+        if (maxContentCreated > (cursor ?? DateTime.MinValue))
+            await _data.UpdateCopilotAuditCursorAsync(tenantId, maxContentCreated);
     }
 
     private void AccumulateRecord(JsonElement record, Dictionary<(string, DateTime), Aggregate> aggregates)

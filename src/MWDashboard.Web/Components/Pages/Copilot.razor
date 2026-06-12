@@ -542,11 +542,19 @@ else
             }
 
             var failures = 0;
+            var warnings = 0;
             foreach (var tenant in targets)
             {
                 try
                 {
                     await CopilotAuditClient.CollectForTenantAsync(tenant.TenantId, tenant.TenantName);
+                }
+                catch (CopilotAuditConfigurationException ex)
+                {
+                    // Expected tenant-configuration state (audit not provisioned / disabled / not
+                    // consented) — an admin action, not a system error. Surface as an informational warning.
+                    warnings++;
+                    Snackbar.Add($"Copilot Chat not yet available for '{tenant.TenantName}': {ex.Message}", Severity.Warning);
                 }
                 catch (Exception ex)
                 {
@@ -558,7 +566,7 @@ else
             await LoadData();
             StateHasChanged();
 
-            if (failures == 0)
+            if (failures == 0 && warnings == 0)
                 Snackbar.Add($"Copilot Chat data refreshed for {targets.Count} tenant(s). New audit events can take up to 12 hours to appear.", Severity.Success);
         }
         finally

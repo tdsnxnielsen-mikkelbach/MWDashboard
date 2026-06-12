@@ -11,6 +11,18 @@ using Microsoft.Extensions.Logging;
 namespace MWDashboard.Shared.Services;
 
 /// <summary>
+/// Raised when a Copilot Chat audit collection cannot proceed because of an expected, recoverable
+/// tenant-configuration state — e.g. unified audit logging is off / not yet provisioned, the
+/// Audit.General subscription is not enabled, or the app has not been admin-consented in the tenant.
+/// Callers should surface this as a warning (an action the admin must take), not a system error.
+/// </summary>
+public sealed class CopilotAuditConfigurationException : Exception
+{
+    public CopilotAuditConfigurationException(string message) : base(message) { }
+    public CopilotAuditConfigurationException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>
 /// A single Audit.General content blob descriptor returned by the
 /// Office 365 Management Activity API <c>/subscriptions/content</c> endpoint.
 /// </summary>
@@ -82,7 +94,7 @@ public class ManagementActivityClient : IManagementActivityClient
         {
             // Most common after moving the app registration: the customer tenant has not
             // admin-consented the (new) app, or the configured client secret is wrong/expired.
-            throw new InvalidOperationException(
+            throw new CopilotAuditConfigurationException(
                 $"Could not acquire an Office 365 Management Activity API token for tenant {tenantId}. " +
                 "Verify the app registration is admin-consented in this tenant (ActivityFeed.Read on the " +
                 "Office 365 Management APIs) and that the configured client secret is current. " +
@@ -141,11 +153,14 @@ public class ManagementActivityClient : IManagementActivityClient
             return;
         }
 
-        _logger.LogError("Failed to start Audit.General subscription for tenant {TenantId}: {Status} {Body}",
+        _logger.LogWarning("Failed to start Audit.General subscription for tenant {TenantId}: {Status} {Body}",
             tenantId, (int)response.StatusCode, body);
-        throw new InvalidOperationException(
-            $"Office 365 Management Activity API rejected the Audit.General subscription start for tenant {tenantId} " +
-            $"({(int)response.StatusCode} {response.ReasonPhrase}). {DescribeApiError(body)}");
+        var detail = DescribeApiError(body, out var recognized);
+        var msg = $"Office 365 Management Activity API rejected the Audit.General subscription start for tenant {tenantId} " +
+                  $"({(int)response.StatusCode} {response.ReasonPhrase}). {detail}";
+        throw recognized
+            ? new CopilotAuditConfigurationException(msg)
+            : new InvalidOperationException(msg);
     }
 
     public async Task<List<AuditContentBlob>> ListContentAsync(string tenantId, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
@@ -174,11 +189,14 @@ public class ManagementActivityClient : IManagementActivityClient
                     continue;
                 }
 
-                _logger.LogError("Failed to list Audit.General content for tenant {TenantId}: {Status} {Body}",
+                _logger.LogWarning("Failed to list Audit.General content for tenant {TenantId}: {Status} {Body}",
                     tenantId, (int)response.StatusCode, body);
-                throw new InvalidOperationException(
-                    $"Office 365 Management Activity API rejected the content listing for tenant {tenantId} " +
-                    $"({(int)response.StatusCode} {response.ReasonPhrase}). {DescribeApiError(body)}");
+                var detail = DescribeApiError(body, out var recognized);
+                var msg = $"Office 365 Management Activity API rejected the content listing for tenant {tenantId} " +
+                          $"({(int)response.StatusCode} {response.ReasonPhrase}). {detail}";
+                throw recognized
+                    ? new CopilotAuditConfigurationException(msg)
+                    : new InvalidOperationException(msg);
             }
 
             var items = await response.Content.ReadFromJsonAsync<List<ContentListItem>>(cancellationToken: ct) ?? [];
@@ -225,8 +243,11 @@ public class ManagementActivityClient : IManagementActivityClient
     /// <summary>
     /// Turns a Management Activity API error body (<c>{ "error": { "code", "message" } }</c>) into a
     /// concise, actionable sentence, adding hints for the well-known <c>AFxxxxx</c> failure codes.
+    /// <paramref name="recognized"/> is set to <c>true</c> when the failure maps to a known, expected
+    /// tenant-configuration state (audit not provisioned / disabled / not consented) rather than an
+    /// unexpected error, so callers can surface it at an appropriate severity.
     /// </summary>
-    private static string DescribeApiError(string body)
+    private static string DescribeApiError(string body, out bool recognized)
     {
         string code = string.Empty, message = string.Empty;
         try
@@ -273,8 +294,12 @@ public class ManagementActivityClient : IManagementActivityClient
         // When we recognise the failure, the hint is self-explanatory — don't append the
         // verbose server-side stack trace the API returns in the message.
         if (!string.IsNullOrEmpty(hint))
+        {
+            recognized = true;
             return hint;
+        }
 
+        recognized = false;
         var detail = (code, message) switch
         {
             ("", "") => string.IsNullOrWhiteSpace(body) ? "No error detail returned." : body.Trim(),
