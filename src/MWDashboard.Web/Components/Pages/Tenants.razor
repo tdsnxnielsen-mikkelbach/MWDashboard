@@ -88,7 +88,61 @@
 
     <MudItem xs="12" md="7">
         <MudPaper Class="pa-4" Elevation="2">
-            <MudText Typo="Typo.h6" Class="mb-3">Registered Tenants</MudText>
+            <div class="d-flex justify-space-between align-center mb-3">
+                <MudText Typo="Typo.h6">Registered Tenants</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.CloudSync"
+                           OnClick="CollectAll" Disabled="@(_collectingAll || _collectingTenantId != null)">
+                    @(_collectingAll ? "Collecting…" : "Collect All Tenants")
+                </MudButton>
+            </div>
+
+            @if (_collectingAll || _collectAllLog.Count > 0)
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="0" Outlined="true">
+                    @if (_collectingAll)
+                    {
+                        <div class="d-flex align-center mb-2">
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Success" Class="mr-2" />
+                            <MudText Typo="Typo.body2">
+                                @if (_collectAllCurrent != null)
+                                {
+                                    <text>Collecting from <strong>@_collectAllCurrent</strong>… (@(_collectAllDone + 1) of @_collectAllTotal)</text>
+                                }
+                                else
+                                {
+                                    <text>Preparing collection for @_collectAllTotal tenant(s)…</text>
+                                }
+                            </MudText>
+                        </div>
+                        <MudProgressLinear Color="Color.Success" Value="@(_collectAllTotal == 0 ? 0 : (double)_collectAllDone / _collectAllTotal * 100)" Class="mb-2" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">
+                            Collection finished — @_collectAllLog.Count(l => l.Success) of @_collectAllLog.Count succeeded
+                        </MudText>
+                    }
+                    <MudList T="string" Dense="true">
+                        @foreach (var entry in _collectAllLog)
+                        {
+                            <MudListItem T="string"
+                                         Icon="@(entry.Success ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)"
+                                         IconColor="@(entry.Success ? Color.Success : Color.Error)">
+                                <strong>@entry.Name</strong>
+                                @if (entry.Success)
+                                {
+                                    <text> — collected</text>
+                                }
+                                else
+                                {
+                                    <text> — failed: @entry.Error</text>
+                                }
+                            </MudListItem>
+                        }
+                    </MudList>
+                </MudPaper>
+            }
+
             <MudTable Items="_tenants" Dense="true" Hover="true" Loading="_loading">
                 <HeaderContent>
                     <MudTh>Tenant Name</MudTh>
@@ -328,6 +382,13 @@
     private string? _checkingTenantId;
     private string _editDisplayName = string.Empty;
 
+    // Collect-all progress state
+    private bool _collectingAll;
+    private string? _collectAllCurrent;
+    private int _collectAllDone;
+    private int _collectAllTotal;
+    private readonly List<(string Name, bool Success, string? Error)> _collectAllLog = [];
+
     private async Task CollectNow(TenantInfo tenant)
     {
         _collectingTenantId = tenant.TenantId;
@@ -348,6 +409,58 @@
         {
             _collectingTenantId = null;
         }
+    }
+
+    // Collects data for every active tenant sequentially, surfacing per-tenant progress
+    // ("Collecting from X…"), a per-tenant confirmation, and a final overall summary.
+    private async Task CollectAll()
+    {
+        var active = _tenants.Where(t => t.IsActive).ToList();
+        if (active.Count == 0)
+        {
+            _message = "No active tenants to collect.";
+            _severity = Severity.Warning;
+            return;
+        }
+
+        _collectingAll = true;
+        _collectAllLog.Clear();
+        _collectAllDone = 0;
+        _collectAllTotal = active.Count;
+        _collectAllCurrent = null;
+        _message = string.Empty;
+        StateHasChanged();
+
+        foreach (var tenant in active)
+        {
+            _collectAllCurrent = tenant.TenantName;
+            StateHasChanged();
+            await Task.Yield();
+
+            try
+            {
+                await DataCollectionService.CollectForTenantAsync(tenant.TenantId, tenant.TenantName);
+                _collectAllLog.Add((tenant.TenantName, true, null));
+            }
+            catch (Exception ex)
+            {
+                _collectAllLog.Add((tenant.TenantName, false, ex.Message));
+            }
+            finally
+            {
+                _collectAllDone++;
+                _collectAllCurrent = null;
+                StateHasChanged();
+            }
+        }
+
+        _collectingAll = false;
+        var failures = _collectAllLog.Count(l => !l.Success);
+        _message = failures == 0
+            ? $"Data collection completed for all {_collectAllTotal} active tenant(s)."
+            : $"Collection finished: {_collectAllTotal - failures} succeeded, {failures} failed.";
+        _severity = failures == 0 ? Severity.Success : Severity.Warning;
+        StateHasChanged();
     }
 
     private async Task CheckPermissions(TenantInfo tenant)

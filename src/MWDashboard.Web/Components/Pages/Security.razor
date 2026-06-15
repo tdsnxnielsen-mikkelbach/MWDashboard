@@ -703,9 +703,9 @@ else
                 </MudPaper>
             </MudItem>
             <MudItem xs="12">
-                <MudTable Items="_directoryAudits" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" FixedHeader="true" Height="420px">
+                <MudTable Items="_directoryAudits" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" FixedHeader="true" Height="420px"
+                          GroupBy="@(TenantFilter.IsMultiTenantView ? _auditGroupDefinition : null)">
                     <HeaderContent>
-                        @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
                         <MudTh>Report Date</MudTh>
                         <MudTh>Category</MudTh>
                         <MudTh>Activity</MudTh>
@@ -713,8 +713,16 @@ else
                         <MudTh Style="text-align:right">Failures</MudTh>
                         <MudTh Style="text-align:right">Actors</MudTh>
                     </HeaderContent>
+                    <GroupHeaderTemplate>
+                        <MudTh Class="mud-table-cell-custom-group" colspan="6">
+                            <MudText Typo="Typo.subtitle2" Class="d-inline">@TenantFilter.GetTenantName(context.Key?.ToString() ?? string.Empty)</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-2 d-inline">
+                                @context.Items.Sum(s => s.EventCount).ToString("N0") event(s),
+                                @context.Items.Sum(s => s.FailureCount).ToString("N0") failure(s)
+                            </MudText>
+                        </MudTh>
+                    </GroupHeaderTemplate>
                     <RowTemplate>
-                        @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
                         <MudTd DataLabel="Report Date">@context.ReportDate.ToString("yyyy-MM-dd")</MudTd>
                         <MudTd DataLabel="Category"><MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@context.Category</MudChip></MudTd>
                         <MudTd DataLabel="Activity">@context.Activity</MudTd>
@@ -782,6 +790,15 @@ else
     // Directory audit / change-log aggregates
     private List<DirectoryAuditSnapshot> _directoryAudits = [];
     private int _auditTotal, _auditFailures, _auditCategoryCount;
+
+    // Groups the Change Log table by tenant (collapsible) in multi-tenant view.
+    private readonly TableGroupDefinition<DirectoryAuditSnapshot> _auditGroupDefinition = new()
+    {
+        GroupName = "Tenant",
+        Indentation = false,
+        Expandable = true,
+        Selector = s => s.TenantId
+    };
 
     private ApexChartOptions<DailySignIn> _signInChartOptions = new()
     {
