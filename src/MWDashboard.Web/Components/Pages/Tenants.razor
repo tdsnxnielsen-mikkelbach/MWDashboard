@@ -96,7 +96,7 @@
                 </MudButton>
             </div>
 
-            @if (_collectingAll || _collectAllLog.Count > 0)
+            @if (_collectingAll || _collectAllItems.Count > 0)
             {
                 <MudPaper Class="pa-3 mb-3" Elevation="0" Outlined="true">
                     @if (_collectingAll)
@@ -104,14 +104,8 @@
                         <div class="d-flex align-center mb-2">
                             <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Success" Class="mr-2" />
                             <MudText Typo="Typo.body2">
-                                @if (_collectAllCurrent != null)
-                                {
-                                    <text>Collecting from <strong>@_collectAllCurrent</strong>… (@(_collectAllDone + 1) of @_collectAllTotal)</text>
-                                }
-                                else
-                                {
-                                    <text>Preparing collection for @_collectAllTotal tenant(s)…</text>
-                                }
+                                Collecting in parallel — <strong>@_collectAllDone</strong> of <strong>@_collectAllTotal</strong> done,
+                                <strong>@_collectAllItems.Count(i => i.Status == CollectStatus.Collecting)</strong> in progress
                             </MudText>
                         </div>
                         <MudProgressLinear Color="Color.Success" Value="@(_collectAllTotal == 0 ? 0 : (double)_collectAllDone / _collectAllTotal * 100)" Class="mb-2" />
@@ -119,23 +113,31 @@
                     else
                     {
                         <MudText Typo="Typo.subtitle2" Class="mb-2">
-                            Collection finished — @_collectAllLog.Count(l => l.Success) of @_collectAllLog.Count succeeded
+                            Collection finished — @_collectAllItems.Count(i => i.Status == CollectStatus.Success) of @_collectAllItems.Count succeeded
                         </MudText>
                     }
                     <MudList T="string" Dense="true">
-                        @foreach (var entry in _collectAllLog)
+                        @foreach (var item in _collectAllItems)
                         {
                             <MudListItem T="string"
-                                         Icon="@(entry.Success ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)"
-                                         IconColor="@(entry.Success ? Color.Success : Color.Error)">
-                                <strong>@entry.Name</strong>
-                                @if (entry.Success)
+                                         Icon="@StatusIcon(item.Status)"
+                                         IconColor="@StatusColor(item.Status)">
+                                <strong>@item.Name</strong>
+                                @switch (item.Status)
                                 {
-                                    <text> — collected</text>
-                                }
-                                else
-                                {
-                                    <text> — failed: @entry.Error</text>
+                                    case CollectStatus.Pending:
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-inline ml-1">queued…</MudText>
+                                        break;
+                                    case CollectStatus.Collecting:
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Info" Class="ml-2" Style="height:14px;width:14px;" />
+                                        <MudText Typo="Typo.caption" Color="Color.Info" Class="d-inline ml-1">collecting…</MudText>
+                                        break;
+                                    case CollectStatus.Success:
+                                        <text> — collected</text>
+                                        break;
+                                    case CollectStatus.Failed:
+                                        <text> — failed: @item.Error</text>
+                                        break;
                                 }
                             </MudListItem>
                         }
@@ -384,10 +386,42 @@
 
     // Collect-all progress state
     private bool _collectingAll;
-    private string? _collectAllCurrent;
     private int _collectAllDone;
     private int _collectAllTotal;
-    private readonly List<(string Name, bool Success, string? Error)> _collectAllLog = [];
+    private readonly List<CollectItem> _collectAllItems = [];
+    private readonly object _collectLock = new();
+
+    // Max tenants collected concurrently. The Collector container scales independently
+    // (0→3 replicas × 5 concurrent requests) so parallel collection is safe; bound it to
+    // avoid issuing more in-flight requests than the collector can usefully absorb.
+    private int MaxParallelCollections =>
+        int.TryParse(Configuration["Collector:MaxParallelCollections"], out var n) && n > 0 ? n : 4;
+
+    private enum CollectStatus { Pending, Collecting, Success, Failed }
+
+    private sealed class CollectItem
+    {
+        public required string TenantId { get; init; }
+        public required string Name { get; init; }
+        public CollectStatus Status { get; set; } = CollectStatus.Pending;
+        public string? Error { get; set; }
+    }
+
+    private static string StatusIcon(CollectStatus s) => s switch
+    {
+        CollectStatus.Success => Icons.Material.Filled.CheckCircle,
+        CollectStatus.Failed => Icons.Material.Filled.Error,
+        CollectStatus.Collecting => Icons.Material.Filled.Sync,
+        _ => Icons.Material.Filled.Schedule
+    };
+
+    private static Color StatusColor(CollectStatus s) => s switch
+    {
+        CollectStatus.Success => Color.Success,
+        CollectStatus.Failed => Color.Error,
+        CollectStatus.Collecting => Color.Info,
+        _ => Color.Default
+    };
 
     private async Task CollectNow(TenantInfo tenant)
     {
@@ -411,8 +445,10 @@
         }
     }
 
-    // Collects data for every active tenant sequentially, surfacing per-tenant progress
-    // ("Collecting from X…"), a per-tenant confirmation, and a final overall summary.
+    // Collects data for every active tenant in parallel (bounded concurrency), surfacing live
+    // per-tenant status (queued → collecting → collected/failed), an aggregate progress bar,
+    // and a final overall summary. UI updates are marshaled back onto the Blazor circuit via
+    // InvokeAsync because the collection tasks run on background threads.
     private async Task CollectAll()
     {
         var active = _tenants.Where(t => t.IsActive).ToList();
@@ -424,38 +460,44 @@
         }
 
         _collectingAll = true;
-        _collectAllLog.Clear();
+        _collectAllItems.Clear();
+        _collectAllItems.AddRange(active.Select(t => new CollectItem { TenantId = t.TenantId, Name = t.TenantName }));
         _collectAllDone = 0;
         _collectAllTotal = active.Count;
-        _collectAllCurrent = null;
         _message = string.Empty;
         StateHasChanged();
 
-        foreach (var tenant in active)
-        {
-            _collectAllCurrent = tenant.TenantName;
-            StateHasChanged();
-            await Task.Yield();
+        using var throttle = new SemaphoreSlim(MaxParallelCollections);
 
+        var tasks = active.Select(async tenant =>
+        {
+            var item = _collectAllItems.First(i => i.TenantId == tenant.TenantId);
+            await throttle.WaitAsync();
             try
             {
+                item.Status = CollectStatus.Collecting;
+                await InvokeAsync(StateHasChanged);
+
                 await DataCollectionService.CollectForTenantAsync(tenant.TenantId, tenant.TenantName);
-                _collectAllLog.Add((tenant.TenantName, true, null));
+                item.Status = CollectStatus.Success;
             }
             catch (Exception ex)
             {
-                _collectAllLog.Add((tenant.TenantName, false, ex.Message));
+                item.Status = CollectStatus.Failed;
+                item.Error = ex.Message;
             }
             finally
             {
-                _collectAllDone++;
-                _collectAllCurrent = null;
-                StateHasChanged();
+                throttle.Release();
+                lock (_collectLock) { _collectAllDone++; }
+                await InvokeAsync(StateHasChanged);
             }
-        }
+        });
+
+        await Task.WhenAll(tasks);
 
         _collectingAll = false;
-        var failures = _collectAllLog.Count(l => !l.Success);
+        var failures = _collectAllItems.Count(i => i.Status == CollectStatus.Failed);
         _message = failures == 0
             ? $"Data collection completed for all {_collectAllTotal} active tenant(s)."
             : $"Collection finished: {_collectAllTotal - failures} succeeded, {failures} failed.";
