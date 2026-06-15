@@ -240,3 +240,120 @@ Copilot Chat interactions land in `Audit.General` content blobs as records with:
 2. ✅ **External sharing audit** (Tier A) — reuses the Management Activity collector, top security story, no new consent. **Done.**
 3. ✅ **Privileged role inventory** (Tier B) + **Defender alerts** (Tier B) — complete the security posture. **Done.**
 4. ✅ **Suspicious inbox/forwarding rules** + **DLP matches** (Tier B, Management Activity API) + **License renewal dates** + **Teams team activity** (Tier C, existing permissions). **Done.**
+
+---
+
+## Wave 3 — CSP Reseller Value (customer-facing depth, no Partner Center billing)
+
+**Context**: Viewed from a **CSP reseller's** seat, the dashboard already covers posture, adoption and audit-feed security. The remaining high-value data that a reseller can present *to its customers* — without touching Partner Center billing — falls into three themes: (1) **change & accountability** ("what changed in my tenant and who did it"), (2) **license hygiene** ("am I paying for licenses that are broken or wasted"), and (3) **attack-surface & device health** ("where am I exposed"). Every item below is reachable from Microsoft Graph, the Office 365 Management Activity API, or Intune — all **excluding Partner Center / billing APIs**.
+
+Each item follows the existing scaffolding pattern (the `new-model` skill): new `*Snapshot` model + DbSet + EF migration → a `GraphReportService` (or `ManagementActivityClient`) method → a cached `MauDataService` save/query pair (+ Redis key + invalidation) → a page or tab → a `ResolveScope`-based export entry in `ExportEndpoints.cs`. Reuse the existing P1/P2 premium gating (`TenantEntraTier.FromLicenses`), PII pseudonymization (`PiiProtector`) for any per-user rows, and tenant-isolation (`GetFilteredTenantIds`) conventions. Ordered by ROI (value vs. effort).
+
+> **Note**: Items marked **(already granted)** need **no re-consent** — the permission is already on the app registration. Items marked **(new — requires re-consent)** must be added to the app registration and re-consented by each customer.
+
+### Tier 1 — Highest ROI, no new consent (uses already-granted permissions)
+
+- [x] **Directory audit / change tracking** — "what changed in my tenant, when, and who did it": admin role grants, user/group create-delete, app consents, password resets, policy edits, license changes. The single strongest **QBR accountability** deliverable and an early-warning signal for compromise. High event volume → aggregate to per-day counts by `category` + `activityDisplayName`, and keep a rolling top-N of the most recent/sensitive events. ✅ **Shipped** — `DirectoryAuditSnapshot` + `TenantInfo.DirectoryAuditCursorUtc` (cursor + **ADD-on-upsert** so split-day events accumulate and history is preserved beyond the tenant's ~7-day free / ~30-day P1-P2 retention) + **Change Log — Directory Audit** section on `/security` (retention-caveat empty-state) + `directory-audit` export.
+  - Endpoint: `GET /auditLogs/directoryAudits` (`activityDisplayName`, `category`, `initiatedBy`, `targetResources`, `result`, `activityDateTime`); page with `$top` + `@odata.nextLink`, filter `activityDateTime ge {cursor}`
+  - Permission: `AuditLog.Read.All` **(already granted)**
+  - Model: `DirectoryAuditSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `Category`, `Activity`, `EventCount`, `FailureCount`, `CollectedAt`); composite unique index `(TenantId, Category, Activity, ReportDate)`. Pseudonymize any actor UPNs via `PiiProtector`
+  - Implementation steps:
+    1. Add `DirectoryAuditSnapshot` to `MauSnapshot.cs` + DbSet + `OnModelCreating` config; `dotnet ef migrations add AddDirectoryAudit --project ../MWDashboard.Shared`
+    2. `GraphReportService.GetDirectoryAuditsAsync(tenantId, sinceUtc)` — paginate, aggregate by (category, activity, day), count failures
+    3. Persist a per-tenant cursor (mirror the Management-Activity cursor pattern; reuse a `TenantInfo.DirectoryAuditCursorUtc` field) so only new events are pulled (directoryAudits retain ~30 days on P1/P2, 7 days on free)
+    4. `MauDataService` save (upsert by composite key) + query (cutoff-days filter) + `CachedMauDataService` wrapper (`directory-audit` key, 60-min TTL) + invalidation
+    5. Wire into `OnDemandDataCollectionService` (+ Job inherits); add a **Change Log** tab on `/security` (or a new `/audit` page) with a per-day category bar chart + recent-sensitive-events table
+    6. Add a `directory-audit` entry to `ExportEndpoints.cs`
+  - Gating note: free-tier tenants retain only ~7 days of directory audit; surface the retention caveat in the empty-state (same pattern as the Copilot audit section)
+
+- [x] **License assignment errors & seat waste detail** — surface users whose license assignment **failed** (`licenseAssignmentStates.state == Error`, e.g. dependency/conflict) and disabled-but-licensed accounts. A reseller-specific deliverable: "you are paying for N seats that aren't actually applied." Complements the already-shipped inactive-account and subscription-renewal sections. ✅ **Shipped** — `LicenseAssignmentIssueSnapshot` + **License Assignment Issues** section on `/licenses` (seats-in-error / disabled-but-licensed KPIs + per-SKU table) + `license-issues` export.
+  - Endpoint: `GET /users?$select=id,accountEnabled,assignedLicenses,licenseAssignmentStates&$top=999` (+ paging)
+  - Permission: `User.Read.All` + `Organization.Read.All` **(already granted)**
+  - Model: `LicenseAssignmentIssueSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `SkuPartNumber`, `ErrorUsers`, `DisabledLicensedUsers`, `CollectedAt`); composite unique index `(TenantId, SkuPartNumber, ReportDate)`
+  - Implementation steps:
+    1. Model + DbSet + migration
+    2. `GraphReportService.GetLicenseAssignmentIssuesAsync(tenantId)` — enumerate users, bucket per SKU: assignment errors + accounts where `accountEnabled == false` but a license is assigned. Cross-reference SKU GUID → part number via the already-collected `LicenseSnapshot`
+    3. Data-service save (delete-then-insert per `(TenantId, ReportDate)`) + query + cache wrapper (`license-issues` key, 60-min TTL)
+    4. Wire into `OnDemandDataCollectionService`; add a **License Issues** section on `/licenses` (KPI: seats in error / disabled-but-licensed + a per-SKU table)
+    5. `license-issues` export entry
+
+- [x] **OAuth app consent grants & over-privileged enterprise apps** — inventory third-party/enterprise apps with delegated + application permission grants; flag high-risk scopes (`Mail.Read`, `Files.ReadWrite.All`, `Directory.ReadWrite.All`, full-access app roles) and apps consented by non-admins. This is the **illicit-consent / OAuth-phishing attack surface** explicitly deferred when the App Credential Expiry tab shipped (Tier A above) — a top MSP security narrative. ✅ **Shipped** — `OAuthGrantSnapshot` + **OAuth Apps** tab on `/identity` (high-risk-app / admin-consented KPIs + table with risk chips) + `oauth-grants` export. (Delegated grants via `/oauth2PermissionGrants`; application app-role grants left as a future enhancement.)
+  - Endpoints: `GET /servicePrincipals` (`appDisplayName`, `appRoleAssignedTo`), `GET /oauth2PermissionGrants` (delegated grants + scopes)
+  - Permission: `Application.Read.All` **(already granted)** + `Directory.Read.All` **(already granted)** (delegated-grant detail may also use `DelegatedPermissionGrant.Read.All` — add only if the `oauth2PermissionGrants` read 403s)
+  - Model: `OAuthGrantSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `AppDisplayName`, `AppId`, `GrantType` [Delegated/Application], `HighRiskScopes`, `ScopeCount`, `IsAdminConsented`, `CollectedAt`); composite unique index `(TenantId, AppId, GrantType, ReportDate)`
+  - Implementation steps:
+    1. Model + DbSet + migration
+    2. `GraphReportService.GetOAuthGrantsAsync(tenantId)` — join service principals to their delegated (`oauth2PermissionGrants`) + application (`appRoleAssignedTo`) grants; classify a curated high-risk-scope set; flag admin- vs user-consent
+    3. Data-service save (delete-then-insert per `(TenantId, ReportDate)`) + query + cache wrapper (`oauth-grants` key, 60-min TTL)
+    4. Wire into `OnDemandDataCollectionService`; add an **OAuth Apps** tab to `/identity` (high-risk-app KPI + table with risk chips)
+    5. `oauth-grants` export entry
+
+- [ ] **Legacy authentication & risky sign-in detail** — extend the existing sign-in summary with **legacy-auth protocol usage** (POP/IMAP/SMTP/older clients that bypass MFA — a concrete remediation the customer can act on) plus failed-sign-in / risky-sign-in and sign-in-by-country breakdowns. Builds directly on the data already pulled for `SecuritySignInSummary`.
+  - Endpoint: `GET /auditLogs/signIns` (`clientAppUsed`, `status`, `location.countryOrRegion`, `riskLevelAggregated`); filter `createdDateTime ge {cursor}`
+  - Permission: `AuditLog.Read.All` **(already granted)** — **Entra ID P1/P2 gated** (skip on free tenants via `TenantEntraTier.FromLicenses`, same as the inactive-account pipeline)
+  - Model: `SignInDetailSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `ClientApp`, `IsLegacyAuth`, `SuccessCount`, `FailureCount`, `RiskyCount`, `CollectedAt`); composite unique index `(TenantId, ClientApp, ReportDate)`
+  - Implementation steps:
+    1. Model + DbSet + migration
+    2. `GraphReportService.GetSignInDetailAsync(tenantId, sinceUtc)` — aggregate by (clientApp, day); mark legacy-auth client strings; count failures + risky aggregated levels. **Skip entirely on free-tier tenants** and reuse `IsPremiumLicenseError`
+    3. Cursor (`TenantInfo.SignInDetailCursorUtc`) so only new sign-ins are pulled (sign-in logs retain ~30 days on P1, longer on P2)
+    4. Data-service save (upsert) + query + cache wrapper (`signin-detail` key, 15-min TTL) + invalidation
+    5. Wire into `OnDemandDataCollectionService`; add a **Legacy Auth & Risky Sign-ins** section to `/security` (legacy-auth-user KPI + per-client table + country breakdown). Surface the P1/P2 caveat on free tenants
+    6. `signin-detail` export entry
+
+- [ ] **Windows patch / OS-version compliance** — turn the **already-collected** `managedDevices` data into a patch-hygiene story: OS-version distribution, out-of-date / unsupported builds, last-check-in age. No new Graph call if the device list is already pulled for the Device Compliance tab — just an added aggregation + projection.
+  - Endpoint: `GET /deviceManagement/managedDevices` (`operatingSystem`, `osVersion`, `complianceState`, `lastSyncDateTime`) — **already consumed** for Device Compliance
+  - Permission: `DeviceManagementManagedDevices.Read.All` **(already granted)**
+  - Model: `DevicePatchSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `OsPlatform`, `OsVersion`, `DeviceCount`, `StaleCount`, `CollectedAt`); composite unique index `(TenantId, OsPlatform, OsVersion, ReportDate)`
+  - Implementation steps:
+    1. Model + DbSet + migration
+    2. In the existing device-compliance collection path, additionally aggregate devices by (osPlatform, osVersion, day); count devices whose `lastSyncDateTime` is older than N days as stale
+    3. Data-service save (delete-then-insert per `(TenantId, ReportDate)`) + query + cache wrapper (`device-patch` key, 60-min TTL)
+    4. Add a **Patch / OS Versions** tab to `/identity` (top-versions bar + stale-device KPI). Optionally a curated "supported vs. unsupported build" flag for common Windows builds
+    5. `device-patch` export entry
+
+- [x] **Mailbox non-owner / delegate access** — surface `MailItemsAccessed` and non-owner mailbox access from the **already-subscribed** `Audit.Exchange` feed — an insider-threat / compromised-delegate indicator that pairs with the shipped Suspicious Mailbox Rules section. Pure parser addition to the existing collector; **no new subscription or consent**. ✅ **Shipped** — `MailboxAccessSnapshot` + a second classifier in `MailRuleAuditCollectionService` (same `Audit.Exchange` blob loop / `ExchangeAuditCursorUtc` cursor, no extra API calls) + **Mailbox Access** card on `/security` + `mailbox-access` export.
+  - Source: **Office 365 Management Activity API**, content type `Audit.Exchange` (`MailItemsAccessed`, `Add-MailboxPermission`, non-owner `LogonType`)
+  - Permission: `ActivityFeed.Read` **(already granted)** — reuses `ManagementActivityClient` + the `ExchangeAuditCursorUtc` cursor already advanced by `MailRuleAuditCollectionService`
+  - Model: `MailboxAccessSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `AccessType` [NonOwnerAccess/DelegateGrant], `EventCount`, `DistinctMailboxes`, `CollectedAt`); composite unique index `(TenantId, AccessType, ReportDate)`
+  - Implementation steps:
+    1. Model + DbSet + migration
+    2. Extend `MailRuleAuditCollectionService` (or add a sibling parser) to also accumulate non-owner mailbox-access records from the same `Audit.Exchange` blobs it already pulls — **no extra API calls**, just an added classifier
+    3. Data-service save (upsert by `(TenantId, AccessType, ReportDate)`) + query + cache wrapper (`mailbox-access` key, 60-min TTL)
+    4. Add a **Mailbox Access** card to the `/security` Suspicious Mailbox Rules area
+    5. `mailbox-access` export entry
+
+### Tier 2 — Strong value, new consent or add-on license required
+
+- [ ] **Stale Entra-registered devices** — registered/joined devices that haven't signed in for 90+ days (device-hygiene / cleanup story distinct from Intune compliance, since it covers all registered devices, not just managed ones).
+  - Endpoint: `GET /devices` (`displayName`, `operatingSystem`, `approximateLastSignInDateTime`, `isManaged`, `isCompliant`, `accountEnabled`)
+  - Permission: `Device.Read.All` **(new — requires re-consent)** (or reuse `Directory.Read.All` if it suffices for `/devices` in the target tenant)
+  - Model: `StaleDeviceSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `OsPlatform`, `TotalDevices`, `Stale90Plus`, `DisabledDevices`, `CollectedAt`); composite unique index `(TenantId, OsPlatform, ReportDate)`
+  - Implementation steps: model + migration → `GraphReportService.GetStaleDevicesAsync(tenantId)` (bucket by platform, count `approximateLastSignInDateTime` older than 90 days) → data-service save (delete-then-insert) + cache (`stale-devices`, 60-min) → tab on `/identity` → export. Add `Device.Read.All` to `GraphPermissions` + consent probe + `docs/permissions.md`
+
+- [ ] **Defender for Office 365 email threat protection** — phishing / malware / spam messages **blocked** by EOP/MDO (the "we stopped X threats this month" headline metric customers love in a QBR). Requires the customer to hold a Defender for Office 365 / EOP plan.
+  - Endpoints: `getMailDetailMalwareReport` / `getMailDetailPhishReport` / threat reports under `/security` (validate exact Graph availability per tenant; some live only in the Defender portal reporting API)
+  - Permission: likely `SecurityEvents.Read.All` **(already granted)** or `ThreatHunting.Read.All` / `SecurityAnalyzedMessage.Read.All` **(new)** — confirm during spike; **requires a Defender for Office 365 subscription** on the tenant
+  - Model: `EmailThreatSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `ThreatType` [Malware/Phish/Spam], `BlockedCount`, `DeliveredCount`, `CollectedAt`); composite unique index `(TenantId, ThreatType, ReportDate)`
+  - Implementation steps: **spike first** to confirm the exact Graph endpoint + permission + license requirement (this is the least-certain item) → model + migration → `GraphReportService` method (gracefully no-op when the tenant lacks the Defender plan, like the existing Defender-alerts handling) → data-service save + cache (`email-threats`, 60-min) → section on `/security` with a "Defender for Office 365 not licensed" empty-state → export
+
+- [ ] **Attack Simulation Training results** — phishing-simulation campaigns and click/report rates (security-awareness posture). Requires Defender for Office 365 Plan 2.
+  - Endpoint: `GET /security/attackSimulation/simulations` (+ per-simulation report)
+  - Permission: `AttackSimulation.Read.All` **(new — requires re-consent)**; **Defender for Office 365 Plan 2** on the tenant
+  - Model: `AttackSimSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `CampaignName`, `TargetedUsers`, `ClickedCount`, `ReportedCount`, `CompromisedRate`, `CollectedAt`); composite unique index `(TenantId, CampaignName, ReportDate)`
+  - Implementation steps: model + migration → `GraphReportService.GetAttackSimulationsAsync(tenantId)` (no-op when unlicensed) → data-service save + cache (`attack-sim`, 60-min) → tab on `/security` → export → add `AttackSimulation.Read.All` to `GraphPermissions` + consent probe + `docs/permissions.md`
+
+### Tier 3 — Optional / overlap
+
+- [ ] **`Audit.AzureActiveDirectory` Management-Activity content type** — an *alternative* source for the same admin/sign-in/consent change events as Tier 1's Directory Audit (Graph `directoryAudits`). Only pursue if the Graph `directoryAudits` retention window proves too short for a given customer — the Management Activity feed (7-day blobs, already plumbed via `ManagementActivityClient`) can backfill. Otherwise **skip to avoid double-counting** the same events the Directory Audit item already aggregates.
+  - Source: **Office 365 Management Activity API**, content type `Audit.AzureActiveDirectory`
+  - Permission: `ActivityFeed.Read` **(already granted)**
+  - Decision: implement **only** Directory Audit (Tier 1) first; revisit this if retention gaps appear
+
+### Suggested implementation order (Wave 3)
+1. ~~**Directory audit / change tracking** (Tier 1)~~ — ✅ **Shipped** (Change Log section on Security page; cursor + ADD-on-upsert accumulates history beyond the ~7-day free retention).
+2. ~~**License assignment errors** (Tier 1)~~ — ✅ **Shipped** (License Assignment Issues section on Licenses page; seats-in-error + disabled-but-licensed seat waste).
+3. ~~**OAuth app consent grants** (Tier 1)~~ — ✅ **Shipped** (OAuth Apps tab on Identity & Devices page; high-risk scope + admin-consent flags).
+4. ~~**Mailbox non-owner access** (Tier 1)~~ — ✅ **Shipped** (Mailbox Access section on Security page; parser add-on to the existing `Audit.Exchange` collector, no extra API calls).
+5. **Windows patch / OS-version compliance** (Tier 1) — aggregation over already-collected device data.
+6. **Legacy auth & risky sign-in detail** (Tier 1, P1/P2-gated) — extends the existing sign-in pipeline.
+7. **Stale registered devices** (Tier 2) + **Defender for O365 email threats** (Tier 2, spike first) + **Attack Simulation Training** (Tier 2) — once the no-consent Tier 1 items ship.

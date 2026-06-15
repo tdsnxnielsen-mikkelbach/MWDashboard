@@ -16,6 +16,7 @@
         ("Guest Users", "guests"),
         ("Risky Users", "risky-users"),
         ("App Credential Expiry", "app-credential-expiry"),
+        ("OAuth Apps", "oauth-grants"),
         ("Privileged Roles", "privileged-roles") })" />
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
@@ -553,6 +554,98 @@ else
         }
     </MudTabPanel>
 
+    <MudTabPanel Text="OAuth Apps" Icon="@Icons.Material.Filled.Apps">
+        @if (_oauthGrants.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No OAuth app consent grants found for the selected tenant(s). Requires <PermissionTag Scope="Application.Read.All" /> + <PermissionTag Scope="Directory.Read.All" />.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Consented Apps</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_oauthGrants.Count.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">with delegated grants</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">High-Risk Apps</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_oauthHighRisk > 0 ? Color.Warning : Color.Success)">@_oauthHighRisk.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">hold sensitive scopes</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Admin-Consented</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_oauthAdminConsented.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">tenant-wide grants</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Scopes</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_oauthGrants.Sum(g => g.ScopeCount).ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">delegated permissions</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-1">Third-Party App Consent</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+                        Delegated OAuth grants consented to apps in the tenant. Apps holding high-risk scopes (mailbox, files, directory, app management)
+                        warrant review — over-privileged or unrecognized apps are a common data-exfiltration vector.
+                    </MudText>
+                    <MudTable Items="_oauthGrants" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" FixedHeader="true" Height="460px">
+                        <HeaderContent>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                            <MudTh>Application</MudTh>
+                            <MudTh>Type</MudTh>
+                            <MudTh Style="text-align:right">Scopes</MudTh>
+                            <MudTh>High-Risk Scopes</MudTh>
+                            <MudTh>Consent</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                            <MudTd DataLabel="Application">@context.AppDisplayName</MudTd>
+                            <MudTd DataLabel="Type"><MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@context.GrantType</MudChip></MudTd>
+                            <MudTd DataLabel="Scopes" Style="text-align:right">@context.ScopeCount.ToString("N0")</MudTd>
+                            <MudTd DataLabel="High-Risk Scopes">
+                                @if (string.IsNullOrEmpty(context.HighRiskScopes))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">None</MudChip>
+                                }
+                                else
+                                {
+                                    @foreach (var scope in context.HighRiskScopes.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="ma-1">@scope</MudChip>
+                                    }
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Consent">
+                                @if (context.IsAdminConsented)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Filled">Admin (all users)</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">User</MudChip>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
 </MudTabs>
 }
 
@@ -567,6 +660,8 @@ else
     private List<RiskyUserSnapshot> _riskyUsers = [];
     private List<AppCredentialSnapshot> _appCredentials = [];
     private List<PrivilegedRoleSnapshot> _privilegedRoles = [];
+    private List<OAuthGrantSnapshot> _oauthGrants = [];
+    private int _oauthHighRisk, _oauthAdminConsented;
 
     // Groups the Role Membership table by tenant (collapsible) in multi-tenant view.
     private readonly TableGroupDefinition<PrivilegedRoleSnapshot> _roleGroupDefinition = new()
@@ -652,6 +747,8 @@ else
             .OrderBy(c => c.DaysToExpiry).ToList();
         _privilegedRoles = (await MauDataService.GetPrivilegedRolesAsync(tenantIds))
             .OrderByDescending(r => r.IsPrivileged).ThenByDescending(r => r.MemberCount).ToList();
+        _oauthGrants = (await MauDataService.GetOAuthGrantsAsync(tenantIds))
+            .OrderByDescending(g => !string.IsNullOrEmpty(g.HighRiskScopes)).ThenByDescending(g => g.ScopeCount).ToList();
 
         // Tier info so the Risky Users tab can explain why P2-only data is missing
         var tiers = await MauDataService.GetTenantEntraIdTiersAsync();
@@ -663,7 +760,7 @@ else
             .ToList();
 
         _hasAnyData = _devices.Count > 0 || _conditionalAccess.Count > 0 || _guests.Count > 0 || _riskyUsers.Count > 0
-            || _appCredentials.Count > 0 || _privilegedRoles.Count > 0;
+            || _appCredentials.Count > 0 || _privilegedRoles.Count > 0 || _oauthGrants.Count > 0;
 
         BuildDeviceMetrics();
         BuildConditionalAccessMetrics();
@@ -687,6 +784,9 @@ else
         _privilegedMembers = _privilegedRoles
             .Where(r => r.IsPrivileged)
             .Sum(r => r.MemberCount);
+
+        _oauthHighRisk = _oauthGrants.Count(g => !string.IsNullOrEmpty(g.HighRiskScopes));
+        _oauthAdminConsented = _oauthGrants.Count(g => g.IsAdminConsented);
     }
 
     private void BuildDeviceMetrics()

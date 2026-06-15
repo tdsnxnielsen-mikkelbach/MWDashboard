@@ -14,7 +14,9 @@
         ("Sign-ins & MFA", "security"),
         ("Defender Alerts", "defender-alerts"),
         ("Suspicious Mail Rules", "mail-rules"),
+        ("Mailbox Access", "mailbox-access"),
         ("DLP Policy Matches", "dlp-events"),
+        ("Change Log (Directory Audit)", "directory-audit"),
         ("External Sharing", "external-sharing") })" />
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
@@ -535,6 +537,64 @@ else
     }
 </MudPaper>
 
+@* Mailbox Non-Owner / Delegate Access (insider-risk / BEC indicator) *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.NoAccounts" Class="mr-2" />
+        Mailbox Access (last 30 days)
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Non-owner mailbox access (a mailbox opened by a delegate, admin or other account) and new delegate-permission grants
+        from the Office 365 unified audit log (<PermissionTag Scope="ActivityFeed.Read" />). Unexpected non-owner access is an
+        <strong>insider-risk / business-email-compromise (BEC)</strong> indicator. Requires unified audit logging enabled on the tenant.
+    </MudText>
+    @if (_mailboxAccess.Count == 0)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true">No non-owner mailbox access or delegate grants recorded for the selected tenant(s).</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Non-Owner Access</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_accessNonOwner > 0 ? Color.Warning : Color.Success)">@_accessNonOwner.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">access events</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Delegate Grants</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_accessDelegate > 0 ? Color.Warning : Color.Success)">@_accessDelegate.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">permission grants</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTable Items="_mailboxAccess" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                        <MudTh>Report Date</MudTh>
+                        <MudTh>Access Type</MudTh>
+                        <MudTh Style="text-align:right">Events</MudTh>
+                        <MudTh Style="text-align:right">Distinct Mailboxes</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                        <MudTd DataLabel="Report Date">@context.ReportDate.ToString("yyyy-MM-dd")</MudTd>
+                        <MudTd DataLabel="Access Type">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.AccessType == "NonOwnerAccess" ? Color.Warning : Color.Info)" Variant="Variant.Filled">
+                                @(context.AccessType == "NonOwnerAccess" ? "Non-Owner Access" : "Delegate Grant")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Events" Style="text-align:right">@context.EventCount.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Distinct Mailboxes" Style="text-align:right">@context.DistinctMailboxes.ToString("N0")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
+
 @* DLP Policy Matches (Purview) *@
 <MudPaper Class="pa-4 mb-4" Elevation="2">
     <MudText Typo="Typo.h6" Class="mb-1">
@@ -598,6 +658,81 @@ else
         </MudGrid>
     }
 </MudPaper>
+
+@* Change Log — Directory Audit (admin & directory changes over time) *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.History" Class="mr-2" />
+        Change Log — Directory Audit (last 30 days)
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Admin and directory change events from the Entra audit log (<PermissionTag Scope="AuditLog.Read.All" />), aggregated by
+        category and activity. Actor identities are pseudonymized (only distinct-actor counts are stored). Failed operations are
+        highlighted as a potential misconfiguration or attack indicator.
+    </MudText>
+    @if (_directoryAudits.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">
+            No directory change events recorded yet for the selected tenant(s). Entra <strong>free-tier</strong> tenants retain only
+            <strong>~7 days</strong> of directory audit (P1/P2 retain ~30 days), so the change log builds up as the dashboard collects
+            daily — history is accumulated here and preserved beyond the tenant's native retention window.
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Changes</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_auditTotal.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">audited events</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Failed Operations</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_auditFailures > 0 ? Color.Warning : Color.Success)">@_auditFailures.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">failures</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Categories</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_auditCategoryCount.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">distinct categories</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTable Items="_directoryAudits" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" FixedHeader="true" Height="420px">
+                    <HeaderContent>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                        <MudTh>Report Date</MudTh>
+                        <MudTh>Category</MudTh>
+                        <MudTh>Activity</MudTh>
+                        <MudTh Style="text-align:right">Events</MudTh>
+                        <MudTh Style="text-align:right">Failures</MudTh>
+                        <MudTh Style="text-align:right">Actors</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                        <MudTd DataLabel="Report Date">@context.ReportDate.ToString("yyyy-MM-dd")</MudTd>
+                        <MudTd DataLabel="Category"><MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@context.Category</MudChip></MudTd>
+                        <MudTd DataLabel="Activity">@context.Activity</MudTd>
+                        <MudTd DataLabel="Events" Style="text-align:right">@context.EventCount.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Failures" Style="text-align:right">
+                            @if (context.FailureCount > 0)
+                            {
+                                <MudText Color="Color.Warning" Typo="Typo.body2">@context.FailureCount.ToString("N0")</MudText>
+                            }
+                            else { <text>@context.FailureCount.ToString("N0")</text> }
+                        </MudTd>
+                        <MudTd DataLabel="Actors" Style="text-align:right">@context.DistinctActors.ToString("N0")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
 }
 
 @code {
@@ -639,6 +774,14 @@ else
     // DLP policy-match aggregates
     private List<DlpEventSnapshot> _dlpEvents = [];
     private int _dlpTotal, _dlpHigh, _dlpPolicyCount;
+
+    // Mailbox non-owner / delegate access aggregates
+    private List<MailboxAccessSnapshot> _mailboxAccess = [];
+    private int _accessNonOwner, _accessDelegate;
+
+    // Directory audit / change-log aggregates
+    private List<DirectoryAuditSnapshot> _directoryAudits = [];
+    private int _auditTotal, _auditFailures, _auditCategoryCount;
 
     private ApexChartOptions<DailySignIn> _signInChartOptions = new()
     {
@@ -732,6 +875,19 @@ else
         _dlpTotal = _dlpEvents.Sum(s => s.MatchCount);
         _dlpHigh = _dlpEvents.Where(s => string.Equals(s.Severity, "High", StringComparison.OrdinalIgnoreCase)).Sum(s => s.MatchCount);
         _dlpPolicyCount = _dlpEvents.Select(s => s.PolicyName).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+        // Mailbox non-owner / delegate access aggregates (last 30 days)
+        _mailboxAccess = (await MauDataService.GetMailboxAccessAsync(tenantIds, days: 30))
+            .OrderByDescending(s => s.ReportDate).ThenBy(s => s.AccessType).ToList();
+        _accessNonOwner = _mailboxAccess.Where(s => s.AccessType == "NonOwnerAccess").Sum(s => s.EventCount);
+        _accessDelegate = _mailboxAccess.Where(s => s.AccessType == "DelegateGrant").Sum(s => s.EventCount);
+
+        // Directory audit / change-log aggregates (last 30 days)
+        _directoryAudits = (await MauDataService.GetDirectoryAuditsAsync(tenantIds, days: 30))
+            .OrderByDescending(s => s.ReportDate).ThenByDescending(s => s.EventCount).ToList();
+        _auditTotal = _directoryAudits.Sum(s => s.EventCount);
+        _auditFailures = _directoryAudits.Sum(s => s.FailureCount);
+        _auditCategoryCount = _directoryAudits.Select(s => s.Category).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
         _dailySignIns = _summaries
             .GroupBy(s => s.ReportDate.ToString("MM-dd"))

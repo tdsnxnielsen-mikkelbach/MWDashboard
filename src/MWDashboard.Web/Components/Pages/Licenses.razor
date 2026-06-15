@@ -12,6 +12,7 @@
     <MudText Typo="Typo.h4">Licenses &amp; Adoption</MudText>
     <ExportMenu Items="@(new[] {
         ("Licenses", "licenses"),
+        ("License Issues", "license-issues"),
         ("Subscription Renewals", "subscriptions") })" />
 </div>
 
@@ -324,6 +325,63 @@ else
         </MudTable>
     }
 </MudPaper>
+
+@* License Assignment Issues — seats in error + disabled-but-licensed (seat waste) *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.ReportProblem" Class="mr-2" />
+        License Assignment Issues
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Per-SKU license assignment errors and wasted seats (disabled accounts still holding a license) from Microsoft Graph
+        (<PermissionTag Scope="User.Read.All" />). Reclaiming error/disabled seats reduces spend.
+    </MudText>
+    @if (_licenseIssues.Count == 0)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true">No license assignment errors or wasted seats detected for the selected tenant(s).</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Seats in Error</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_issueErrorTotal > 0 ? Color.Error : Color.Success)">@_issueErrorTotal.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">failed assignments</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Disabled but Licensed</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_issueDisabledTotal > 0 ? Color.Warning : Color.Success)">@_issueDisabledTotal.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">wasted seats</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTable Items="_licenseIssues" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                        <MudTh>Subscription</MudTh>
+                        <MudTh Style="text-align:right">Seats in Error</MudTh>
+                        <MudTh Style="text-align:right">Disabled but Licensed</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                        <MudTd DataLabel="Subscription">@context.SkuPartNumber</MudTd>
+                        <MudTd DataLabel="Seats in Error" Style="text-align:right">
+                            @if (context.ErrorUsers > 0) { <MudText Color="Color.Error" Typo="Typo.body2">@context.ErrorUsers.ToString("N0")</MudText> }
+                            else { <text>0</text> }
+                        </MudTd>
+                        <MudTd DataLabel="Disabled but Licensed" Style="text-align:right">
+                            @if (context.DisabledLicensedUsers > 0) { <MudText Color="Color.Warning" Typo="Typo.body2">@context.DisabledLicensedUsers.ToString("N0")</MudText> }
+                            else { <text>0</text> }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
 }
 
 @code {
@@ -334,6 +392,8 @@ else
     private Dictionary<string, List<AdoptionPoint>> _adoptionData = [];
     private List<SubscriptionSnapshot> _subscriptions = [];
     private int _subsExpiringSoon, _subsTrials;
+    private List<LicenseAssignmentIssueSnapshot> _licenseIssues = [];
+    private int _issueErrorTotal, _issueDisabledTotal;
     private string _searchString = string.Empty;
     private DateTime? _fromDate = DateTime.UtcNow.AddMonths(-6);
     private DateTime? _toDate = DateTime.UtcNow;
@@ -398,6 +458,14 @@ else
             && s.NextLifecycleDateTime.Value <= soonCutoff
             && s.NextLifecycleDateTime.Value >= DateTime.UtcNow);
         _subsTrials = _subscriptions.Count(s => s.IsTrial);
+
+        // License assignment issues (latest snapshot per tenant)
+        _licenseIssues = (await MauDataService.GetLicenseAssignmentIssuesAsync(tenantIds))
+            .OrderByDescending(s => s.ErrorUsers + s.DisabledLicensedUsers)
+            .ThenBy(s => s.SkuPartNumber)
+            .ToList();
+        _issueErrorTotal = _licenseIssues.Sum(s => s.ErrorUsers);
+        _issueDisabledTotal = _licenseIssues.Sum(s => s.DisabledLicensedUsers);
         var (earliest, latest) = await MauDataService.GetLicenseDataRangeAsync();
         _dataRangeEarliest = earliest;
         _dataRangeLatest = latest;

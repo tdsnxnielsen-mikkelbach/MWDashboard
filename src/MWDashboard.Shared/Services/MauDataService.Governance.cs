@@ -409,4 +409,167 @@ public partial class MauDataService
         db.TeamsTeamActivitySnapshots.AddRange(snapshots);
         await db.SaveChangesAsync();
     }
+
+    // Directory audit / change tracking — Microsoft Graph /auditLogs/directoryAudits.
+    // History is accumulated in our DB: new events (newer than the cursor) are ADDED to the
+    // existing per-day aggregate so a day split across collection runs is never under-counted,
+    // and data survives beyond the tenant's short audit-retention window.
+    public async Task<List<DirectoryAuditSnapshot>> GetDirectoryAuditsAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var query = db.DirectoryAuditSnapshots.AsNoTracking().Where(s => s.ReportDate >= cutoff);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveDirectoryAuditsAsync(IEnumerable<DirectoryAuditSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.DirectoryAuditSnapshots.FirstOrDefaultAsync(s =>
+                s.TenantId == snapshot.TenantId &&
+                s.Category == snapshot.Category &&
+                s.Activity == snapshot.Activity &&
+                s.ReportDate == snapshot.ReportDate);
+            if (existing != null)
+            {
+                // Accumulate: the cursor guarantees no event is pulled twice, so adding is correct.
+                existing.TenantName = snapshot.TenantName;
+                existing.EventCount += snapshot.EventCount;
+                existing.FailureCount += snapshot.FailureCount;
+                existing.DistinctActors = Math.Max(existing.DistinctActors, snapshot.DistinctActors);
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.DirectoryAuditSnapshots.Add(snapshot);
+            }
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<DateTime?> GetDirectoryAuditCursorAsync(string tenantId)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        return tenant?.DirectoryAuditCursorUtc;
+    }
+
+    public async Task UpdateDirectoryAuditCursorAsync(string tenantId, DateTime cursorUtc)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        if (tenant == null) return;
+
+        // Never move the cursor backwards.
+        if (tenant.DirectoryAuditCursorUtc == null || cursorUtc > tenant.DirectoryAuditCursorUtc)
+        {
+            tenant.DirectoryAuditCursorUtc = cursorUtc;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    // License assignment errors & seat waste — Microsoft Graph /users (delete-then-insert per day).
+    public async Task<List<LicenseAssignmentIssueSnapshot>> GetLicenseAssignmentIssuesAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.LicenseAssignmentIssueSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .OrderByDescending(s => s.ErrorUsers + s.DisabledLicensedUsers)
+            .ToListAsync();
+    }
+
+    public async Task SaveLicenseAssignmentIssuesAsync(string tenantId, DateTime reportDate, IEnumerable<LicenseAssignmentIssueSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.LicenseAssignmentIssueSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.LicenseAssignmentIssueSnapshots.RemoveRange(existing);
+
+        db.LicenseAssignmentIssueSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
+
+    // OAuth app consent grants — Microsoft Graph /servicePrincipals + /oauth2PermissionGrants (delete-then-insert per day).
+    public async Task<List<OAuthGrantSnapshot>> GetOAuthGrantsAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.OAuthGrantSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .OrderByDescending(s => s.ScopeCount)
+            .ToListAsync();
+    }
+
+    public async Task SaveOAuthGrantsAsync(string tenantId, DateTime reportDate, IEnumerable<OAuthGrantSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.OAuthGrantSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.OAuthGrantSnapshots.RemoveRange(existing);
+
+        db.OAuthGrantSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
+
+    // Mailbox non-owner / delegate access — Office 365 Management Activity API (Audit.Exchange).
+    public async Task<List<MailboxAccessSnapshot>> GetMailboxAccessAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var query = db.MailboxAccessSnapshots.AsNoTracking().Where(s => s.ReportDate >= cutoff);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveMailboxAccessAsync(IEnumerable<MailboxAccessSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.MailboxAccessSnapshots.FirstOrDefaultAsync(s =>
+                s.TenantId == snapshot.TenantId &&
+                s.AccessType == snapshot.AccessType &&
+                s.ReportDate == snapshot.ReportDate);
+            if (existing != null)
+            {
+                existing.TenantName = snapshot.TenantName;
+                existing.EventCount = snapshot.EventCount;
+                existing.DistinctMailboxes = snapshot.DistinctMailboxes;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.MailboxAccessSnapshots.Add(snapshot);
+            }
+        }
+        await db.SaveChangesAsync();
+    }
 }

@@ -313,6 +313,28 @@ public class OnDemandDataCollectionService : IDataCollectionService
             await _dataService.SaveDefenderAlertsAsync(tenantId, DateTime.UtcNow.Date, defenderAlerts);
         }
 
+        // Directory audit / change log (requires AuditLog.Read.All). Uses a per-tenant cursor and
+        // accumulates history in-DB so data survives beyond the tenant's short audit-retention window.
+        var auditCursor = await _dataService.GetDirectoryAuditCursorAsync(tenantId);
+        var (directoryAudits, maxAuditTime) = await _graphService.GetDirectoryAuditsAsync(tenantId, auditCursor);
+        if (directoryAudits.Count > 0)
+        {
+            foreach (var a in directoryAudits) a.TenantName = tenantName;
+            await _dataService.SaveDirectoryAuditsAsync(directoryAudits);
+        }
+        if (maxAuditTime.HasValue)
+            await _dataService.UpdateDirectoryAuditCursorAsync(tenantId, maxAuditTime.Value);
+
+        // License assignment errors & seat waste (requires User.Read.All)
+        var licenseIssues = await _graphService.GetLicenseAssignmentIssuesAsync(tenantId, licenses);
+        foreach (var l in licenseIssues) l.TenantName = tenantName;
+        await _dataService.SaveLicenseAssignmentIssuesAsync(tenantId, DateTime.UtcNow.Date, licenseIssues);
+
+        // OAuth app consent grants (requires Application.Read.All + Directory.Read.All)
+        var oauthGrants = await _graphService.GetOAuthGrantsAsync(tenantId);
+        foreach (var g in oauthGrants) g.TenantName = tenantName;
+        await _dataService.SaveOAuthGrantsAsync(tenantId, DateTime.UtcNow.Date, oauthGrants);
+
         // Compute and save consumption score
         await ComputeConsumptionScoreAsync(tenantId, tenantName, storage, activities, segments, licenses);
 

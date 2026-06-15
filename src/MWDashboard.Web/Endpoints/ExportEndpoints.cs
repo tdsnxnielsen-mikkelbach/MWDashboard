@@ -236,6 +236,30 @@ public static class ExportEndpoints
                 Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), r.Rank, F(r.TeamName), F(r.TeamType),
                     r.ActiveUsers, r.ActiveChannels, r.Guests, r.ChannelMessages, r.ReplyMessages,
                     r.MeetingsOrganized, r.Reactions, DN(r.LastActivityDate)))),
+
+        ["directory-audit"] = new("directory-audit-report.csv",
+            "TenantId,TenantName,ReportDate,Category,Activity,EventCount,FailureCount,DistinctActors",
+            async (data, scope) => (await data.GetDirectoryAuditsAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.Category), F(r.Activity),
+                    r.EventCount, r.FailureCount, r.DistinctActors))),
+
+        ["license-issues"] = new("license-issues-report.csv",
+            "TenantId,TenantName,ReportDate,SkuPartNumber,SkuId,ErrorUsers,DisabledLicensedUsers",
+            async (data, scope) => (await data.GetLicenseAssignmentIssuesAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.SkuPartNumber), F(r.SkuId),
+                    r.ErrorUsers, r.DisabledLicensedUsers))),
+
+        ["oauth-grants"] = new("oauth-grants-report.csv",
+            "TenantId,TenantName,ReportDate,AppDisplayName,AppId,GrantType,ScopeCount,HighRiskScopes,IsAdminConsented",
+            async (data, scope) => (await data.GetOAuthGrantsAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.AppDisplayName), F(r.AppId),
+                    F(r.GrantType), r.ScopeCount, F(r.HighRiskScopes), r.IsAdminConsented))),
+
+        ["mailbox-access"] = new("mailbox-access-report.csv",
+            "TenantId,TenantName,ReportDate,AccessType,EventCount,DistinctMailboxes",
+            async (data, scope) => (await data.GetMailboxAccessAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.AccessType),
+                    r.EventCount, r.DistinctMailboxes))),
     };
 
     public static void MapExportEndpoints(this WebApplication app)

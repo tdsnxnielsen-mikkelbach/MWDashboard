@@ -70,6 +70,8 @@ public class MailRuleAuditCollectionService : IMailRuleAuditCollectionService
 
         // Aggregation keyed by (RuleType, day). Track distinct mailboxes + event counts.
         var aggregates = new Dictionary<(string RuleType, DateTime Day), Aggregate>();
+        // Mailbox non-owner / delegate access aggregation keyed by (AccessType, day).
+        var accessAggregates = new Dictionary<(string AccessType, DateTime Day), Aggregate>();
         var maxContentCreated = cursor ?? DateTime.MinValue;
 
         for (var windowStart = start; windowStart < now; windowStart += MaxQueryWindow)
@@ -87,7 +89,10 @@ public class MailRuleAuditCollectionService : IMailRuleAuditCollectionService
 
                 var records = await _activity.GetBlobRecordsAsync(tenantId, blob.ContentUri, ct);
                 foreach (var record in records)
+                {
                     AccumulateRecord(record, aggregates);
+                    AccumulateMailboxAccess(record, accessAggregates);
+                }
             }
         }
 
@@ -112,9 +117,87 @@ public class MailRuleAuditCollectionService : IMailRuleAuditCollectionService
             _logger.LogInformation("Saved {Count} mail-rule snapshots for tenant {TenantName}", snapshots.Count, tenantName);
         }
 
+        if (accessAggregates.Count > 0)
+        {
+            var accessSnapshots = accessAggregates.Select(kvp => new MailboxAccessSnapshot
+            {
+                TenantId = tenantId,
+                TenantName = tenantName,
+                ReportDate = kvp.Key.Day,
+                AccessType = kvp.Key.AccessType,
+                EventCount = kvp.Value.EventCount,
+                DistinctMailboxes = kvp.Value.Mailboxes.Count,
+                CollectedAt = DateTime.UtcNow,
+            }).ToList();
+
+            await _data.SaveMailboxAccessAsync(accessSnapshots);
+            _logger.LogInformation("Saved {Count} mailbox-access snapshots for tenant {TenantName}", accessSnapshots.Count, tenantName);
+        }
+
         // Advance the cursor only to the newest content actually ingested (never to "now" on an empty run).
         if (maxContentCreated > (cursor ?? DateTime.MinValue))
             await _data.UpdateExchangeAuditCursorAsync(tenantId, maxContentCreated);
+    }
+
+    /// <summary>
+    /// Detects mailbox non-owner access (a mailbox opened by someone other than its owner) and
+    /// delegate-permission grants — both insider-risk / BEC indicators — and aggregates them by
+    /// (access type, day) tracking distinct affected mailboxes.
+    /// </summary>
+    private static void AccumulateMailboxAccess(JsonElement record, Dictionary<(string, DateTime), Aggregate> aggregates)
+    {
+        var accessType = ClassifyMailboxAccess(record);
+        if (accessType == null)
+            return;
+
+        if (!TryGetDateTime(record, "CreationTime", out var creationTime))
+            return;
+
+        var key = (accessType, creationTime.Date);
+        if (!aggregates.TryGetValue(key, out var agg))
+        {
+            agg = new Aggregate();
+            aggregates[key] = agg;
+        }
+        agg.EventCount++;
+
+        var mailbox = GetString(record, "MailboxOwnerUPN");
+        if (string.IsNullOrEmpty(mailbox))
+            mailbox = GetString(record, "UserId");
+        if (!string.IsNullOrEmpty(mailbox))
+            agg.Mailboxes.Add(mailbox);
+    }
+
+    /// <summary>
+    /// Classifies an Exchange mailbox-audit record into a mailbox-access bucket:
+    /// <c>NonOwnerAccess</c> (MailItemsAccessed / non-owner logon) or <c>DelegateGrant</c>
+    /// (Add-MailboxPermission), or <c>null</c> when not relevant.
+    /// </summary>
+    private static string? ClassifyMailboxAccess(JsonElement record)
+    {
+        var op = GetString(record, "Operation");
+        if (string.IsNullOrEmpty(op))
+            return null;
+
+        // Delegate permission granted on a mailbox (FullAccess / SendAs etc.).
+        if (op.Equals("Add-MailboxPermission", StringComparison.OrdinalIgnoreCase))
+            return "DelegateGrant";
+
+        // Non-owner access: the logon type / access is by a delegate, admin or external account.
+        var logonType = GetString(record, "LogonType");
+        var isNonOwnerOp = op.Equals("MailItemsAccessed", StringComparison.OrdinalIgnoreCase) ||
+                           op.Equals("MessageBind", StringComparison.OrdinalIgnoreCase) ||
+                           op.Equals("FolderBind", StringComparison.OrdinalIgnoreCase);
+        if (isNonOwnerOp)
+        {
+            // LogonType: 0 = Owner, 1 = Admin, 2 = Delegate. Only flag non-owner access.
+            if (logonType.Equals("Admin", StringComparison.OrdinalIgnoreCase) ||
+                logonType.Equals("Delegate", StringComparison.OrdinalIgnoreCase) ||
+                logonType == "1" || logonType == "2")
+                return "NonOwnerAccess";
+        }
+
+        return null;
     }
 
     private static void AccumulateRecord(JsonElement record, Dictionary<(string, DateTime), Aggregate> aggregates)

@@ -607,6 +607,73 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("teams-team-activity", new[] { tenantId }), BuildKey("teams-team-activity", null));
     }
 
+    // --- Directory audit / change tracking (60 min — daily-changing) ---
+    public Task<List<DirectoryAuditSnapshot>> GetDirectoryAuditsAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        var key = BuildKey("directory-audit", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetDirectoryAuditsAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveDirectoryAuditsAsync(IEnumerable<DirectoryAuditSnapshot> snapshots)
+    {
+        await _inner.SaveDirectoryAuditsAsync(snapshots);
+        foreach (var tid in snapshots.Select(s => s.TenantId).Distinct())
+            await InvalidateAsync(BuildKey("directory-audit", new[] { tid }));
+        await InvalidateAsync(BuildKey("directory-audit", null));
+    }
+
+    // The directory-audit cursor is collection state, never cached.
+    public Task<DateTime?> GetDirectoryAuditCursorAsync(string tenantId)
+        => _inner.GetDirectoryAuditCursorAsync(tenantId);
+
+    public Task UpdateDirectoryAuditCursorAsync(string tenantId, DateTime cursorUtc)
+        => _inner.UpdateDirectoryAuditCursorAsync(tenantId, cursorUtc);
+
+    // --- License assignment errors & seat waste (60 min — daily-changing) ---
+    public Task<List<LicenseAssignmentIssueSnapshot>> GetLicenseAssignmentIssuesAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("license-issues", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetLicenseAssignmentIssuesAsync(tenantIds), options);
+    }
+
+    public async Task SaveLicenseAssignmentIssuesAsync(string tenantId, DateTime reportDate, IEnumerable<LicenseAssignmentIssueSnapshot> snapshots)
+    {
+        await _inner.SaveLicenseAssignmentIssuesAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("license-issues", new[] { tenantId }), BuildKey("license-issues", null));
+    }
+
+    // --- OAuth app consent grants (60 min — daily-changing) ---
+    public Task<List<OAuthGrantSnapshot>> GetOAuthGrantsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("oauth-grants", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetOAuthGrantsAsync(tenantIds), options);
+    }
+
+    public async Task SaveOAuthGrantsAsync(string tenantId, DateTime reportDate, IEnumerable<OAuthGrantSnapshot> snapshots)
+    {
+        await _inner.SaveOAuthGrantsAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("oauth-grants", new[] { tenantId }), BuildKey("oauth-grants", null));
+    }
+
+    // --- Mailbox non-owner / delegate access (60 min — daily-changing) ---
+    public Task<List<MailboxAccessSnapshot>> GetMailboxAccessAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        var key = BuildKey("mailbox-access", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetMailboxAccessAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveMailboxAccessAsync(IEnumerable<MailboxAccessSnapshot> snapshots)
+    {
+        await _inner.SaveMailboxAccessAsync(snapshots);
+        foreach (var tid in snapshots.Select(s => s.TenantId).Distinct())
+            await InvalidateAsync(BuildKey("mailbox-access", new[] { tid }));
+        await InvalidateAsync(BuildKey("mailbox-access", null));
+    }
+
     // --- Pass-through for write operations; cached reads below ---
 
     // --- MAU History (15 min — dashboard-level, queried frequently) ---

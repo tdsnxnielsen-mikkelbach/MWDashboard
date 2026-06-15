@@ -167,6 +167,24 @@ public interface IMauDataService
     // Teams team & channel activity (per-team detail)
     Task<List<TeamsTeamActivitySnapshot>> GetTeamsTeamActivityAsync(IEnumerable<string>? tenantIds);
     Task SaveTeamsTeamActivityAsync(string tenantId, DateTime reportDate, IEnumerable<TeamsTeamActivitySnapshot> snapshots);
+
+    // Directory audit / change tracking — Microsoft Graph /auditLogs/directoryAudits (history accumulated in-DB)
+    Task<List<DirectoryAuditSnapshot>> GetDirectoryAuditsAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveDirectoryAuditsAsync(IEnumerable<DirectoryAuditSnapshot> snapshots);
+    Task<DateTime?> GetDirectoryAuditCursorAsync(string tenantId);
+    Task UpdateDirectoryAuditCursorAsync(string tenantId, DateTime cursorUtc);
+
+    // License assignment errors & seat waste — Microsoft Graph /users
+    Task<List<LicenseAssignmentIssueSnapshot>> GetLicenseAssignmentIssuesAsync(IEnumerable<string>? tenantIds);
+    Task SaveLicenseAssignmentIssuesAsync(string tenantId, DateTime reportDate, IEnumerable<LicenseAssignmentIssueSnapshot> snapshots);
+
+    // OAuth app consent grants — Microsoft Graph /servicePrincipals + /oauth2PermissionGrants
+    Task<List<OAuthGrantSnapshot>> GetOAuthGrantsAsync(IEnumerable<string>? tenantIds);
+    Task SaveOAuthGrantsAsync(string tenantId, DateTime reportDate, IEnumerable<OAuthGrantSnapshot> snapshots);
+
+    // Mailbox non-owner / delegate access — Office 365 Management Activity API (Audit.Exchange)
+    Task<List<MailboxAccessSnapshot>> GetMailboxAccessAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveMailboxAccessAsync(IEnumerable<MailboxAccessSnapshot> snapshots);
 }
 
 /// <summary>

@@ -40,6 +40,9 @@ public interface IGraphReportService
     Task<List<DefenderAlertSnapshot>> GetDefenderAlertsAsync(string tenantId);
     Task<List<SubscriptionSnapshot>> GetDirectorySubscriptionsAsync(string tenantId);
     Task<List<TeamsTeamActivitySnapshot>> GetTeamsTeamActivityAsync(string tenantId);
+    Task<(List<DirectoryAuditSnapshot> Snapshots, DateTime? MaxActivityDateTime)> GetDirectoryAuditsAsync(string tenantId, DateTime? sinceUtc);
+    Task<List<LicenseAssignmentIssueSnapshot>> GetLicenseAssignmentIssuesAsync(string tenantId, IEnumerable<LicenseSnapshot> licenses);
+    Task<List<OAuthGrantSnapshot>> GetOAuthGrantsAsync(string tenantId);
     Task<List<string>> CheckMissingPermissionsAsync(string tenantId);
 
     /// <summary>

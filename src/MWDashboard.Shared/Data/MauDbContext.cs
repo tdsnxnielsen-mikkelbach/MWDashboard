@@ -48,6 +48,10 @@ public class MauDbContext : DbContext
     public DbSet<DlpEventSnapshot> DlpEventSnapshots => Set<DlpEventSnapshot>();
     public DbSet<SubscriptionSnapshot> SubscriptionSnapshots => Set<SubscriptionSnapshot>();
     public DbSet<TeamsTeamActivitySnapshot> TeamsTeamActivitySnapshots => Set<TeamsTeamActivitySnapshot>();
+    public DbSet<DirectoryAuditSnapshot> DirectoryAuditSnapshots => Set<DirectoryAuditSnapshot>();
+    public DbSet<LicenseAssignmentIssueSnapshot> LicenseAssignmentIssueSnapshots => Set<LicenseAssignmentIssueSnapshot>();
+    public DbSet<OAuthGrantSnapshot> OAuthGrantSnapshots => Set<OAuthGrantSnapshot>();
+    public DbSet<MailboxAccessSnapshot> MailboxAccessSnapshots => Set<MailboxAccessSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -404,6 +408,43 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TeamId).HasMaxLength(100);
             entity.Property(e => e.TeamName).HasMaxLength(250);
             entity.Property(e => e.TeamType).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<DirectoryAuditSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.Category, e.Activity, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.Category).HasMaxLength(100);
+            entity.Property(e => e.Activity).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<LicenseAssignmentIssueSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.SkuPartNumber, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.SkuPartNumber).HasMaxLength(100);
+            entity.Property(e => e.SkuId).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<OAuthGrantSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.AppId, e.GrantType, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.AppDisplayName).HasMaxLength(250);
+            entity.Property(e => e.AppId).HasMaxLength(100);
+            entity.Property(e => e.GrantType).HasMaxLength(20);
+            entity.Property(e => e.HighRiskScopes).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<MailboxAccessSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.AccessType, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.AccessType).HasMaxLength(30);
         });
     }
 }
