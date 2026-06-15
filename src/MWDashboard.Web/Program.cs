@@ -144,6 +144,8 @@ else
 builder.Services.AddHttpClient<IManagementActivityClient, ManagementActivityClient>();
 builder.Services.AddScoped<ICopilotAuditCollectionService, CopilotAuditCollectionService>();
 builder.Services.AddScoped<IExternalSharingCollectionService, ExternalSharingCollectionService>();
+builder.Services.AddScoped<IMailRuleAuditCollectionService, MailRuleAuditCollectionService>();
+builder.Services.AddScoped<IDlpAuditCollectionService, DlpAuditCollectionService>();
 
 var copilotAuditBaseUrl = builder.Configuration["CopilotAuditBaseUrl"];
 if (!string.IsNullOrEmpty(copilotAuditBaseUrl))

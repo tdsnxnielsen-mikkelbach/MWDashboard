@@ -159,6 +159,75 @@ public partial class GraphReportService
         }
     }
 
+    // Teams team & channel activity — per-team detail (top-N by active users).
+    public async Task<List<TeamsTeamActivitySnapshot>> GetTeamsTeamActivityAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var reportDate = DateTime.UtcNow.Date;
+        try
+        {
+            var report = await client.Reports.GetTeamsTeamActivityDetailWithPeriod("D30").GetAsync();
+            if (report == null) return [];
+
+            using var reader = new StreamReader(report);
+            var csv = await reader.ReadToEndAsync();
+            var rows = ParseCsv(csv);
+            if (rows.Count < 2) return [];
+
+            var h = rows[0];
+            int iTeamId = Array.IndexOf(h, "Team Id");
+            int iTeamName = Array.IndexOf(h, "Team Name");
+            int iTeamType = Array.IndexOf(h, "Team Type");
+            int iLast = Array.IndexOf(h, "Last Activity Date");
+            int iActiveUsers = Array.IndexOf(h, "Active Users");
+            int iActiveChannels = Array.IndexOf(h, "Active Channels");
+            int iGuests = Array.IndexOf(h, "Guests");
+            int iChannelMsgs = Array.IndexOf(h, "Channel Messages");
+            int iReplyMsgs = Array.IndexOf(h, "Reply Messages");
+            int iMeetings = Array.IndexOf(h, "Meetings Organized");
+            int iReactions = Array.IndexOf(h, "Reactions");
+
+            int Num(string[] v, int idx) { int.TryParse(GetValue(v, idx), out var c); return c; }
+
+            var teams = new List<TeamsTeamActivitySnapshot>();
+            for (int r = 1; r < rows.Count; r++)
+            {
+                var v = rows[r];
+                var hasActivity = DateTime.TryParse(GetValue(v, iLast), out var last);
+                teams.Add(new TeamsTeamActivitySnapshot
+                {
+                    TenantId = tenantId,
+                    ReportDate = reportDate,
+                    TeamId = GetValue(v, iTeamId) ?? string.Empty,
+                    TeamName = GetValue(v, iTeamName) ?? "(unknown)",
+                    TeamType = GetValue(v, iTeamType) ?? string.Empty,
+                    ActiveUsers = Num(v, iActiveUsers),
+                    ActiveChannels = Num(v, iActiveChannels),
+                    Guests = Num(v, iGuests),
+                    ChannelMessages = Num(v, iChannelMsgs),
+                    ReplyMessages = Num(v, iReplyMsgs),
+                    MeetingsOrganized = Num(v, iMeetings),
+                    Reactions = Num(v, iReactions),
+                    LastActivityDate = hasActivity ? last : null,
+                    CollectedAt = DateTime.UtcNow
+                });
+            }
+
+            var top = teams
+                .OrderByDescending(t => t.ActiveUsers)
+                .ThenByDescending(t => t.ChannelMessages + t.ReplyMessages)
+                .Take(TopN)
+                .ToList();
+            for (int rank = 0; rank < top.Count; rank++) top[rank].Rank = rank + 1;
+            return top;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get Teams team activity for tenant {TenantId}", tenantId);
+            return [];
+        }
+    }
+
     // SharePoint sites + OneDrive accounts — per-workload aggregate plus top-N by storage.
     public async Task<(List<SiteUsageSnapshot> Aggregates, List<SiteUsageDetailSnapshot> Details)> GetSiteUsageAsync(string tenantId)
     {

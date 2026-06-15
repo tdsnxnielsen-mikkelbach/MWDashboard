@@ -147,6 +147,26 @@ public interface IMauDataService
     // Defender / M365 security alerts
     Task<List<DefenderAlertSnapshot>> GetDefenderAlertsAsync(IEnumerable<string>? tenantIds);
     Task SaveDefenderAlertsAsync(string tenantId, DateTime reportDate, IEnumerable<DefenderAlertSnapshot> snapshots);
+
+    // Suspicious mailbox-rule / auto-forwarding audit — Office 365 Management Activity API (Audit.Exchange)
+    Task<List<MailRuleEventSnapshot>> GetMailRuleEventsAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveMailRuleEventsAsync(IEnumerable<MailRuleEventSnapshot> snapshots);
+    Task<DateTime?> GetExchangeAuditCursorAsync(string tenantId);
+    Task UpdateExchangeAuditCursorAsync(string tenantId, DateTime cursorUtc);
+
+    // DLP policy matches — Office 365 Management Activity API (DLP.All)
+    Task<List<DlpEventSnapshot>> GetDlpEventsAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveDlpEventsAsync(IEnumerable<DlpEventSnapshot> snapshots);
+    Task<DateTime?> GetDlpAuditCursorAsync(string tenantId);
+    Task UpdateDlpAuditCursorAsync(string tenantId, DateTime cursorUtc);
+
+    // Directory subscriptions (license renewal / expiry dates)
+    Task<List<SubscriptionSnapshot>> GetSubscriptionsAsync(IEnumerable<string>? tenantIds);
+    Task SaveSubscriptionsAsync(string tenantId, DateTime reportDate, IEnumerable<SubscriptionSnapshot> snapshots);
+
+    // Teams team & channel activity (per-team detail)
+    Task<List<TeamsTeamActivitySnapshot>> GetTeamsTeamActivityAsync(IEnumerable<string>? tenantIds);
+    Task SaveTeamsTeamActivityAsync(string tenantId, DateTime reportDate, IEnumerable<TeamsTeamActivitySnapshot> snapshots);
 }
 
 /// <summary>

@@ -51,6 +51,8 @@ public class CopilotAuditScheduleService : BackgroundService
             var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<MauDbContext>>();
             var collector = scope.ServiceProvider.GetRequiredService<ICopilotAuditCollectionService>();
             var sharingCollector = scope.ServiceProvider.GetRequiredService<IExternalSharingCollectionService>();
+            var mailRuleCollector = scope.ServiceProvider.GetRequiredService<IMailRuleAuditCollectionService>();
+            var dlpCollector = scope.ServiceProvider.GetRequiredService<IDlpAuditCollectionService>();
 
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var tenants = await db.Tenants.AsNoTracking().Where(t => t.IsActive).ToListAsync(ct);
@@ -90,6 +92,46 @@ public class CopilotAuditScheduleService : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Scheduled external sharing audit collection failed for tenant {TenantName} ({TenantId})",
+                        tenant.TenantName, tenant.TenantId);
+                }
+
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    await mailRuleCollector.CollectForTenantAsync(tenant.TenantId, tenant.TenantName, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (CopilotAuditConfigurationException ex)
+                {
+                    _logger.LogWarning("Mail-rule audit not yet available for tenant {TenantName} ({TenantId}): {Message}",
+                        tenant.TenantName, tenant.TenantId, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Scheduled mail-rule audit collection failed for tenant {TenantName} ({TenantId})",
+                        tenant.TenantName, tenant.TenantId);
+                }
+
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    await dlpCollector.CollectForTenantAsync(tenant.TenantId, tenant.TenantName, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (CopilotAuditConfigurationException ex)
+                {
+                    _logger.LogWarning("DLP audit not yet available for tenant {TenantName} ({TenantId}): {Message}",
+                        tenant.TenantName, tenant.TenantId, ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Scheduled DLP audit collection failed for tenant {TenantName} ({TenantId})",
                         tenant.TenantName, tenant.TenantId);
                 }
             }

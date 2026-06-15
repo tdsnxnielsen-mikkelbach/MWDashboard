@@ -35,6 +35,14 @@ public class OnDemandDataCollectionService : IDataCollectionService
         if (licenses.Count > 0)
             await _dataService.SaveLicensesAsync(licenses);
 
+        // Commercial subscriptions (license renewal / expiry dates)
+        var subscriptions = await _graphService.GetDirectorySubscriptionsAsync(tenantId);
+        if (subscriptions.Count > 0)
+        {
+            foreach (var s in subscriptions) s.TenantName = tenantName;
+            await _dataService.SaveSubscriptionsAsync(tenantId, DateTime.UtcNow.Date, subscriptions);
+        }
+
         // Determine the tenant's Entra ID tier from its SKUs. Sign-in-based features
         // (signInActivity, sign-in logs) require P1/P2, so skip them on the free tier
         // instead of issuing a call that always returns 403.
@@ -242,6 +250,14 @@ public class OnDemandDataCollectionService : IDataCollectionService
         {
             teamsDevices.TenantName = tenantName;
             await _dataService.SaveTeamsDeviceUsageAsync(teamsDevices);
+        }
+
+        // Teams team & channel activity (per-team top-N detail)
+        var teamsActivity = await _graphService.GetTeamsTeamActivityAsync(tenantId);
+        if (teamsActivity.Count > 0)
+        {
+            foreach (var t in teamsActivity) t.TenantName = tenantName;
+            await _dataService.SaveTeamsTeamActivityAsync(tenantId, DateTime.UtcNow.Date, teamsActivity);
         }
 
         // SharePoint / OneDrive site usage (aggregate + top-N detail)

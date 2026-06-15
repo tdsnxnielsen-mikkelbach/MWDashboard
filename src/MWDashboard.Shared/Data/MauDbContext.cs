@@ -44,6 +44,10 @@ public class MauDbContext : DbContext
     public DbSet<ExternalSharingSnapshot> ExternalSharingSnapshots => Set<ExternalSharingSnapshot>();
     public DbSet<PrivilegedRoleSnapshot> PrivilegedRoleSnapshots => Set<PrivilegedRoleSnapshot>();
     public DbSet<DefenderAlertSnapshot> DefenderAlertSnapshots => Set<DefenderAlertSnapshot>();
+    public DbSet<MailRuleEventSnapshot> MailRuleEventSnapshots => Set<MailRuleEventSnapshot>();
+    public DbSet<DlpEventSnapshot> DlpEventSnapshots => Set<DlpEventSnapshot>();
+    public DbSet<SubscriptionSnapshot> SubscriptionSnapshots => Set<SubscriptionSnapshot>();
+    public DbSet<TeamsTeamActivitySnapshot> TeamsTeamActivitySnapshots => Set<TeamsTeamActivitySnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -363,6 +367,43 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.Severity).HasMaxLength(30);
             entity.Property(e => e.Status).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<MailRuleEventSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.RuleType, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.RuleType).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<DlpEventSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.PolicyName, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.PolicyName).HasMaxLength(250);
+            entity.Property(e => e.Severity).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<SubscriptionSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.SkuId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.SkuId).HasMaxLength(100);
+            entity.Property(e => e.SkuPartNumber).HasMaxLength(100);
+            entity.Property(e => e.Status).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<TeamsTeamActivitySnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.TeamId, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.TeamId).HasMaxLength(100);
+            entity.Property(e => e.TeamName).HasMaxLength(250);
+            entity.Property(e => e.TeamType).HasMaxLength(30);
         });
     }
 }

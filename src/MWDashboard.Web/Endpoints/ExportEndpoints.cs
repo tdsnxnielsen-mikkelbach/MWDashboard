@@ -213,6 +213,29 @@ public static class ExportEndpoints
             "TenantId,TenantName,ReportDate,Severity,Status,AlertCount",
             async (data, scope) => (await data.GetDefenderAlertsAsync(scope)).Select(r =>
                 Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.Severity), F(r.Status), r.AlertCount))),
+
+        ["mail-rules"] = new("suspicious-mail-rules-report.csv",
+            "TenantId,TenantName,ReportDate,RuleType,EventCount,DistinctMailboxes",
+            async (data, scope) => (await data.GetMailRuleEventsAsync(scope, days: 30)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.RuleType), r.EventCount, r.DistinctMailboxes))),
+
+        ["dlp-events"] = new("dlp-policy-matches-report.csv",
+            "TenantId,TenantName,ReportDate,PolicyName,Severity,MatchCount",
+            async (data, scope) => (await data.GetDlpEventsAsync(scope, days: 30)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.PolicyName), F(r.Severity), r.MatchCount))),
+
+        ["subscriptions"] = new("subscription-renewals-report.csv",
+            "TenantId,TenantName,ReportDate,SkuPartNumber,SkuId,Status,IsTrial,TotalLicenses,NextLifecycleDate",
+            async (data, scope) => (await data.GetSubscriptionsAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.SkuPartNumber), F(r.SkuId),
+                    F(r.Status), r.IsTrial, r.TotalLicenses, DN(r.NextLifecycleDateTime)))),
+
+        ["teams-activity"] = new("teams-team-activity-report.csv",
+            "TenantId,TenantName,ReportDate,Rank,TeamName,TeamType,ActiveUsers,ActiveChannels,Guests,ChannelMessages,ReplyMessages,MeetingsOrganized,Reactions,LastActivityDate",
+            async (data, scope) => (await data.GetTeamsTeamActivityAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), r.Rank, F(r.TeamName), F(r.TeamType),
+                    r.ActiveUsers, r.ActiveChannels, r.Guests, r.ChannelMessages, r.ReplyMessages,
+                    r.MeetingsOrganized, r.Reactions, DN(r.LastActivityDate)))),
     };
 
     public static void MapExportEndpoints(this WebApplication app)

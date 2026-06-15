@@ -10,7 +10,9 @@
 
 <div class="d-flex justify-space-between align-center mb-4">
     <MudText Typo="Typo.h4">Feature-Level Usage</MudText>
-    <ExportButton Feature="activity" />
+    <ExportMenu Items="@(new[] {
+        ("Feature Activity", "activity"),
+        ("Teams Team Activity", "teams-activity") })" />
 </div>
 
 @if (_loading)
@@ -84,11 +86,57 @@ else
         </MudTable>
     </MudPaper>
 }
+
+@* Teams Team & Channel Activity (top teams) *@
+<MudPaper Class="pa-4 mt-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.Groups" Class="mr-2" />
+        Top Teams by Activity (last 30 days)
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Per-team activity detail from <code>getTeamsTeamActivityDetail</code> (<PermissionTag Scope="Reports.Read.All" />). Shows the most active teams (top @TopTeamsLimit by active users) including channel and reply message volume.
+    </MudText>
+    @if (_teamsActivity.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">No Teams team activity data available for the selected tenant(s). Collect data from the Tenants page first.</MudAlert>
+    }
+    else
+    {
+        <MudTable Items="_teamsActivity" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                <MudTh>Team</MudTh>
+                <MudTh>Type</MudTh>
+                <MudTh Style="text-align:right">Active Users</MudTh>
+                <MudTh Style="text-align:right">Active Channels</MudTh>
+                <MudTh Style="text-align:right">Guests</MudTh>
+                <MudTh Style="text-align:right">Channel Msgs</MudTh>
+                <MudTh Style="text-align:right">Reply Msgs</MudTh>
+                <MudTh Style="text-align:right">Meetings</MudTh>
+                <MudTh>Last Activity</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                <MudTd DataLabel="Team">@context.TeamName</MudTd>
+                <MudTd DataLabel="Type"><MudChip T="string" Size="Size.Small" Color="Color.Default">@(string.IsNullOrEmpty(context.TeamType) ? "—" : context.TeamType)</MudChip></MudTd>
+                <MudTd DataLabel="Active Users" Style="text-align:right">@context.ActiveUsers.ToString("N0")</MudTd>
+                <MudTd DataLabel="Active Channels" Style="text-align:right">@context.ActiveChannels.ToString("N0")</MudTd>
+                <MudTd DataLabel="Guests" Style="text-align:right">@context.Guests.ToString("N0")</MudTd>
+                <MudTd DataLabel="Channel Msgs" Style="text-align:right">@context.ChannelMessages.ToString("N0")</MudTd>
+                <MudTd DataLabel="Reply Msgs" Style="text-align:right">@context.ReplyMessages.ToString("N0")</MudTd>
+                <MudTd DataLabel="Meetings" Style="text-align:right">@context.MeetingsOrganized.ToString("N0")</MudTd>
+                <MudTd DataLabel="Last Activity">@(context.LastActivityDate?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
 }
 
 @code {
     private List<WorkloadActivitySnapshot> _activities = [];
     private List<ActivitySummary> _summaryData = [];
+    private List<TeamsTeamActivitySnapshot> _teamsActivity = [];
+    private const int TopTeamsLimit = 20;
     private bool _loading = true;
     private string _searchString = string.Empty;
     private readonly string[] _workloads = [M365Services.Teams, M365Services.Exchange, M365Services.SharePoint, M365Services.OneDrive];
@@ -119,6 +167,12 @@ else
 
         var tenantIds = TenantFilter.GetFilteredTenantIds();
         _activities = await MauDataService.GetWorkloadActivityAsync(tenantIds, days: 30);
+
+        // Teams team & channel activity (top teams by active users)
+        _teamsActivity = (await MauDataService.GetTeamsTeamActivityAsync(tenantIds))
+            .OrderByDescending(t => t.ActiveUsers)
+            .ThenByDescending(t => t.ChannelMessages + t.ReplyMessages)
+            .ToList();
 
         // Build summary table
         _summaryData = _activities

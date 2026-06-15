@@ -40,6 +40,20 @@ public class TenantInfo
     /// processed. Only newer blobs are pulled. Null means no external-sharing collection has run yet.
     /// </summary>
     public DateTime? SharePointAuditCursorUtc { get; set; }
+
+    /// <summary>
+    /// Cursor for the Office 365 Management Activity API <c>Audit.Exchange</c> mailbox-rule
+    /// collection: the <c>contentCreated</c> timestamp (UTC) of the most recent content blob already
+    /// processed. Only newer blobs are pulled. Null means no mail-rule collection has run yet.
+    /// </summary>
+    public DateTime? ExchangeAuditCursorUtc { get; set; }
+
+    /// <summary>
+    /// Cursor for the Office 365 Management Activity API <c>DLP.All</c> collection: the
+    /// <c>contentCreated</c> timestamp (UTC) of the most recent content blob already processed.
+    /// Only newer blobs are pulled. Null means no DLP collection has run yet.
+    /// </summary>
+    public DateTime? DlpAuditCursorUtc { get; set; }
 }
 
 public class LicenseSnapshot
@@ -691,5 +705,91 @@ public class DefenderAlertSnapshot
     /// <summary><c>new</c>, <c>inProgress</c>, or <c>resolved</c>.</summary>
     public string Status { get; set; } = string.Empty;
     public int AlertCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Daily aggregate of suspicious mailbox-rule / auto-forwarding activity, a classic Business Email
+/// Compromise (BEC) indicator. Sourced from the Office 365 Management Activity API
+/// <c>Audit.Exchange</c> feed (requires <c>ActivityFeed.Read</c>).
+/// </summary>
+public class MailRuleEventSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    /// <summary><c>Forwarding</c> (forward to external/SMTP address), <c>Redirect</c> (redirect-to rule), or <c>Delete</c> (auto-delete/move rule).</summary>
+    public string RuleType { get; set; } = string.Empty;
+    public int EventCount { get; set; }
+    public int DistinctMailboxes { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Daily aggregate of Microsoft Purview Data Loss Prevention (DLP) policy matches by policy and
+/// severity, sourced from the Office 365 Management Activity API <c>DLP.All</c> feed (requires
+/// <c>ActivityFeed.Read</c>). Only populated for tenants that actually run DLP policies.
+/// </summary>
+public class DlpEventSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string PolicyName { get; set; } = string.Empty;
+    /// <summary><c>High</c>, <c>Medium</c>, <c>Low</c>, or empty when the event carries no severity.</summary>
+    public string Severity { get; set; } = string.Empty;
+    public int MatchCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// One row per directory subscription per collection, capturing renewal/expiry lifecycle dates so
+/// upcoming subscription renewals can be surfaced. Sourced from Microsoft Graph
+/// <c>/directory/subscriptions</c> (<c>companySubscription</c>; requires <c>Directory.Read.All</c>).
+/// </summary>
+public class SubscriptionSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string SkuId { get; set; } = string.Empty;
+    public string SkuPartNumber { get; set; } = string.Empty;
+    /// <summary>Subscription status, e.g. <c>Enabled</c>, <c>Warning</c>, <c>Suspended</c>, <c>Deleted</c>, <c>LockedOut</c>.</summary>
+    public string Status { get; set; } = string.Empty;
+    /// <summary>True when the subscription is a trial.</summary>
+    public bool IsTrial { get; set; }
+    public int TotalLicenses { get; set; }
+    /// <summary>The next renewal/expiry lifecycle date (UTC). Null when the subscription has no scheduled lifecycle change.</summary>
+    public DateTime? NextLifecycleDateTime { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Per-team activity detail (top-N teams by activity), sourced from Microsoft Graph
+/// <c>getTeamsTeamActivityDetail</c> (requires <c>Reports.Read.All</c>). Team identities are
+/// organizational (not user PII); display names follow the tenant's report privacy setting.
+/// </summary>
+public class TeamsTeamActivitySnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string TeamId { get; set; } = string.Empty;
+    public string TeamName { get; set; } = string.Empty;
+    /// <summary><c>Public</c>, <c>Private</c>, etc.</summary>
+    public string TeamType { get; set; } = string.Empty;
+    public int ActiveUsers { get; set; }
+    public int ActiveChannels { get; set; }
+    public int Guests { get; set; }
+    public int ChannelMessages { get; set; }
+    public int ReplyMessages { get; set; }
+    public int MeetingsOrganized { get; set; }
+    public int Reactions { get; set; }
+    public DateTime? LastActivityDate { get; set; }
+    public int Rank { get; set; }
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }

@@ -77,6 +77,49 @@ public partial class GraphReportService
         return licenses;
     }
 
+    // Commercial subscriptions (license renewal / expiry dates) — GET /directory/subscriptions.
+    public async Task<List<SubscriptionSnapshot>> GetDirectorySubscriptionsAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var subscriptions = new List<SubscriptionSnapshot>();
+        var reportDate = DateTime.UtcNow.Date;
+
+        try
+        {
+            var subs = await client.Directory.Subscriptions.GetAsync();
+            if (subs?.Value != null)
+            {
+                foreach (var sub in subs.Value)
+                {
+                    subscriptions.Add(new SubscriptionSnapshot
+                    {
+                        TenantId = tenantId,
+                        ReportDate = reportDate,
+                        SkuId = sub.SkuId?.ToString() ?? string.Empty,
+                        SkuPartNumber = sub.SkuPartNumber ?? string.Empty,
+                        Status = sub.Status ?? string.Empty,
+                        IsTrial = sub.IsTrial ?? false,
+                        TotalLicenses = sub.TotalLicenses ?? 0,
+                        NextLifecycleDateTime = sub.NextLifecycleDateTime?.UtcDateTime,
+                        CollectedAt = DateTime.UtcNow
+                    });
+                }
+            }
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx)
+        {
+            _logger.LogWarning("Directory subscriptions unavailable for tenant {TenantId}: {Error}. " +
+                "Ensure Directory.Read.All permission is granted and admin consent completed.",
+                tenantId, odataEx.Error?.Message ?? odataEx.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get directory subscriptions for tenant {TenantId}", tenantId);
+        }
+
+        return subscriptions;
+    }
+
     public async Task<List<MessageCenterPost>> GetMessageCenterPostsAsync(string tenantId)
     {
         var client = CreateClientForTenant(tenantId);

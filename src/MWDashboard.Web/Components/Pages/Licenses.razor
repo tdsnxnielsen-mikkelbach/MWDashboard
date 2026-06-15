@@ -10,7 +10,9 @@
 
 <div class="d-flex justify-space-between align-center mb-4">
     <MudText Typo="Typo.h4">Licenses &amp; Adoption</MudText>
-    <ExportButton Feature="licenses" />
+    <ExportMenu Items="@(new[] {
+        ("Licenses", "licenses"),
+        ("Subscription Renewals", "subscriptions") })" />
 </div>
 
 @if (_loading)
@@ -248,6 +250,80 @@ else
         }
     }
 </MudPaper>
+
+@* Subscription Renewals / Expiry *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.EventRepeat" Class="mr-2" />
+        Subscription Renewals &amp; Expiry
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Commercial subscription lifecycle dates from <code>/directory/subscriptions</code> (<PermissionTag Scope="Directory.Read.All" />).
+        The <strong>next lifecycle date</strong> is the upcoming renewal or expiry. Trials and subscriptions expiring within 30 days are highlighted.
+    </MudText>
+    @if (_subscriptions.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No subscription data available for the selected tenant(s). Collect data from the Tenants page first.</MudText>
+    }
+    else
+    {
+        <MudGrid Class="mb-2">
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Active Subscriptions</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_subscriptions.Count(s => string.Equals(s.Status, "Enabled", StringComparison.OrdinalIgnoreCase)).ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Expiring ≤ 30 days</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_subsExpiringSoon > 0 ? Color.Warning : Color.Success)">@_subsExpiringSoon.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Trials</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_subsTrials > 0 ? Color.Info : Color.Default)">@_subsTrials.ToString("N0")</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        <MudTable Items="_subscriptions" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                <MudTh>Subscription</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh Style="text-align:right">Seats</MudTh>
+                <MudTh>Next Lifecycle Date</MudTh>
+                <MudTh Style="text-align:right">Days Remaining</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                <MudTd DataLabel="Subscription">
+                    @context.SkuPartNumber
+                    @if (context.IsTrial) { <MudChip T="string" Size="Size.Small" Color="Color.Info" Class="ml-1">Trial</MudChip> }
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <MudChip T="string" Size="Size.Small" Color="@GetSubStatusColor(context.Status)" Variant="Variant.Filled">@context.Status</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Seats" Style="text-align:right">@context.TotalLicenses.ToString("N0")</MudTd>
+                <MudTd DataLabel="Next Lifecycle Date">@(context.NextLifecycleDateTime?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+                <MudTd DataLabel="Days Remaining" Style="text-align:right">
+                    @{
+                        var days = DaysRemaining(context.NextLifecycleDateTime);
+                    }
+                    @if (days.HasValue)
+                    {
+                        <MudText Typo="Typo.body2" Color="@DaysColor(days.Value)">@days.Value.ToString("N0")</MudText>
+                    }
+                    else
+                    {
+                        <span>—</span>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
 }
 
 @code {
@@ -256,6 +332,8 @@ else
     private List<MessageCenterPost> _messageCenterPosts = [];
     private List<LicenseRecommendation> _recommendations = [];
     private Dictionary<string, List<AdoptionPoint>> _adoptionData = [];
+    private List<SubscriptionSnapshot> _subscriptions = [];
+    private int _subsExpiringSoon, _subsTrials;
     private string _searchString = string.Empty;
     private DateTime? _fromDate = DateTime.UtcNow.AddMonths(-6);
     private DateTime? _toDate = DateTime.UtcNow;
@@ -309,6 +387,17 @@ else
         var tenantIds = TenantFilter.GetFilteredTenantIds();
         _latestLicenses = await MauDataService.GetLatestLicensesAsync(tenantIds);
         _messageCenterPosts = await MauDataService.GetMessageCenterPostsAsync(tenantIds);
+
+        // Subscription renewals / expiry (latest snapshot per tenant)
+        _subscriptions = (await MauDataService.GetSubscriptionsAsync(tenantIds))
+            .OrderBy(s => s.NextLifecycleDateTime ?? DateTime.MaxValue)
+            .ThenBy(s => s.SkuPartNumber)
+            .ToList();
+        var soonCutoff = DateTime.UtcNow.AddDays(30);
+        _subsExpiringSoon = _subscriptions.Count(s => s.NextLifecycleDateTime.HasValue
+            && s.NextLifecycleDateTime.Value <= soonCutoff
+            && s.NextLifecycleDateTime.Value >= DateTime.UtcNow);
+        _subsTrials = _subscriptions.Count(s => s.IsTrial);
         var (earliest, latest) = await MauDataService.GetLicenseDataRangeAsync();
         _dataRangeEarliest = earliest;
         _dataRangeLatest = latest;
@@ -512,6 +601,24 @@ else
             _ => Color.Info
         };
     }
+
+    private static Color GetSubStatusColor(string status) => status?.ToLowerInvariant() switch
+    {
+        "enabled" => Color.Success,
+        "warning" => Color.Warning,
+        "suspended" or "lockedout" or "deleted" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static int? DaysRemaining(DateTime? next)
+        => next.HasValue ? (int)Math.Ceiling((next.Value.Date - DateTime.UtcNow.Date).TotalDays) : null;
+
+    private static Color DaysColor(int days) => days switch
+    {
+        < 0 => Color.Error,
+        <= 30 => Color.Warning,
+        _ => Color.Success
+    };
 
     private bool FilterFunc(LicenseSnapshot license)
     {

@@ -213,35 +213,30 @@ Copilot Chat interactions land in `Audit.General` content blobs as records with:
   - Model: `SecurityAlertSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `Severity`, `Status`, `AlertCount`, `CollectedAt`); composite unique index `(TenantId, Severity, Status, ReportDate)`
   - UI: surface on the **Security** page alongside existing posture metrics
 
-- [ ] **Suspicious inbox / auto-forwarding rules** — mailbox forwarding-rule creation is a classic Business Email Compromise (BEC) indicator. High MSP security value.
+- [x] **Suspicious inbox / auto-forwarding rules** — mailbox forwarding-rule creation is a classic Business Email Compromise (BEC) indicator. High MSP security value. ✅ **Shipped** — `MailRuleEventSnapshot` (`Audit.Exchange` via `MailRuleAuditCollectionService`, new `TenantInfo.ExchangeAuditCursorUtc` cursor) + **Suspicious Mailbox Rules** section on `/security` + `mail-rules` export.
   - Source: **Office 365 Management Activity API**, content type `Audit.Exchange` (`New-InboxRule`, `Set-InboxRule`, `Set-Mailbox ForwardingSmtpAddress`)
   - Permission: `ActivityFeed.Read` (**already granted**)
   - Model: `MailRuleEventSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `RuleType` [Forwarding/Redirect/Delete], `EventCount`, `DistinctMailboxes`, `CollectedAt`)
 
-- [ ] **DLP policy matches** — Purview DLP sensitive-data exposure events (only for tenants running DLP).
+- [x] **DLP policy matches** — Purview DLP sensitive-data exposure events (only for tenants running DLP). ✅ **Shipped** — `DlpEventSnapshot` (`DLP.All` via `DlpAuditCollectionService`, new `TenantInfo.DlpAuditCursorUtc` cursor) + **DLP Policy Matches** section on `/security` (shows a "not configured" notice when a tenant isn't running DLP) + `dlp-events` export.
   - Source: **Office 365 Management Activity API**, content type `DLP.All`
   - Permission: `ActivityFeed.Read` (**already granted**)
   - Model: `DlpEventSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `PolicyName`, `MatchCount`, `Severity`, `CollectedAt`)
 
 ### Tier C — Adoption / quality depth (mostly existing permissions)
 
-- [ ] **License renewal / expiry dates** — track subscription renewal dates (counts already collected); complements the planned Partner Center billing work.
+- [x] **License renewal / expiry dates** — track subscription renewal dates (counts already collected); complements the planned Partner Center billing work. ✅ **Shipped** — `SubscriptionSnapshot` (`GET /directory/subscriptions`) + **Subscription Renewals & Expiry** section on `/licenses` (expiring-≤30-days KPI + per-subscription days-remaining) + `subscriptions` export. Delivered without Partner Center billing work.
   - Endpoint: `GET /directory/subscriptions` (`nextLifecycleDateTime`, `status`)
-  - Permission: existing license/org scopes — verify (`Organization.Read.All` / `Directory.Read.All`)
-  - Model: extend `LicenseSnapshot` or new `SubscriptionSnapshot` (`TenantId`, `SkuId`, `Status`, `NextLifecycleDateTime`, `TotalSeats`, `CollectedAt`)
+  - Permission: `Directory.Read.All` (**already granted**)
+  - Model: `SubscriptionSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `SkuId`, `SkuPartNumber`, `Status`, `IsTrial`, `TotalLicenses`, `NextLifecycleDateTime`, `CollectedAt`); composite unique index `(TenantId, SkuId, ReportDate)`
 
-- [ ] **Teams team & channel activity** — per-team activity detail (per-user/device already collected).
+- [x] **Teams team & channel activity** — per-team activity detail (per-user/device already collected). ✅ **Shipped** — `TeamsTeamActivitySnapshot` (`getTeamsTeamActivityDetail`, top-20 teams by active users) + **Top Teams by Activity** section on `/activity` + `teams-activity` export.
   - Endpoint: `getTeamsTeamActivityDetail`
   - Permission: `Reports.Read.All` (**already granted**)
   - UI: tab/drill-down on the **Activity** page
-
-- [ ] **Teams call quality (CQD-style)** — poor-call detection and meeting-experience metrics.
-  - Endpoint: `GET /communications/callRecords` (+ `/sessions`)
-  - Permission: `CallRecords.Read.All` (new — requires re-consent)
-  - Model: `CallQualitySnapshot` (`TenantId`, `TenantName`, `ReportDate`, `TotalCalls`, `PoorCalls`, `GoodCallPercent`, `CollectedAt`)
 
 ### Suggested implementation order
 1. ✅ **App secret/cert expiry** (Tier A) — cheapest, prevents real outages, instant MSP value. **Done.**
 2. ✅ **External sharing audit** (Tier A) — reuses the Management Activity collector, top security story, no new consent. **Done.**
 3. ✅ **Privileged role inventory** (Tier B) + **Defender alerts** (Tier B) — complete the security posture. **Done.**
-4. Remaining Tier B/C items (suspicious inbox/forwarding rules, DLP matches, license renewal dates, Teams team activity, call quality) as customer demand dictates.
+4. ✅ **Suspicious inbox/forwarding rules** + **DLP matches** (Tier B, Management Activity API) + **License renewal dates** + **Teams team activity** (Tier C, existing permissions). **Done.**

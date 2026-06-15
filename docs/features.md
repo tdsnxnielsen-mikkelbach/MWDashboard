@@ -52,6 +52,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
   - **Collapsible month groups** (yyyy-MM) via expansion panels — individually expand/collapse for easy scanning of large post volumes
   - Tenant column visible in multi-tenant view
   - Inline severity color coding and "no matches" feedback
+- **Subscription Renewals & Expiry** — KPI cards for active subscriptions, those expiring within 30 days, and trials, plus a per-subscription table showing SKU, status, seat count, next lifecycle (renewal/expiry) date and days remaining (color-coded by urgency). Surfaces upcoming commercial renewals without any Partner Center / billing integration. Data source: Microsoft Graph `GET /directory/subscriptions` (`nextLifecycleDateTime` / `status` / `isTrial`); requires `Directory.Read.All`. `SubscriptionSnapshot`, refreshed each collection run
 
 ## Feature-Level Activity (`/activity`)
 
@@ -60,6 +61,7 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Activity summary table** — searchable, sortable by total count and daily average across all workloads
 - Multi-tenant support — Tenant column visible when multiple tenants are selected; charts show tenant-level breakdown
 - Data source: Graph Reports API (`getTeamsUserActivityCounts`, `getSharePointActivityUserCounts`, `getOneDriveActivityUserCounts`, `getEmailActivityCounts`)
+- **Top Teams by Activity** — a top-20 table of the most active teams (by active users, then message volume) showing team name, type, active users, active channels, guests, channel messages, reply messages, meetings organized and last activity date (Tenant column in multi-tenant view). Helps spot the busiest collaboration spaces and ownerless/abandoned teams. Data source: Graph Reports API `getTeamsTeamActivityDetail` (`Reports.Read.All`). `TeamsTeamActivitySnapshot`, top-20 rows per tenant per day
 
 ## M365 App Usage (`/m365apps`)
 
@@ -138,6 +140,8 @@ All charts include axis labels (Y-axis: metric name, X-axis: time/category) and 
 - **Inactive / Stale Licensed Accounts** — KPI cards for enabled, licensed member accounts: total licensed, inactive 30+ days, inactive 90+ days, never signed in (each with % of licensed). Surfaces license-reclamation opportunities. **Requires Microsoft Entra ID P1/P2** — the underlying `signInActivity` property is premium-gated and returns 403 on the free tier even when `AuditLog.Read.All` + `User.Read.All` are consented. The dashboard detects the tenant tier from its SKUs and **skips this collection entirely on free-tier tenants** (logged at Information, not as a permission error). Data source: Microsoft Graph `GET /users` with `signInActivity`
 - **Microsoft Defender Alerts** (last 30 days) — KPI cards for total alerts, high/critical, active (new + in-progress), and resolved, plus a severity/status breakdown table (color-coded severity chips; Tenant column in multi-tenant view). Requires a Microsoft Defender / Defender XDR subscription on the tenant. Data source: Microsoft Graph `GET /security/alerts_v2` (aggregated by severity + status); requires `SecurityAlert.Read.All` (**new permission** — must be re-consented). `DefenderAlertSnapshot`, one row per (severity, status) per tenant per day
 - **External Sharing Activity** (last 30 days) — KPI cards for anonymous-link, external/guest, and organization shares, plus a per-day share-type table (event count + distinct users). Sourced from the **Office 365 Management Activity API** `Audit.SharePoint` feed (not Graph) via the same `ActivityFeed.Read` permission already used for unlicensed Copilot Chat — collected by the `MWDashboard.CopilotAudit` container. Requires unified audit logging enabled on the tenant. `ExternalSharingSnapshot`, one row per (share type) per tenant per day
+- **Suspicious Mailbox Rules** (last 30 days) — KPI cards for auto-forwarding, redirect, and auto-delete inbox rules plus a per-day rule-type table (event count + distinct mailboxes) — a key business-email-compromise (BEC) indicator. Shows a green "no suspicious rules detected" confirmation when empty. Sourced from the **Office 365 Management Activity API** `Audit.Exchange` feed (`New-InboxRule` / `Set-InboxRule` / `Set-Mailbox` with forwarding/redirect/delete parameters) via `ActivityFeed.Read` — collected by the `MWDashboard.CopilotAudit` container. `MailRuleEventSnapshot`, one row per (rule type) per tenant per day
+- **DLP Policy Matches** (last 30 days) — KPI cards for total matches, high-severity matches, and distinct policies triggered, plus a per-policy table (severity + match count) surfacing Microsoft Purview DLP sensitive-data exposure events. **Informs the operator when the tenant is not running Purview DLP** (an info alert is shown instead of an empty table). Sourced from the **Office 365 Management Activity API** `DLP.All` feed via `ActivityFeed.Read` — collected by the `MWDashboard.CopilotAudit` container. `DlpEventSnapshot`, one row per (policy) per tenant per day
 - **Clear data availability notes** — explains exactly what's available per license tier and that Free-tier tenants cannot expose sign-in/audit-derived data via Graph
 
 ## Secure Score (`/securescore`)
@@ -192,7 +196,7 @@ Every dashboard dataset can be exported to CSV. Exports are served from minimal-
   - **Secure Score** — Score History, Control Details
   - **Service Health** — Service Status, Incidents & Advisories
   - **Identity & Devices** — Device Compliance, Conditional Access, Guest Users, Risky Users, App Credential Expiry, Privileged Roles
-  - **Security** — Sign-ins & MFA, Defender Alerts, External Sharing
+  - **Security** — Sign-ins & MFA, Defender Alerts, External Sharing, Suspicious Mailbox Rules, DLP Policy Matches
   - **M365 Apps** — App × Platform Detail (anonymized), Office Activations (counts), Office Activations (anonymized users)
   - **Usage & Governance** — Mailbox Usage, Top Mailboxes, Teams Devices, SharePoint & OneDrive, Top Sites/Accounts, Viva Engage, Groups & Teams
 - **Export All Data (ZIP)** — the Dashboard page has an "Export All Data" button (`/api/export-all`) that streams a single ZIP containing every dataset as its own CSV (30 files), named `mwdashboard-export-{date}.zip`

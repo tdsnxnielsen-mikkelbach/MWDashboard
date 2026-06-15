@@ -38,6 +38,8 @@ public interface IGraphReportService
     Task<List<AppCredentialSnapshot>> GetAppCredentialsAsync(string tenantId);
     Task<List<PrivilegedRoleSnapshot>> GetPrivilegedRolesAsync(string tenantId);
     Task<List<DefenderAlertSnapshot>> GetDefenderAlertsAsync(string tenantId);
+    Task<List<SubscriptionSnapshot>> GetDirectorySubscriptionsAsync(string tenantId);
+    Task<List<TeamsTeamActivitySnapshot>> GetTeamsTeamActivityAsync(string tenantId);
     Task<List<string>> CheckMissingPermissionsAsync(string tenantId);
 
     /// <summary>

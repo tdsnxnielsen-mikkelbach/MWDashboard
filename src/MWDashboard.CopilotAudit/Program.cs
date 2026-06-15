@@ -30,6 +30,8 @@ builder.Services.AddScoped<IMauDataService, MauDataService>();
 builder.Services.AddHttpClient<IManagementActivityClient, ManagementActivityClient>();
 builder.Services.AddScoped<ICopilotAuditCollectionService, CopilotAuditCollectionService>();
 builder.Services.AddScoped<IExternalSharingCollectionService, ExternalSharingCollectionService>();
+builder.Services.AddScoped<IMailRuleAuditCollectionService, MailRuleAuditCollectionService>();
+builder.Services.AddScoped<IDlpAuditCollectionService, DlpAuditCollectionService>();
 
 // Internal cron scheduler — advances the per-tenant cursor on a fixed interval.
 builder.Services.AddHostedService<CopilotAuditScheduleService>();
@@ -74,6 +76,36 @@ app.MapPost("/collect/{tenantId}", async (string tenantId, HttpContext ctx, ISer
     catch (Exception ex)
     {
         logger.LogError(ex, "External sharing audit collection failed for tenant {TenantName} ({TenantId})", tenantName, tenantId);
+    }
+
+    // Suspicious mail-rule / auto-forwarding audit (Audit.Exchange) — same plumbing.
+    var mailRuleService = scope.ServiceProvider.GetRequiredService<IMailRuleAuditCollectionService>();
+    try
+    {
+        await mailRuleService.CollectForTenantAsync(tenantId, tenantName, ctx.RequestAborted);
+    }
+    catch (CopilotAuditConfigurationException ex)
+    {
+        logger.LogWarning("Mail-rule audit not yet available for tenant {TenantName} ({TenantId}): {Message}", tenantName, tenantId, ex.Message);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Mail-rule audit collection failed for tenant {TenantName} ({TenantId})", tenantName, tenantId);
+    }
+
+    // DLP policy matches (DLP.All) — same plumbing. Tenants without DLP simply yield no data.
+    var dlpService = scope.ServiceProvider.GetRequiredService<IDlpAuditCollectionService>();
+    try
+    {
+        await dlpService.CollectForTenantAsync(tenantId, tenantName, ctx.RequestAborted);
+    }
+    catch (CopilotAuditConfigurationException ex)
+    {
+        logger.LogWarning("DLP audit not yet available for tenant {TenantName} ({TenantId}): {Message}", tenantName, tenantId, ex.Message);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "DLP audit collection failed for tenant {TenantName} ({TenantId})", tenantName, tenantId);
     }
 
     return Results.Ok(new { status = "completed", tenantId, tenantName });

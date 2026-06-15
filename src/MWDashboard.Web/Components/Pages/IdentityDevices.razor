@@ -523,7 +523,7 @@ else
                         </HeaderContent>
                         <GroupHeaderTemplate>
                             <MudTh Class="mud-table-cell-custom-group" colspan="3">
-                                <MudText Typo="Typo.subtitle2">@TenantFilter.GetTenantName(context.Key?.ToString())</MudText>
+                                <MudText Typo="Typo.subtitle2">@TenantFilter.GetTenantName(context.Key?.ToString() ?? string.Empty)</MudText>
                                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-2">
                                     @context.Items.Count() role(s), @context.Items.Sum(r => r.MemberCount).ToString("N0") member(s)
                                 </MudText>

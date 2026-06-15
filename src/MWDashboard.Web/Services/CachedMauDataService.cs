@@ -533,6 +533,80 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("defender-alerts", new[] { tenantId }), BuildKey("defender-alerts", null));
     }
 
+    // --- Suspicious mailbox-rule / auto-forwarding audit (60 min — daily-changing) ---
+    public Task<List<MailRuleEventSnapshot>> GetMailRuleEventsAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        var key = BuildKey("mail-rules", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetMailRuleEventsAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveMailRuleEventsAsync(IEnumerable<MailRuleEventSnapshot> snapshots)
+    {
+        await _inner.SaveMailRuleEventsAsync(snapshots);
+        foreach (var tid in snapshots.Select(s => s.TenantId).Distinct())
+            await InvalidateAsync(BuildKey("mail-rules", new[] { tid }));
+        await InvalidateAsync(BuildKey("mail-rules", null));
+    }
+
+    // The Exchange audit cursor is collection state, never cached.
+    public Task<DateTime?> GetExchangeAuditCursorAsync(string tenantId)
+        => _inner.GetExchangeAuditCursorAsync(tenantId);
+
+    public Task UpdateExchangeAuditCursorAsync(string tenantId, DateTime cursorUtc)
+        => _inner.UpdateExchangeAuditCursorAsync(tenantId, cursorUtc);
+
+    // --- DLP policy matches (60 min — daily-changing) ---
+    public Task<List<DlpEventSnapshot>> GetDlpEventsAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        var key = BuildKey("dlp-events", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetDlpEventsAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveDlpEventsAsync(IEnumerable<DlpEventSnapshot> snapshots)
+    {
+        await _inner.SaveDlpEventsAsync(snapshots);
+        foreach (var tid in snapshots.Select(s => s.TenantId).Distinct())
+            await InvalidateAsync(BuildKey("dlp-events", new[] { tid }));
+        await InvalidateAsync(BuildKey("dlp-events", null));
+    }
+
+    // The DLP audit cursor is collection state, never cached.
+    public Task<DateTime?> GetDlpAuditCursorAsync(string tenantId)
+        => _inner.GetDlpAuditCursorAsync(tenantId);
+
+    public Task UpdateDlpAuditCursorAsync(string tenantId, DateTime cursorUtc)
+        => _inner.UpdateDlpAuditCursorAsync(tenantId, cursorUtc);
+
+    // --- Directory subscriptions / license renewals (60 min — daily-changing) ---
+    public Task<List<SubscriptionSnapshot>> GetSubscriptionsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("subscriptions", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetSubscriptionsAsync(tenantIds), options);
+    }
+
+    public async Task SaveSubscriptionsAsync(string tenantId, DateTime reportDate, IEnumerable<SubscriptionSnapshot> snapshots)
+    {
+        await _inner.SaveSubscriptionsAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("subscriptions", new[] { tenantId }), BuildKey("subscriptions", null));
+    }
+
+    // --- Teams team & channel activity (60 min — daily-changing) ---
+    public Task<List<TeamsTeamActivitySnapshot>> GetTeamsTeamActivityAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("teams-team-activity", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetTeamsTeamActivityAsync(tenantIds), options);
+    }
+
+    public async Task SaveTeamsTeamActivityAsync(string tenantId, DateTime reportDate, IEnumerable<TeamsTeamActivitySnapshot> snapshots)
+    {
+        await _inner.SaveTeamsTeamActivityAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("teams-team-activity", new[] { tenantId }), BuildKey("teams-team-activity", null));
+    }
+
     // --- Pass-through for write operations; cached reads below ---
 
     // --- MAU History (15 min — dashboard-level, queried frequently) ---

@@ -231,4 +231,182 @@ public partial class MauDataService
         db.DefenderAlertSnapshots.AddRange(snapshots);
         await db.SaveChangesAsync();
     }
+
+    // Suspicious mailbox-rule / auto-forwarding audit — Office 365 Management Activity API (Audit.Exchange)
+    public async Task<List<MailRuleEventSnapshot>> GetMailRuleEventsAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var query = db.MailRuleEventSnapshots.AsNoTracking().Where(s => s.ReportDate >= cutoff);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveMailRuleEventsAsync(IEnumerable<MailRuleEventSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.MailRuleEventSnapshots.FirstOrDefaultAsync(s =>
+                s.TenantId == snapshot.TenantId &&
+                s.RuleType == snapshot.RuleType &&
+                s.ReportDate == snapshot.ReportDate);
+            if (existing != null)
+            {
+                existing.TenantName = snapshot.TenantName;
+                existing.EventCount = snapshot.EventCount;
+                existing.DistinctMailboxes = snapshot.DistinctMailboxes;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.MailRuleEventSnapshots.Add(snapshot);
+            }
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<DateTime?> GetExchangeAuditCursorAsync(string tenantId)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        return tenant?.ExchangeAuditCursorUtc;
+    }
+
+    public async Task UpdateExchangeAuditCursorAsync(string tenantId, DateTime cursorUtc)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        if (tenant == null) return;
+
+        // Never move the cursor backwards.
+        if (tenant.ExchangeAuditCursorUtc == null || cursorUtc > tenant.ExchangeAuditCursorUtc)
+        {
+            tenant.ExchangeAuditCursorUtc = cursorUtc;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    // DLP policy matches — Office 365 Management Activity API (DLP.All)
+    public async Task<List<DlpEventSnapshot>> GetDlpEventsAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var query = db.DlpEventSnapshots.AsNoTracking().Where(s => s.ReportDate >= cutoff);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveDlpEventsAsync(IEnumerable<DlpEventSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.DlpEventSnapshots.FirstOrDefaultAsync(s =>
+                s.TenantId == snapshot.TenantId &&
+                s.PolicyName == snapshot.PolicyName &&
+                s.ReportDate == snapshot.ReportDate);
+            if (existing != null)
+            {
+                existing.TenantName = snapshot.TenantName;
+                existing.Severity = snapshot.Severity;
+                existing.MatchCount = snapshot.MatchCount;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.DlpEventSnapshots.Add(snapshot);
+            }
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<DateTime?> GetDlpAuditCursorAsync(string tenantId)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        return tenant?.DlpAuditCursorUtc;
+    }
+
+    public async Task UpdateDlpAuditCursorAsync(string tenantId, DateTime cursorUtc)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        if (tenant == null) return;
+
+        // Never move the cursor backwards.
+        if (tenant.DlpAuditCursorUtc == null || cursorUtc > tenant.DlpAuditCursorUtc)
+        {
+            tenant.DlpAuditCursorUtc = cursorUtc;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    // Directory subscriptions (license renewal / expiry dates)
+    public async Task<List<SubscriptionSnapshot>> GetSubscriptionsAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.SubscriptionSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .OrderBy(s => s.NextLifecycleDateTime)
+            .ToListAsync();
+    }
+
+    public async Task SaveSubscriptionsAsync(string tenantId, DateTime reportDate, IEnumerable<SubscriptionSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.SubscriptionSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.SubscriptionSnapshots.RemoveRange(existing);
+
+        db.SubscriptionSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
+
+    // Teams team & channel activity (per-team detail)
+    public async Task<List<TeamsTeamActivitySnapshot>> GetTeamsTeamActivityAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.TeamsTeamActivitySnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .OrderBy(s => s.Rank)
+            .ToListAsync();
+    }
+
+    public async Task SaveTeamsTeamActivityAsync(string tenantId, DateTime reportDate, IEnumerable<TeamsTeamActivitySnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.TeamsTeamActivitySnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.TeamsTeamActivitySnapshots.RemoveRange(existing);
+
+        db.TeamsTeamActivitySnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
 }

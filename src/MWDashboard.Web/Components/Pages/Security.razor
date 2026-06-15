@@ -13,6 +13,8 @@
     <ExportMenu Items="@(new[] {
         ("Sign-ins & MFA", "security"),
         ("Defender Alerts", "defender-alerts"),
+        ("Suspicious Mail Rules", "mail-rules"),
+        ("DLP Policy Matches", "dlp-events"),
         ("External Sharing", "external-sharing") })" />
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
@@ -470,6 +472,132 @@ else
         </MudGrid>
     }
 </MudPaper>
+
+@* Suspicious Inbox / Auto-Forwarding Rules (BEC indicator) *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.ForwardToInbox" Class="mr-2" />
+        Suspicious Mailbox Rules (last 30 days)
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Inbox-rule and mailbox auto-forwarding changes from the Office 365 unified audit log (<PermissionTag Scope="ActivityFeed.Read" />).
+        New forwarding, redirect, or auto-delete rules are a common <strong>business-email-compromise (BEC)</strong> indicator. Requires unified audit logging enabled on the tenant.
+    </MudText>
+    @if (_mailRules.Count == 0)
+    {
+        <MudAlert Severity="Severity.Success" Dense="true">No suspicious inbox-rule or auto-forwarding activity recorded for the selected tenant(s).</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Forwarding</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_ruleForwarding > 0 ? Color.Error : Color.Success)">@_ruleForwarding.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">forward-to rules</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Redirect</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_ruleRedirect > 0 ? Color.Warning : Color.Success)">@_ruleRedirect.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">redirect-to rules</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Auto-Delete</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_ruleDelete > 0 ? Color.Warning : Color.Success)">@_ruleDelete.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">delete-message rules</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTable Items="_mailRules" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                        <MudTh>Report Date</MudTh>
+                        <MudTh>Rule Type</MudTh>
+                        <MudTh Style="text-align:right">Events</MudTh>
+                        <MudTh Style="text-align:right">Distinct Mailboxes</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                        <MudTd DataLabel="Report Date">@context.ReportDate.ToString("yyyy-MM-dd")</MudTd>
+                        <MudTd DataLabel="Rule Type">
+                            <MudChip T="string" Size="Size.Small" Color="@GetRuleColor(context.RuleType)" Variant="Variant.Filled">@context.RuleType</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Events" Style="text-align:right">@context.EventCount.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Distinct Mailboxes" Style="text-align:right">@context.DistinctMailboxes.ToString("N0")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
+
+@* DLP Policy Matches (Purview) *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.Policy" Class="mr-2" />
+        DLP Policy Matches (last 30 days)
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Microsoft Purview Data Loss Prevention sensitive-data exposure events from the Office 365 unified audit log (<PermissionTag Scope="ActivityFeed.Read" />).
+        Only tenants running Purview DLP policies will report matches.
+    </MudText>
+    @if (_dlpEvents.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">
+            No DLP policy matches recorded for the selected tenant(s). This usually means <strong>Microsoft Purview DLP is not configured</strong> on the tenant (or no sensitive content was shared in the window).
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Matches</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_dlpTotal.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">policy hits</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">High Severity</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_dlpHigh > 0 ? Color.Error : Color.Success)">@_dlpHigh.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">high-risk matches</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Policies Triggered</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_dlpPolicyCount.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">distinct policies</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12">
+                <MudTable Items="_dlpEvents" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                        <MudTh>Report Date</MudTh>
+                        <MudTh>Policy</MudTh>
+                        <MudTh>Severity</MudTh>
+                        <MudTh Style="text-align:right">Matches</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                        <MudTd DataLabel="Report Date">@context.ReportDate.ToString("yyyy-MM-dd")</MudTd>
+                        <MudTd DataLabel="Policy">@context.PolicyName</MudTd>
+                        <MudTd DataLabel="Severity">
+                            <MudChip T="string" Size="Size.Small" Color="@GetDlpSeverityColor(context.Severity)" Variant="Variant.Filled">@context.Severity</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Matches" Style="text-align:right">@context.MatchCount.ToString("N0")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
 }
 
 @code {
@@ -503,6 +631,14 @@ else
     // External sharing aggregates
     private List<ExternalSharingSnapshot> _externalSharing = [];
     private int _shareAnonymous, _shareExternal, _shareOrganization;
+
+    // Suspicious mail-rule aggregates
+    private List<MailRuleEventSnapshot> _mailRules = [];
+    private int _ruleForwarding, _ruleRedirect, _ruleDelete;
+
+    // DLP policy-match aggregates
+    private List<DlpEventSnapshot> _dlpEvents = [];
+    private int _dlpTotal, _dlpHigh, _dlpPolicyCount;
 
     private ApexChartOptions<DailySignIn> _signInChartOptions = new()
     {
@@ -583,6 +719,20 @@ else
         _shareExternal = _externalSharing.Where(s => s.ShareType == "External").Sum(s => s.EventCount);
         _shareOrganization = _externalSharing.Where(s => s.ShareType == "Organization").Sum(s => s.EventCount);
 
+        // Suspicious mail-rule aggregates (last 30 days)
+        _mailRules = (await MauDataService.GetMailRuleEventsAsync(tenantIds, days: 30))
+            .OrderByDescending(s => s.ReportDate).ThenBy(s => s.RuleType).ToList();
+        _ruleForwarding = _mailRules.Where(s => s.RuleType == "Forwarding").Sum(s => s.EventCount);
+        _ruleRedirect = _mailRules.Where(s => s.RuleType == "Redirect").Sum(s => s.EventCount);
+        _ruleDelete = _mailRules.Where(s => s.RuleType == "Delete").Sum(s => s.EventCount);
+
+        // DLP policy-match aggregates (last 30 days)
+        _dlpEvents = (await MauDataService.GetDlpEventsAsync(tenantIds, days: 30))
+            .OrderByDescending(s => s.ReportDate).ThenByDescending(s => s.MatchCount).ToList();
+        _dlpTotal = _dlpEvents.Sum(s => s.MatchCount);
+        _dlpHigh = _dlpEvents.Where(s => string.Equals(s.Severity, "High", StringComparison.OrdinalIgnoreCase)).Sum(s => s.MatchCount);
+        _dlpPolicyCount = _dlpEvents.Select(s => s.PolicyName).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
         _dailySignIns = _summaries
             .GroupBy(s => s.ReportDate.ToString("MM-dd"))
             .Select(g => new DailySignIn
@@ -643,6 +793,22 @@ else
         "Anonymous" => Color.Error,
         "External" => Color.Warning,
         _ => Color.Info
+    };
+
+    private static Color GetRuleColor(string ruleType) => ruleType switch
+    {
+        "Forwarding" => Color.Error,
+        "Redirect" => Color.Warning,
+        "Delete" => Color.Warning,
+        _ => Color.Info
+    };
+
+    private static Color GetDlpSeverityColor(string severity) => severity?.ToLowerInvariant() switch
+    {
+        "high" => Color.Error,
+        "medium" => Color.Warning,
+        "low" => Color.Info,
+        _ => Color.Default
     };
 
     private Color GetRateColor(double rate)

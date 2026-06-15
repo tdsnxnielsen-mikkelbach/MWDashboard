@@ -4,7 +4,7 @@ The app registration needs the following **Application** permissions (not Delega
 
 | Permission | Purpose | Notes |
 |-----------|---------|-------|
-| `Reports.Read.All` | MAU usage reports, workload activity, user detail; M365 app per-user detail (`getM365AppUserDetail`) and Office desktop activations (`getOffice365ActivationCounts` / `getOffice365ActivationsUserDetail`) | Core functionality + Activity + Segmentation + M365 Apps pages. Per-user rows are anonymized at collection time (UPNs pseudonymized, names dropped) |
+| `Reports.Read.All` | MAU usage reports, workload activity, user detail; M365 app per-user detail (`getM365AppUserDetail`), Office desktop activations (`getOffice365ActivationCounts` / `getOffice365ActivationsUserDetail`) and per-team Teams activity (`getTeamsTeamActivityDetail`) | Core functionality + Activity (incl. Top Teams) + Segmentation + M365 Apps pages. Per-user rows are anonymized at collection time (UPNs pseudonymized, names dropped) |
 | `Organization.Read.All` | Subscribed SKUs / license data, organization info | License page + Consent callback (verify tenant domain) |
 | `ServiceMessage.Read.All` | M365 Message Center posts | License page — Message Center section |
 | `AuditLog.Read.All` | Entra sign-in logs; MFA/auth method registration (`/reports/authenticationMethods/userRegistrationDetails`); inactive-account `signInActivity` | Security page — sign-in logs and inactive accounts require Entra ID P1/P2 on target tenant (the `signInActivity` property is premium-gated); MFA registration works on all tiers |
@@ -18,6 +18,7 @@ The app registration needs the following **Application** permissions (not Delega
 | `Application.Read.All` | App registration secret/certificate expiry inventory (`/applications` `passwordCredentials` + `keyCredentials`) | Identity & Devices page — App Credential Expiry tab (all tiers); **new permission — requires re-consent** |
 | `RoleManagement.Read.Directory` | Standing privileged-role membership (`/directoryRoles` + members) incl. Global Administrator count | Identity & Devices page — Privileged Roles tab (all tiers); **new permission — requires re-consent** |
 | `SecurityAlert.Read.All` | Microsoft Defender / Microsoft 365 security alerts by severity & status (`/security/alerts_v2`) | Security page — Defender Alerts section; requires a Microsoft Defender / Defender XDR subscription on the tenant; **new permission — requires re-consent** |
+| `Directory.Read.All` | Commercial subscription renewal/expiry dates (`/directory/subscriptions` — `nextLifecycleDateTime`, `status`, `isTrial`, seat counts) | Licenses page — Subscription Renewals & Expiry section (all tiers) |
 
 > `Guest / external users` (Identity & Devices page) reuses the already-granted `User.Read.All` permission — no extra consent needed.
 
@@ -25,7 +26,7 @@ In addition, one permission on a **different resource** is required for the unli
 
 | Permission | Resource | Purpose | Notes |
 |-----------|----------|---------|-------|
-| `ActivityFeed.Read` | **Office 365 Management APIs** (not Microsoft Graph) | Read raw audit events from two content types: `Audit.General` (`CopilotInteraction`) to measure free, unlicensed Copilot Chat usage, and `Audit.SharePoint` (sharing operations) to measure external/anonymous file-sharing activity — neither exposed by the Graph reports API | Granted by the same admin-consent flow (the `/adminconsent` URL grants every permission configured on the app registration), but it must first be **added to the app registration** under *Office 365 Management APIs → Application permissions*. Requires **unified audit logging** to be enabled on the tenant. Drives both the unlicensed Copilot Chat metric and the External Sharing section on the Security page. Intentionally **not** part of the Graph consent probe (the probe only exercises Graph endpoints). |
+| `ActivityFeed.Read` | **Office 365 Management APIs** (not Microsoft Graph) | Read raw audit events from four content types: `Audit.General` (`CopilotInteraction`) to measure free, unlicensed Copilot Chat usage; `Audit.SharePoint` (sharing operations) to measure external/anonymous file-sharing activity; `Audit.Exchange` (`New-InboxRule` / `Set-InboxRule` / `Set-Mailbox`) to detect suspicious mailbox forwarding/redirect/delete rules (a BEC indicator); and `DLP.All` to surface Purview DLP policy matches — none exposed by the Graph reports API | Granted by the same admin-consent flow (the `/adminconsent` URL grants every permission configured on the app registration), but it must first be **added to the app registration** under *Office 365 Management APIs → Application permissions*. Requires **unified audit logging** to be enabled on the tenant. Drives the unlicensed Copilot Chat metric, the External Sharing + Suspicious Mailbox Rules + DLP Policy Matches sections on the Security page. Intentionally **not** part of the Graph consent probe (the probe only exercises Graph endpoints). |
 
 ## How permissions appear in the UI
 
@@ -57,7 +58,7 @@ This URL is stable after first deployment and does not change unless you recreat
 
 | Target Tenant License | What's Available |
 |----------------------|-----------------|
-| Entra ID Free | MAU reports, licenses, Message Center, workload activity, segmentation, departments, MFA registration, Secure Score, Service Health, device compliance, guest users, app credential expiry, privileged-role inventory, Defender alerts (where a Defender subscription exists), external sharing — **no sign-in logs, no inactive-account analysis, no Conditional Access policies, no risky-user analysis** (`signInActivity`, Conditional Access, and Identity Protection are premium-gated) |
+| Entra ID Free | MAU reports, licenses, subscription renewals, Message Center, workload activity, Teams team activity, segmentation, departments, MFA registration, Secure Score, Service Health, device compliance, guest users, app credential expiry, privileged-role inventory, Defender alerts (where a Defender subscription exists), external sharing, suspicious mailbox rules, DLP matches (where Purview DLP is configured) — **no sign-in logs, no inactive-account analysis, no Conditional Access policies, no risky-user analysis** (`signInActivity`, Conditional Access, and Identity Protection are premium-gated) |
 | Entra ID P1 | All above + sign-in logs (success/failure counts) + inactive/stale account analysis + Conditional Access policies |
 | Entra ID P2 | All above + full AuthenticationDetails (MFA method breakdown) + risky-user (Identity Protection) analysis |
 

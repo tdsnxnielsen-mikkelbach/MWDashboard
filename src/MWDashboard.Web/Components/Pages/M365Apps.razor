@@ -149,39 +149,22 @@ else
             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">
                 Active users per application and platform, derived from per-user activity. User identities are anonymized (irreversible per-tenant pseudonyms) &mdash; no UPNs or names are stored.
             </MudText>
-            @if (_appPlatformMatrix.Count > 0)
+            @if (_appPlatformChartData.Count > 0)
             {
-                <MudSimpleTable Dense="true" Hover="true" Striped="true">
-                    <thead>
-                        <tr>
-                            @if (TenantFilter.IsMultiTenantView)
-                            {
-                                <th>Tenant</th>
-                            }
-                            <th>Application</th>
-                            <th style="text-align:right">Windows</th>
-                            <th style="text-align:right">Mac</th>
-                            <th style="text-align:right">Mobile</th>
-                            <th style="text-align:right">Web</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var row in _appPlatformMatrix)
-                        {
-                            <tr>
-                                @if (TenantFilter.IsMultiTenantView)
-                                {
-                                    <td>@row.TenantName</td>
-                                }
-                                <td><b>@row.AppName</b></td>
-                                <td style="text-align:right">@row.Windows.ToString("N0")</td>
-                                <td style="text-align:right">@row.Mac.ToString("N0")</td>
-                                <td style="text-align:right">@row.Mobile.ToString("N0")</td>
-                                <td style="text-align:right">@row.Web.ToString("N0")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </MudSimpleTable>
+                <ApexChart TItem="AppPlatformPoint"
+                           Options="_appPlatformChartOptions"
+                           Height="@(_appPlatformChartHeight)"
+                           @key="_chartKey">
+                    @foreach (var series in _appPlatformChartData)
+                    {
+                        <ApexPointSeries TItem="AppPlatformPoint"
+                                         Items="series.Value"
+                                         Name="@series.Key"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)"
+                                         YValue="@(e => (decimal?)e.Count)" />
+                    }
+                </ApexChart>
             }
             else
             {
@@ -233,6 +216,9 @@ else
     private List<AppPlatformRow> _appPlatformMatrix = [];
     private Dictionary<string, List<ActivationDataPoint>> _activationData = [];
 
+    private Dictionary<string, List<AppPlatformPoint>> _appPlatformChartData = [];
+    private int _appPlatformChartHeight = 400;
+
     private readonly (string Label, string Feature)[] _exportItems =
     [
         ("App x Platform Detail (anonymized)", "m365app-userdetail"),
@@ -244,6 +230,18 @@ else
     {
         Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
         Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)", Stacked = false },
+        Xaxis = new XAxis { Categories = new List<string>() }
+    };
+
+    private ApexChartOptions<AppPlatformPoint> _appPlatformChartOptions = new()
+    {
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)", Stacked = true },
+        PlotOptions = new PlotOptions
+        {
+            Bar = new PlotOptionsBar { Horizontal = true }
+        },
+        DataLabels = new DataLabels { Enabled = false },
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
         Xaxis = new XAxis { Categories = new List<string>() }
     };
 
@@ -387,6 +385,7 @@ else
         // App x Platform adoption matrix (anonymized per-user detail aggregated to counts)
         var userDetail = await MauDataService.GetM365AppUserDetailAsync(tenantIds);
         _appPlatformMatrix = BuildAppPlatformMatrix(userDetail);
+        BuildAppPlatformChart(_appPlatformMatrix);
 
         // Office desktop activations by product & device
         var activations = await MauDataService.GetOffice365ActivationsAsync(tenantIds);
@@ -436,6 +435,34 @@ else
             Row("OneNote", x => x.OneNoteWindows, x => x.OneNoteMac, x => x.OneNoteMobile, x => x.OneNoteWeb),
             Row("Teams", x => x.TeamsWindows, x => x.TeamsMac, x => x.TeamsMobile, x => x.TeamsWeb),
         ];
+    }
+
+    private void BuildAppPlatformChart(List<AppPlatformRow> matrix)
+    {
+        _appPlatformChartData = [];
+        if (matrix.Count == 0)
+        {
+            _appPlatformChartOptions.Xaxis = new XAxis { Categories = new List<string>() };
+            return;
+        }
+
+        // Single-tenant: one category per application. Multi-tenant: categories are
+        // "Tenant · App" so each tenant's adoption is distinguishable on the same chart.
+        var rows = TenantFilter.IsMultiTenantView
+            ? matrix.Select(r => new { r, Label = $"{r.TenantName} · {r.AppName}" }).ToList()
+            : matrix.Select(r => new { r, Label = r.AppName }).ToList();
+
+        var categories = rows.Select(x => x.Label).ToList();
+        _appPlatformChartOptions.Xaxis = new XAxis { Categories = categories };
+
+        // Stacked horizontal bars, one series per platform.
+        _appPlatformChartData["Windows"] = rows.Select(x => new AppPlatformPoint { Label = x.Label, Count = x.r.Windows }).ToList();
+        _appPlatformChartData["Mac"] = rows.Select(x => new AppPlatformPoint { Label = x.Label, Count = x.r.Mac }).ToList();
+        _appPlatformChartData["Mobile"] = rows.Select(x => new AppPlatformPoint { Label = x.Label, Count = x.r.Mobile }).ToList();
+        _appPlatformChartData["Web"] = rows.Select(x => new AppPlatformPoint { Label = x.Label, Count = x.r.Web }).ToList();
+
+        // Give multi-tenant views more vertical room so the per-tenant rows stay readable.
+        _appPlatformChartHeight = Math.Max(400, categories.Count * 36);
     }
 
     private void BuildActivationChart(List<Office365ActivationSnapshot> activations)
@@ -519,6 +546,12 @@ else
     public class ActivationDataPoint
     {
         public string Product { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
+    public class AppPlatformPoint
+    {
+        public string Label { get; set; } = string.Empty;
         public int Count { get; set; }
     }
 }
