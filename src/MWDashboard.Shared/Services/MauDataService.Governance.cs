@@ -639,4 +639,63 @@ public partial class MauDataService
             await db.SaveChangesAsync();
         }
     }
+
+    // Email threat protection — Microsoft Defender for Office 365 / EOP (delete-then-insert per day)
+    public async Task<List<EmailThreatSnapshot>> GetEmailThreatsAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.EmailThreatSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .ToListAsync();
+    }
+
+    public async Task SaveEmailThreatsAsync(string tenantId, DateTime reportDate, IEnumerable<EmailThreatSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.EmailThreatSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.EmailThreatSnapshots.RemoveRange(existing);
+
+        db.EmailThreatSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
+
+    // Attack Simulation Training — Microsoft Graph /security/attackSimulation/simulations (delete-then-insert per day)
+    public async Task<List<AttackSimSnapshot>> GetAttackSimulationsAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.AttackSimSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .OrderByDescending(s => s.LaunchDate)
+            .ToListAsync();
+    }
+
+    public async Task SaveAttackSimulationsAsync(string tenantId, DateTime reportDate, IEnumerable<AttackSimSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.AttackSimSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.AttackSimSnapshots.RemoveRange(existing);
+
+        db.AttackSimSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
 }

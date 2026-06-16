@@ -178,6 +178,77 @@ public partial class GraphReportService
         }
     }
 
+    // Stale Entra-registered devices — registered/joined device objects that haven't signed in for
+    // 90+ days (a device-hygiene cleanup story distinct from Intune compliance, since it covers all
+    // registered devices, not just managed ones). Sourced from Microsoft Graph /devices, which is
+    // readable with the already-granted Directory.Read.All — no new consent required.
+    public async Task<List<StaleDeviceSnapshot>> GetStaleDevicesAsync(string tenantId)
+    {
+        const int staleThresholdDays = 90;
+        var client = CreateClientForTenant(tenantId);
+        var today = DateTime.UtcNow.Date;
+        var staleCutoff = DateTimeOffset.UtcNow.AddDays(-staleThresholdDays);
+        var buckets = new Dictionary<string, StaleDeviceSnapshot>();
+
+        try
+        {
+            var page = await client.Devices.GetAsync(c =>
+            {
+                c.QueryParameters.Select = ["operatingSystem", "approximateLastSignInDateTime", "accountEnabled"];
+                c.QueryParameters.Top = 999;
+            });
+
+            if (page?.Value == null) return [];
+
+            void Accumulate(Microsoft.Graph.Models.Device d)
+            {
+                var os = (d.OperatingSystem ?? string.Empty).ToLowerInvariant();
+                string platform;
+                if (os.Contains("windows")) platform = "Windows";
+                else if (os.Contains("ios") || os.Contains("ipados")) platform = "iOS";
+                else if (os.Contains("android")) platform = "Android";
+                else if (os.Contains("mac")) platform = "macOS";
+                else platform = "Other";
+
+                if (!buckets.TryGetValue(platform, out var snap))
+                {
+                    snap = new StaleDeviceSnapshot
+                    {
+                        TenantId = tenantId,
+                        ReportDate = today,
+                        OsPlatform = platform,
+                        CollectedAt = DateTime.UtcNow
+                    };
+                    buckets[platform] = snap;
+                }
+
+                snap.TotalDevices++;
+                var lastSignIn = d.ApproximateLastSignInDateTime;
+                if (lastSignIn == null || lastSignIn.Value < staleCutoff)
+                    snap.Stale90Plus++;
+                if (d.AccountEnabled == false)
+                    snap.DisabledDevices++;
+            }
+
+            var iterator = Microsoft.Graph.PageIterator<Microsoft.Graph.Models.Device, Microsoft.Graph.Models.DeviceCollectionResponse>
+                .CreatePageIterator(client, page, d => { Accumulate(d); return true; });
+            await iterator.IterateAsync();
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            _logger.LogWarning("Registered-device data unavailable for tenant {TenantId}: insufficient permissions. " +
+                "Requires Directory.Read.All (or Device.Read.All).", tenantId);
+            return [];
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get registered devices for tenant {TenantId}", tenantId);
+            return [];
+        }
+
+        return buckets.Values.ToList();
+    }
+
     // Conditional Access coverage — counts policies by state and detects whether key
     // protections (legacy-auth block, MFA grant) exist in any enabled policy.
     // Requires Policy.Read.All.

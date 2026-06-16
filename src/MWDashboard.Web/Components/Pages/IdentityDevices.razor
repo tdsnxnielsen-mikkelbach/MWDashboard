@@ -13,6 +13,7 @@
     <ExportMenu Items="@(new[] {
         ("Device Compliance", "device-compliance"),
         ("Patch / OS Versions", "device-patch"),
+        ("Stale Registered Devices", "stale-devices"),
         ("Conditional Access", "conditional-access"),
         ("Guest Users", "guests"),
         ("Risky Users", "risky-users"),
@@ -23,7 +24,7 @@
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Device compliance, Conditional Access coverage, guest/external accounts, identity risk, app credential expiry, and privileged role membership.
     Requires <PermissionTag Scope="DeviceManagementManagedDevices.Read.All" />, <PermissionTag Scope="Policy.Read.All" />,
-    <PermissionTag Scope="User.Read.All" />, <PermissionTag Scope="Application.Read.All" />, <PermissionTag Scope="RoleManagement.Read.Directory" />, and (for risk) <PermissionTag Scope="IdentityRiskyUser.Read.All" />.
+    <PermissionTag Scope="User.Read.All" />, <PermissionTag Scope="Application.Read.All" />, <PermissionTag Scope="RoleManagement.Read.Directory" />, <PermissionTag Scope="Directory.Read.All" /> (stale registered devices), and (for risk) <PermissionTag Scope="IdentityRiskyUser.Read.All" />.
     <strong>Entra ID license:</strong> Conditional Access requires <strong>P1 or P2</strong>; Risky Users (Identity Protection) requires <strong>P2</strong>; Device Compliance (Intune), Guest Users, App Credentials, and Privileged Roles are available on all tiers.
 </MudText>
 
@@ -243,6 +244,124 @@ else
                                 @if (context.StaleCount > 0)
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">@context.StaleCount.ToString("N0")</MudChip>
+                                }
+                                else
+                                {
+                                    <span>0</span>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Stale Registered Devices ---------------- *@
+    <MudTabPanel Text="Stale Registered Devices" Icon="@Icons.Material.Filled.PhonelinkErase">
+        @if (_staleDeviceList.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No registered-device data available. Requires <PermissionTag Scope="Directory.Read.All" />.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Registered Devices</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_staleTotalDevices.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">in the Entra directory</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Stale (90+ days)</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_stale90Plus > 0 ? Color.Warning : Color.Success)">@_stale90Plus.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">no sign-in 90+ days</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Disabled Devices</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_staleDisabled > 0 ? Color.Error : Color.Success)">@_staleDisabled.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">accountEnabled = false</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Stale Share</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_stalePercent >= 20 ? Color.Warning : Color.Success)">@_stalePercent.ToString("0.#")%</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">of registered devices</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Registered Devices by Platform</MudText>
+                    <ApexChart TItem="LabelValue" Options="_staleTotalBarOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_staleTotalBreakdown" Name="Devices"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Stale Devices by Platform</MudText>
+                    <ApexChart TItem="LabelValue" Options="_staleBarOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_staleBreakdown" Name="Stale"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-1">Registered-Device Hygiene</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+                        Entra-registered devices with no sign-in for 90+ days are stale and should be cleaned up — they enlarge the
+                        attack surface and can mask abandoned or orphaned hardware. Disabled devices are blocked but still occupy the directory.
+                    </MudText>
+                    <MudTable Items="_staleDeviceList" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                              GroupBy="@(TenantFilter.IsMultiTenantView ? _staleGroupDefinition : null)">
+                        <HeaderContent>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                            <MudTh>Platform</MudTh>
+                            <MudTh Style="text-align:right">Total</MudTh>
+                            <MudTh Style="text-align:right">Stale (90+ d)</MudTh>
+                            <MudTh Style="text-align:right">Disabled</MudTh>
+                        </HeaderContent>
+                        <GroupHeaderTemplate>
+                            <MudTh Class="mud-table-cell-custom-group" colspan="@(TenantFilter.IsMultiTenantView ? 5 : 4)">
+                                @TenantFilter.GetTenantName(context.Key?.ToString() ?? string.Empty)
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-inline ml-2">
+                                    (@context.Items.Sum(d => d.TotalDevices).ToString("N0") devices, @context.Items.Sum(d => d.Stale90Plus).ToString("N0") stale)
+                                </MudText>
+                            </MudTh>
+                        </GroupHeaderTemplate>
+                        <RowTemplate>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                            <MudTd DataLabel="Platform"><MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@context.OsPlatform</MudChip></MudTd>
+                            <MudTd DataLabel="Total" Style="text-align:right">@context.TotalDevices.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Stale (90+ d)" Style="text-align:right">
+                                @if (context.Stale90Plus > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">@context.Stale90Plus.ToString("N0")</MudChip>
+                                }
+                                else
+                                {
+                                    <span>0</span>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="Disabled" Style="text-align:right">
+                                @if (context.DisabledDevices > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">@context.DisabledDevices.ToString("N0")</MudChip>
                                 }
                                 else
                                 {
@@ -783,6 +902,7 @@ else
     private List<DeviceComplianceSnapshot> _devices = [];
     private List<DevicePatchSnapshot> _devicePatch = [];
     private List<DevicePatchSnapshot> _devicePatchHistory = [];
+    private List<StaleDeviceSnapshot> _staleDeviceList = [];
     private List<ConditionalAccessSnapshot> _conditionalAccess = [];
     private List<GuestUserSnapshot> _guests = [];
     private List<RiskyUserSnapshot> _riskyUsers = [];
@@ -809,6 +929,15 @@ else
         Selector = s => s.TenantId
     };
 
+    // Groups the stale registered-device table by tenant (collapsible) in multi-tenant view.
+    private readonly TableGroupDefinition<StaleDeviceSnapshot> _staleGroupDefinition = new()
+    {
+        GroupName = "Tenant",
+        Indentation = false,
+        Expandable = true,
+        Selector = s => s.TenantId
+    };
+
     // Device KPIs
     private int _totalDevices, _compliantDevices, _nonCompliantDevices, _graceErrorDevices;
     private double _compliancePercent;
@@ -820,6 +949,12 @@ else
     private double _freshPercent;
     private List<LabelValue> _topOsVersions = [];
     private Dictionary<string, List<TrendPoint>> _staleTrendSeries = [];
+
+    // Stale registered-device KPIs
+    private int _staleTotalDevices, _stale90Plus, _staleDisabled;
+    private double _stalePercent;
+    private List<LabelValue> _staleTotalBreakdown = [];
+    private List<LabelValue> _staleBreakdown = [];
 
     // Conditional Access KPIs
     private int _totalPolicies, _enabledPolicies, _reportOnlyPolicies;
@@ -872,6 +1007,22 @@ else
         Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 }
     };
 
+    private readonly ApexChartOptions<LabelValue> _staleTotalBarOptions = new()
+    {
+        Legend = new Legend { Show = false },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = true } },
+        DataLabels = new DataLabels { Enabled = true }
+    };
+
+    private readonly ApexChartOptions<LabelValue> _staleBarOptions = new()
+    {
+        Legend = new Legend { Show = false },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = true } },
+        DataLabels = new DataLabels { Enabled = true }
+    };
+
     protected override async Task OnInitializedAsync()
     {
         TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
@@ -902,6 +1053,8 @@ else
         _devicePatch = (await MauDataService.GetDevicePatchAsync(tenantIds))
             .OrderByDescending(p => p.DeviceCount).ToList();
         _devicePatchHistory = await MauDataService.GetDevicePatchHistoryAsync(tenantIds, days: 90);
+        _staleDeviceList = (await MauDataService.GetStaleDevicesAsync(tenantIds))
+            .OrderByDescending(d => d.Stale90Plus).ToList();
         _conditionalAccess = await MauDataService.GetConditionalAccessAsync(tenantIds);
         _guests = await MauDataService.GetGuestUsersAsync(tenantIds);
         _riskyUsers = await MauDataService.GetRiskyUsersAsync(tenantIds);
@@ -922,10 +1075,12 @@ else
             .ToList();
 
         _hasAnyData = _devices.Count > 0 || _conditionalAccess.Count > 0 || _guests.Count > 0 || _riskyUsers.Count > 0
-            || _appCredentials.Count > 0 || _privilegedRoles.Count > 0 || _oauthGrants.Count > 0 || _devicePatch.Count > 0;
+            || _appCredentials.Count > 0 || _privilegedRoles.Count > 0 || _oauthGrants.Count > 0 || _devicePatch.Count > 0
+            || _staleDeviceList.Count > 0;
 
         BuildDeviceMetrics();
         BuildDevicePatchMetrics();
+        BuildStaleDeviceMetrics();
         BuildConditionalAccessMetrics();
         BuildGuestMetrics();
         BuildRiskyUserMetrics();
@@ -1026,6 +1181,28 @@ else
             if (points.Count > 0)
                 _staleTrendSeries["Stale devices"] = points;
         }
+    }
+
+    private void BuildStaleDeviceMetrics()
+    {
+        _staleTotalDevices = _staleDeviceList.Sum(d => d.TotalDevices);
+        _stale90Plus = _staleDeviceList.Sum(d => d.Stale90Plus);
+        _staleDisabled = _staleDeviceList.Sum(d => d.DisabledDevices);
+        _stalePercent = _staleTotalDevices > 0 ? (double)_stale90Plus / _staleTotalDevices * 100 : 0;
+
+        _staleTotalBreakdown = _staleDeviceList
+            .GroupBy(d => d.OsPlatform)
+            .Select(g => new LabelValue(g.Key, g.Sum(d => d.TotalDevices)))
+            .Where(x => x.Value > 0)
+            .OrderByDescending(x => x.Value)
+            .ToList();
+
+        _staleBreakdown = _staleDeviceList
+            .GroupBy(d => d.OsPlatform)
+            .Select(g => new LabelValue(g.Key, g.Sum(d => d.Stale90Plus)))
+            .Where(x => x.Value > 0)
+            .OrderByDescending(x => x.Value)
+            .ToList();
     }
 
     private void BuildConditionalAccessMetrics()

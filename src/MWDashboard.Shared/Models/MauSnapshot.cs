@@ -156,6 +156,59 @@ public class TenantEntraTier
     }
 }
 
+/// <summary>
+/// Derives a tenant's Microsoft Defender for Office 365 capability from its license SKUs (no Graph call),
+/// mirroring <see cref="TenantEntraTier"/>. Used to <em>skip</em> threat-protection collection (email
+/// threats, Attack Simulation Training) on tenants that lack the required plan — a missing plan is a
+/// licensing limit, not a consent gap, so it must never be surfaced as "needs re-consent".
+/// </summary>
+public class TenantDefenderTier
+{
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    /// <summary><c>None</c>, <c>MDO P1</c>, or <c>MDO P2</c>.</summary>
+    public string Tier { get; set; } = "None";
+    /// <summary>True when the tenant has EOP/MDO email threat protection (Plan 1 or Plan 2).</summary>
+    public bool HasEmailThreatProtection { get; set; }
+    /// <summary>True when the tenant has Attack Simulation Training (Defender for Office 365 Plan 2 only).</summary>
+    public bool HasAttackSimulation { get; set; }
+
+    // Microsoft Defender for Office 365 Plan 2 (includes Attack Simulation Training) — standalone + bundles.
+    private static readonly string[] P2Skus =
+    [
+        "THREAT_INTELLIGENCE", "ATP_ENTERPRISE_PREMIUM", "EOP_ENTERPRISE_PREMIUM",
+        "SPE_E5", "MICROSOFT_365_E5", "M365_E5", "M365_E5_SECURITY", "MICROSOFT_365_E5_SECURITY",
+        "ENTERPRISEPREMIUM", "ENTERPRISEPREMIUM_NOPSTNCONF", "IDENTITY_THREAT_PROTECTION", "DEFENDER_ENDPOINT_P2"
+    ];
+
+    // Microsoft Defender for Office 365 Plan 1 (email threat protection, no Attack Simulation) — standalone + bundles.
+    private static readonly string[] P1Skus =
+    [
+        "ATP_ENTERPRISE", "SPB", "EOP_ENTERPRISE", "DEFENDER_FOR_OFFICE365_P1"
+    ];
+
+    public static TenantDefenderTier FromLicenses(string tenantId, string tenantName, IEnumerable<string> skuPartNumbers)
+    {
+        var skus = skuPartNumbers.Select(s => s.ToUpperInvariant()).ToHashSet();
+        var tier = new TenantDefenderTier { TenantId = tenantId, TenantName = tenantName };
+
+        if (P2Skus.Any(skus.Contains))
+        {
+            tier.Tier = "MDO P2";
+            tier.HasEmailThreatProtection = true;
+            tier.HasAttackSimulation = true;
+        }
+        else if (P1Skus.Any(skus.Contains))
+        {
+            tier.Tier = "MDO P1";
+            tier.HasEmailThreatProtection = true;
+            tier.HasAttackSimulation = false;
+        }
+
+        return tier;
+    }
+}
+
 public class WorkloadActivitySnapshot
 {
     public int Id { get; set; }
@@ -947,5 +1000,83 @@ public class SignInDetailSnapshot
     public int FailureCount { get; set; }
     /// <summary>Number of sign-ins whose aggregated risk level was low/medium/high (Identity Protection).</summary>
     public int RiskyCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Daily per-platform aggregate of Microsoft Entra-registered/joined devices, surfacing device-hygiene
+/// cleanup opportunities (registered devices that haven't signed in for 90+ days, plus disabled device
+/// objects). Distinct from Intune <see cref="DeviceComplianceSnapshot"/> because it covers <em>all</em>
+/// registered devices, not just managed ones. Sourced from Microsoft Graph <c>/devices</c>
+/// (<c>operatingSystem</c>, <c>approximateLastSignInDateTime</c>, <c>accountEnabled</c>; readable with the
+/// already-granted <c>Directory.Read.All</c>). Delete-then-insert per <c>(TenantId, ReportDate)</c>.
+/// </summary>
+public class StaleDeviceSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    /// <summary><c>Windows</c>, <c>iOS</c>, <c>Android</c>, <c>macOS</c>, or <c>Other</c>.</summary>
+    public string OsPlatform { get; set; } = string.Empty;
+    public int TotalDevices { get; set; }
+    /// <summary>Devices whose <c>approximateLastSignInDateTime</c> is older than 90 days (or never signed in).</summary>
+    public int Stale90Plus { get; set; }
+    /// <summary>Device objects that are disabled (<c>accountEnabled == false</c>).</summary>
+    public int DisabledDevices { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Daily aggregate of email threats detected/blocked by Exchange Online Protection / Microsoft Defender
+/// for Office 365, classified by threat type — the "threats stopped this month" headline a reseller
+/// surfaces in a QBR. Sourced from Microsoft Graph <c>/security/alerts_v2</c> filtered to email/collaboration
+/// threat categories (the only aggregate email-threat signal available app-only; the Defender portal's
+/// mail-flow "delivered" counts are not exposed to app-only Graph, so <see cref="DeliveredCount"/> stays 0).
+/// Requires a Defender for Office 365 / EOP subscription on the tenant — gated via
+/// <see cref="TenantDefenderTier"/>; the collection also no-ops gracefully on a 403. Delete-then-insert
+/// per <c>(TenantId, ReportDate)</c>.
+/// </summary>
+public class EmailThreatSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    /// <summary><c>Malware</c>, <c>Phishing</c>, <c>Spam</c>, or <c>Other</c>.</summary>
+    public string ThreatType { get; set; } = string.Empty;
+    /// <summary>Number of detected/blocked email-threat alerts of this type in the reporting window.</summary>
+    public int BlockedCount { get; set; }
+    /// <summary>Messages that were delivered despite the threat (zero-hour auto purge gaps). Not available via app-only Graph today, so currently 0.</summary>
+    public int DeliveredCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// One row per Attack Simulation Training campaign, capturing the security-awareness funnel (targeted →
+/// clicked → reported) and the compromised rate. Sourced from Microsoft Graph
+/// <c>/security/attackSimulation/simulations</c> + each campaign's <c>report/overview</c> (requires
+/// <c>AttackSimulation.Read.All</c> and <strong>Defender for Office 365 Plan 2</strong>) — gated via
+/// <see cref="TenantDefenderTier"/>; the collection also no-ops gracefully on a 403. No per-user PII is
+/// stored (campaign-level counts only). Delete-then-insert per <c>(TenantId, ReportDate)</c>.
+/// </summary>
+public class AttackSimSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string CampaignName { get; set; } = string.Empty;
+    /// <summary>The attack technique, e.g. <c>credentialHarvesting</c>, <c>attachmentMalware</c>, <c>linkInAttachment</c>.</summary>
+    public string AttackType { get; set; } = string.Empty;
+    /// <summary>Campaign status, e.g. <c>succeeded</c>, <c>running</c>, <c>scheduled</c>.</summary>
+    public string Status { get; set; } = string.Empty;
+    public int TargetedUsers { get; set; }
+    public int ClickedCount { get; set; }
+    public int ReportedCount { get; set; }
+    /// <summary>Percentage of targeted users who were compromised by the simulated attack (0–100).</summary>
+    public double CompromisedRate { get; set; }
+    /// <summary>The campaign launch date (UTC), when available.</summary>
+    public DateTime? LaunchDate { get; set; }
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }

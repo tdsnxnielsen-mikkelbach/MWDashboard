@@ -54,6 +54,9 @@ public class MauDbContext : DbContext
     public DbSet<OAuthGrantSnapshot> OAuthGrantSnapshots => Set<OAuthGrantSnapshot>();
     public DbSet<MailboxAccessSnapshot> MailboxAccessSnapshots => Set<MailboxAccessSnapshot>();
     public DbSet<SignInDetailSnapshot> SignInDetailSnapshots => Set<SignInDetailSnapshot>();
+    public DbSet<StaleDeviceSnapshot> StaleDeviceSnapshots => Set<StaleDeviceSnapshot>();
+    public DbSet<EmailThreatSnapshot> EmailThreatSnapshots => Set<EmailThreatSnapshot>();
+    public DbSet<AttackSimSnapshot> AttackSimSnapshots => Set<AttackSimSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -465,6 +468,32 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.ClientApp).HasMaxLength(100);
             entity.Property(e => e.Country).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<StaleDeviceSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.OsPlatform, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.OsPlatform).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<EmailThreatSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ThreatType, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.ThreatType).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<AttackSimSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.CampaignName, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.CampaignName).HasMaxLength(300);
+            entity.Property(e => e.AttackType).HasMaxLength(100);
+            entity.Property(e => e.Status).HasMaxLength(50);
         });
     }
 }

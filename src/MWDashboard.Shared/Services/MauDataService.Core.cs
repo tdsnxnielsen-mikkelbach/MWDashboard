@@ -310,4 +310,28 @@ public partial class MauDataService
 
         return tiers;
     }
+
+    public async Task<List<TenantDefenderTier>> GetTenantDefenderTiersAsync()
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var tenants = await db.Tenants.AsNoTracking().Where(t => t.IsActive).ToListAsync();
+        var latestLicenses = await db.LicenseSnapshots
+            .AsNoTracking()
+            .GroupBy(l => new { l.TenantId, l.SkuId })
+            .Select(g => g.OrderByDescending(l => l.CollectedAt).First())
+            .ToListAsync();
+
+        var tiers = new List<TenantDefenderTier>();
+        foreach (var tenant in tenants)
+        {
+            var skus = latestLicenses
+                .Where(l => l.TenantId == tenant.TenantId)
+                .Select(l => l.SkuPartNumber);
+
+            tiers.Add(TenantDefenderTier.FromLicenses(tenant.TenantId, tenant.DisplayName, skus));
+        }
+
+        return tiers;
+    }
 }

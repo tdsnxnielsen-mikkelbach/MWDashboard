@@ -215,6 +215,15 @@ public class OnDemandDataCollectionService : IDataCollectionService
             await _dataService.SaveDevicePatchAsync(tenantId, devicePatch[0].ReportDate, devicePatch);
         }
 
+        // Stale registered devices (all tiers — uses Directory.Read.All)
+        var staleDevices = await _graphService.GetStaleDevicesAsync(tenantId);
+        if (staleDevices.Count > 0)
+        {
+            foreach (var d in staleDevices)
+                d.TenantName = tenantName;
+            await _dataService.SaveStaleDevicesAsync(tenantId, staleDevices[0].ReportDate, staleDevices);
+        }
+
         // Conditional Access coverage (all tiers)
         var conditionalAccess = await _graphService.GetConditionalAccessAsync(tenantId);
         if (conditionalAccess != null)
@@ -329,6 +338,41 @@ public class OnDemandDataCollectionService : IDataCollectionService
         {
             foreach (var a in defenderAlerts) a.TenantName = tenantName;
             await _dataService.SaveDefenderAlertsAsync(tenantId, DateTime.UtcNow.Date, defenderAlerts);
+        }
+
+        // --- Threat protection (Microsoft Defender for Office 365 — license-gated) ---
+        var defenderTier = TenantDefenderTier.FromLicenses(tenantId, tenantName, licenses.Select(l => l.SkuPartNumber));
+
+        // Email threat protection (Defender for O365 / EOP — reuses SecurityAlert.Read.All)
+        if (defenderTier.HasEmailThreatProtection)
+        {
+            var emailThreats = await _graphService.GetEmailThreatsAsync(tenantId);
+            if (emailThreats.Count > 0)
+            {
+                foreach (var t in emailThreats) t.TenantName = tenantName;
+                await _dataService.SaveEmailThreatsAsync(tenantId, DateTime.UtcNow.Date, emailThreats);
+            }
+        }
+        else
+        {
+            _logger.LogInformation("Skipping email-threat analysis for tenant {TenantName}: requires Microsoft Defender for Office 365 / Exchange Online Protection (Defender tier: {Tier}).",
+                tenantName, defenderTier.Tier);
+        }
+
+        // Attack Simulation Training (Defender for O365 Plan 2 — requires AttackSimulation.Read.All)
+        if (defenderTier.HasAttackSimulation)
+        {
+            var attackSims = await _graphService.GetAttackSimulationsAsync(tenantId);
+            if (attackSims.Count > 0)
+            {
+                foreach (var s in attackSims) s.TenantName = tenantName;
+                await _dataService.SaveAttackSimulationsAsync(tenantId, DateTime.UtcNow.Date, attackSims);
+            }
+        }
+        else
+        {
+            _logger.LogInformation("Skipping Attack Simulation Training analysis for tenant {TenantName}: requires Microsoft Defender for Office 365 Plan 2 (Defender tier: {Tier}).",
+                tenantName, defenderTier.Tier);
         }
 
         // Directory audit / change log (requires AuditLog.Read.All). Uses a per-tenant cursor and

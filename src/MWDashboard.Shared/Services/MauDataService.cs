@@ -24,6 +24,7 @@ public interface IMauDataService
     Task<List<SecuritySignInSummary>> GetSecuritySummaryAsync(IEnumerable<string>? tenantIds, int days = 30);
     Task SaveSecuritySummariesAsync(IEnumerable<SecuritySignInSummary> summaries);
     Task<List<TenantEntraTier>> GetTenantEntraIdTiersAsync();
+    Task<List<TenantDefenderTier>> GetTenantDefenderTiersAsync();
 
     // Workload Activity
     Task<List<WorkloadActivitySnapshot>> GetWorkloadActivityAsync(IEnumerable<string>? tenantIds, int days = 30);
@@ -196,6 +197,18 @@ public interface IMauDataService
     Task SaveSignInDetailAsync(IEnumerable<SignInDetailSnapshot> snapshots);
     Task<DateTime?> GetSignInDetailCursorAsync(string tenantId);
     Task UpdateSignInDetailCursorAsync(string tenantId, DateTime cursorUtc);
+
+    // Stale registered devices — Microsoft Graph /devices (registered/joined device hygiene)
+    Task<List<StaleDeviceSnapshot>> GetStaleDevicesAsync(IEnumerable<string>? tenantIds);
+    Task SaveStaleDevicesAsync(string tenantId, DateTime reportDate, IEnumerable<StaleDeviceSnapshot> snapshots);
+
+    // Email threat protection — Microsoft Defender for Office 365 / EOP (via /security/alerts_v2)
+    Task<List<EmailThreatSnapshot>> GetEmailThreatsAsync(IEnumerable<string>? tenantIds);
+    Task SaveEmailThreatsAsync(string tenantId, DateTime reportDate, IEnumerable<EmailThreatSnapshot> snapshots);
+
+    // Attack Simulation Training — Microsoft Graph /security/attackSimulation/simulations
+    Task<List<AttackSimSnapshot>> GetAttackSimulationsAsync(IEnumerable<string>? tenantIds);
+    Task SaveAttackSimulationsAsync(string tenantId, DateTime reportDate, IEnumerable<AttackSimSnapshot> snapshots);
 }
 
 /// <summary>

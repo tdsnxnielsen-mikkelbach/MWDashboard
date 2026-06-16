@@ -100,6 +100,36 @@ public partial class MauDataService
         await db.SaveChangesAsync();
     }
 
+    // Stale registered devices (delete-then-insert per (TenantId, ReportDate))
+    public async Task<List<StaleDeviceSnapshot>> GetStaleDevicesAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.StaleDeviceSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .OrderByDescending(s => s.Stale90Plus)
+            .ToListAsync();
+    }
+
+    public async Task SaveStaleDevicesAsync(string tenantId, DateTime reportDate, IEnumerable<StaleDeviceSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var existing = await db.StaleDeviceSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.StaleDeviceSnapshots.RemoveRange(existing);
+
+        db.StaleDeviceSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
+
     // Conditional Access
     public async Task<List<ConditionalAccessSnapshot>> GetConditionalAccessAsync(IEnumerable<string>? tenantIds)
     {

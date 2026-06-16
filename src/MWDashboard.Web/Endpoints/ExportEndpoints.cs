@@ -219,6 +219,22 @@ public static class ExportEndpoints
             async (data, scope) => (await data.GetDefenderAlertsAsync(scope)).Select(r =>
                 Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.Severity), F(r.Status), r.AlertCount))),
 
+        ["stale-devices"] = new("stale-devices-report.csv",
+            "TenantId,TenantName,ReportDate,OsPlatform,TotalDevices,Stale90Plus,DisabledDevices",
+            async (data, scope) => (await data.GetStaleDevicesAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.OsPlatform), r.TotalDevices, r.Stale90Plus, r.DisabledDevices))),
+
+        ["email-threats"] = new("email-threats-report.csv",
+            "TenantId,TenantName,ReportDate,ThreatType,BlockedCount,DeliveredCount",
+            async (data, scope) => (await data.GetEmailThreatsAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.ThreatType), r.BlockedCount, r.DeliveredCount))),
+
+        ["attack-sim"] = new("attack-simulation-report.csv",
+            "TenantId,TenantName,ReportDate,CampaignName,AttackType,Status,TargetedUsers,ClickedCount,ReportedCount,CompromisedRate,LaunchDate",
+            async (data, scope) => (await data.GetAttackSimulationsAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.CampaignName), F(r.AttackType), F(r.Status),
+                    r.TargetedUsers, r.ClickedCount, r.ReportedCount, N(r.CompromisedRate), DN(r.LaunchDate)))),
+
         ["mail-rules"] = new("suspicious-mail-rules-report.csv",
             "TenantId,TenantName,ReportDate,RuleType,EventCount,DistinctMailboxes",
             async (data, scope) => (await data.GetMailRuleEventsAsync(scope, days: 30)).Select(r =>

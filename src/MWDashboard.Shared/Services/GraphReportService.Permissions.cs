@@ -166,6 +166,10 @@ public partial class GraphReportService
         // IdentityRiskyUser.Read.All is intentionally NOT probed here: it is Entra ID P2-gated,
         // so a 403 on a non-P2 tenant is a licensing limit, not a consent gap, and would produce
         // a false "re-consent" flag. The risky-user collection logs that case on its own.
+        // AttackSimulation.Read.All is intentionally NOT probed here: it is Microsoft Defender for
+        // Office 365 Plan 2-gated, so a 403 on an under-licensed tenant is a licensing limit, not a
+        // consent gap. GetAttackSimulationsAsync handles that 403 gracefully and the collection is
+        // gated upstream by TenantDefenderTier.
 
         return missing;
     }

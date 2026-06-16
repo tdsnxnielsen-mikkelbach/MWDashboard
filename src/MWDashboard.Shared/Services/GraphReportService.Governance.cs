@@ -188,6 +188,160 @@ public partial class GraphReportService
         }).ToList();
     }
 
+    // Email threat protection (Exchange Online Protection / Microsoft Defender for Office 365) —
+    // detected/blocked email threats grouped by type (Malware/Phishing/Spam). Aggregate mail-flow
+    // counts are not exposed to app-only Graph; /security/alerts_v2 filtered to email/collaboration
+    // threat categories is the available app-only signal. Requires a Defender for O365 / EOP plan
+    // (gated upstream by TenantDefenderTier) and SecurityAlert.Read.All; no-ops gracefully on 403.
+    public async Task<List<EmailThreatSnapshot>> GetEmailThreatsAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var reportDate = DateTime.UtcNow.Date;
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-30);
+        var buckets = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            var page = await client.Security.Alerts_v2.GetAsync(c =>
+            {
+                c.QueryParameters.Filter = $"createdDateTime ge {cutoff:yyyy-MM-ddTHH:mm:ssZ}";
+                c.QueryParameters.Top = 999;
+            });
+
+            if (page?.Value != null)
+            {
+                void Accumulate(Microsoft.Graph.Models.Security.Alert a)
+                {
+                    var threatType = ClassifyEmailThreat(a);
+                    if (threatType == null) return; // not an email/collaboration threat
+                    buckets[threatType] = buckets.TryGetValue(threatType, out var n) ? n + 1 : 1;
+                }
+
+                var iterator = Microsoft.Graph.PageIterator<Microsoft.Graph.Models.Security.Alert, Microsoft.Graph.Models.Security.AlertCollectionResponse>
+                    .CreatePageIterator(client, page, a => { Accumulate(a); return true; });
+                await iterator.IterateAsync();
+            }
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            _logger.LogWarning("Email threat data unavailable for tenant {TenantId}: tenant not onboarded to Microsoft " +
+                "Defender for Office 365, or SecurityAlert.Read.All not consented.", tenantId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get email threats for tenant {TenantId}", tenantId);
+        }
+
+        return buckets.Select(kvp => new EmailThreatSnapshot
+        {
+            TenantId = tenantId,
+            ReportDate = reportDate,
+            ThreatType = kvp.Key,
+            BlockedCount = kvp.Value,
+            DeliveredCount = 0,
+            CollectedAt = DateTime.UtcNow
+        }).ToList();
+    }
+
+    // Classifies a Defender alert as an email/collaboration threat (Malware/Phishing/Spam) or null
+    // when it is not email-related. Uses the alert category + title keywords since the email-threat
+    // taxonomy is not a strongly-typed enum in Graph.
+    private static string? ClassifyEmailThreat(Microsoft.Graph.Models.Security.Alert a)
+    {
+        var haystack = $"{a.Category} {a.Title} {a.Description}".ToLowerInvariant();
+        var isEmail = haystack.Contains("mail") || haystack.Contains("email") || haystack.Contains("phish")
+            || haystack.Contains("teams message") || haystack.Contains("collaboration") || haystack.Contains("zap");
+        if (!isEmail) return null;
+
+        if (haystack.Contains("malware") || haystack.Contains("virus") || haystack.Contains("trojan")) return "Malware";
+        if (haystack.Contains("phish")) return "Phishing";
+        if (haystack.Contains("spam") || haystack.Contains("bulk")) return "Spam";
+        return "Other";
+    }
+
+    // Attack Simulation Training — phishing-simulation campaigns and the targeted → clicked → reported
+    // funnel + compromised rate (security-awareness posture). Requires AttackSimulation.Read.All and
+    // Defender for Office 365 Plan 2 (gated upstream by TenantDefenderTier); no-ops gracefully on 403.
+    // Stores campaign-level counts only — no per-user identities.
+    public async Task<List<AttackSimSnapshot>> GetAttackSimulationsAsync(string tenantId)
+    {
+        var client = CreateClientForTenant(tenantId);
+        var reportDate = DateTime.UtcNow.Date;
+        var results = new List<AttackSimSnapshot>();
+
+        try
+        {
+            var page = await client.Security.AttackSimulation.Simulations.GetAsync(c =>
+            {
+                c.QueryParameters.Top = 50;
+            });
+
+            var simulations = (page?.Value ?? [])
+                .OrderByDescending(s => s.CreatedDateTime ?? s.LaunchDateTime ?? DateTimeOffset.MinValue)
+                .Take(25)
+                .ToList();
+
+            foreach (var sim in simulations)
+            {
+                if (string.IsNullOrWhiteSpace(sim.Id)) continue;
+
+                var snap = new AttackSimSnapshot
+                {
+                    TenantId = tenantId,
+                    ReportDate = reportDate,
+                    CampaignName = string.IsNullOrWhiteSpace(sim.DisplayName) ? sim.Id : sim.DisplayName,
+                    AttackType = sim.AttackTechnique?.ToString() ?? sim.AttackType?.ToString() ?? "unknown",
+                    Status = sim.Status?.ToString() ?? "unknown",
+                    LaunchDate = sim.LaunchDateTime?.UtcDateTime,
+                    CollectedAt = DateTime.UtcNow
+                };
+
+                // The simulations list doesn't expand the report, so fetch each campaign with the
+                // report navigation expanded and read its overview.
+                try
+                {
+                    var detail = await client.Security.AttackSimulation.Simulations[sim.Id]
+                        .GetAsync(c => c.QueryParameters.Expand = ["report"]);
+                    var overview = detail?.Report?.Overview;
+                    if (overview != null)
+                    {
+                        snap.TargetedUsers = overview.ResolvedTargetsCount ?? 0;
+                        var events = overview.SimulationEventsContent;
+                        if (events != null)
+                        {
+                            snap.CompromisedRate = Math.Round(events.CompromisedRate ?? 0, 1);
+                            foreach (var ev in events.Events ?? [])
+                            {
+                                var name = (ev.EventName?.ToString() ?? string.Empty).ToLowerInvariant();
+                                var count = ev.Count ?? 0;
+                                if (name.Contains("click")) snap.ClickedCount += count;
+                                else if (name.Contains("report")) snap.ReportedCount += count;
+                                else if (snap.TargetedUsers == 0 && name.Contains("deliver")) snap.TargetedUsers += count;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Could not load attack-simulation report overview for simulation {SimId} (tenant {TenantId})", sim.Id, tenantId);
+                }
+
+                results.Add(snap);
+            }
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            _logger.LogWarning("Attack Simulation Training data unavailable for tenant {TenantId}: requires Defender for " +
+                "Office 365 Plan 2 and AttackSimulation.Read.All.", tenantId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get attack simulations for tenant {TenantId}", tenantId);
+        }
+
+        return results;
+    }
+
     // High-risk delegated/application scopes that warrant attention when consented to a third-party app.
     private static readonly HashSet<string> HighRiskOAuthScopes = new(StringComparer.OrdinalIgnoreCase)
     {

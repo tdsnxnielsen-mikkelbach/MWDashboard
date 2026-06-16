@@ -324,23 +324,23 @@ Each item follows the existing scaffolding pattern (the `new-model` skill): new 
 
 ### Tier 2 — Strong value, new consent or add-on license required
 
-- [ ] **Stale Entra-registered devices** — registered/joined devices that haven't signed in for 90+ days (device-hygiene / cleanup story distinct from Intune compliance, since it covers all registered devices, not just managed ones).
-  - Endpoint: `GET /devices` (`displayName`, `operatingSystem`, `approximateLastSignInDateTime`, `isManaged`, `isCompliant`, `accountEnabled`)
-  - Permission: `Device.Read.All` **(new — requires re-consent)** (or reuse `Directory.Read.All` if it suffices for `/devices` in the target tenant)
+- [x] **Stale Entra-registered devices** — ✅ **Shipped** (Stale Registered Devices tab on the `/identity` page). Registered/joined devices that haven't signed in for 90+ days (device-hygiene / cleanup story distinct from Intune compliance, since it covers all registered devices, not just managed ones).
+  - Endpoint: `GET /devices` (`operatingSystem`, `approximateLastSignInDateTime`, `accountEnabled`)
+  - Permission: reuses `Directory.Read.All` **(already granted)** — no re-consent required
   - Model: `StaleDeviceSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `OsPlatform`, `TotalDevices`, `Stale90Plus`, `DisabledDevices`, `CollectedAt`); composite unique index `(TenantId, OsPlatform, ReportDate)`
-  - Implementation steps: model + migration → `GraphReportService.GetStaleDevicesAsync(tenantId)` (bucket by platform, count `approximateLastSignInDateTime` older than 90 days) → data-service save (delete-then-insert) + cache (`stale-devices`, 60-min) → tab on `/identity` → export. Add `Device.Read.All` to `GraphPermissions` + consent probe + `docs/permissions.md`
+  - All-tier (no license gate); delete-then-insert per `(TenantId, ReportDate)`; cache key `stale-devices` (60-min); `stale-devices` export entry
 
-- [ ] **Defender for Office 365 email threat protection** — phishing / malware / spam messages **blocked** by EOP/MDO (the "we stopped X threats this month" headline metric customers love in a QBR). Requires the customer to hold a Defender for Office 365 / EOP plan.
-  - Endpoints: `getMailDetailMalwareReport` / `getMailDetailPhishReport` / threat reports under `/security` (validate exact Graph availability per tenant; some live only in the Defender portal reporting API)
-  - Permission: likely `SecurityEvents.Read.All` **(already granted)** or `ThreatHunting.Read.All` / `SecurityAnalyzedMessage.Read.All` **(new)** — confirm during spike; **requires a Defender for Office 365 subscription** on the tenant
-  - Model: `EmailThreatSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `ThreatType` [Malware/Phish/Spam], `BlockedCount`, `DeliveredCount`, `CollectedAt`); composite unique index `(TenantId, ThreatType, ReportDate)`
-  - Implementation steps: **spike first** to confirm the exact Graph endpoint + permission + license requirement (this is the least-certain item) → model + migration → `GraphReportService` method (gracefully no-op when the tenant lacks the Defender plan, like the existing Defender-alerts handling) → data-service save + cache (`email-threats`, 60-min) → section on `/security` with a "Defender for Office 365 not licensed" empty-state → export
+- [x] **Defender for Office 365 email threat protection** — ✅ **Shipped** (Email Threats tab on the new `/threat-protection` page). Phishing / malware / spam threats **blocked** by EOP/MDO (the "we stopped X threats this month" headline metric customers love in a QBR).
+  - Source: `/security/alerts_v2` filtered to email-threat categories (no clean app-only aggregate "messages blocked" endpoint exists; `getMailDetail*Report` live only in the Defender portal reporting API). `DeliveredCount` is not available via app-only Graph today, so it stays 0.
+  - Permission: reuses `SecurityAlert.Read.All` **(already granted)** — **requires a Defender for Office 365 / EOP plan** on the tenant (gated via `TenantDefenderTier`; also no-ops gracefully on 403)
+  - Model: `EmailThreatSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `ThreatType` [Malware/Phishing/Spam/Other], `BlockedCount`, `DeliveredCount`, `CollectedAt`); composite unique index `(TenantId, ThreatType, ReportDate)`
+  - Delete-then-insert per `(TenantId, ReportDate)`; cache key `email-threats` (60-min); `email-threats` export entry; "Defender for Office 365 not licensed" empty-state lists the unlicensed tenants
 
-- [ ] **Attack Simulation Training results** — phishing-simulation campaigns and click/report rates (security-awareness posture). Requires Defender for Office 365 Plan 2.
-  - Endpoint: `GET /security/attackSimulation/simulations` (+ per-simulation report)
-  - Permission: `AttackSimulation.Read.All` **(new — requires re-consent)**; **Defender for Office 365 Plan 2** on the tenant
-  - Model: `AttackSimSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `CampaignName`, `TargetedUsers`, `ClickedCount`, `ReportedCount`, `CompromisedRate`, `CollectedAt`); composite unique index `(TenantId, CampaignName, ReportDate)`
-  - Implementation steps: model + migration → `GraphReportService.GetAttackSimulationsAsync(tenantId)` (no-op when unlicensed) → data-service save + cache (`attack-sim`, 60-min) → tab on `/security` → export → add `AttackSimulation.Read.All` to `GraphPermissions` + consent probe + `docs/permissions.md`
+- [x] **Attack Simulation Training results** — ✅ **Shipped** (Attack Simulation Training tab on the new `/threat-protection` page). Phishing-simulation campaigns and click/report/compromised rates (security-awareness posture).
+  - Endpoint: `GET /security/attackSimulation/simulations` + per-simulation `report` (fetched via `$expand=report`)
+  - Permission: `AttackSimulation.Read.All` **(new)**; **Defender for Office 365 Plan 2** on the tenant. Intentionally **excluded from the consent probe** (its 403 on a non-P2 tenant is a licensing limit, not a consent gap) — gated via `TenantDefenderTier.HasAttackSimulation`; also no-ops gracefully on 403
+  - Model: `AttackSimSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `CampaignName`, `AttackType`, `Status`, `TargetedUsers`, `ClickedCount`, `ReportedCount`, `CompromisedRate`, `LaunchDate`, `CollectedAt`); composite unique index `(TenantId, CampaignName, ReportDate)`. No per-user PII (campaign-level counts only)
+  - Delete-then-insert per `(TenantId, ReportDate)`; cache key `attack-sim` (60-min); `attack-sim` export entry
 
 ### Tier 3 — Optional / overlap
 
@@ -356,4 +356,4 @@ Each item follows the existing scaffolding pattern (the `new-model` skill): new 
 4. ~~**Mailbox non-owner access** (Tier 1)~~ — ✅ **Shipped** (Mailbox Access section on Security page; parser add-on to the existing `Audit.Exchange` collector, no extra API calls).
 5. ~~**Windows patch / OS-version compliance** (Tier 1)~~ — ✅ **Shipped** (Patch / OS Versions tab on Identity & Devices page; aggregation over the already-collected `managedDevices` list, no extra Graph call; 30-day stale-check-in flag).
 6. ~~**Legacy auth & risky sign-in detail** (Tier 1, P1/P2-gated)~~ — ✅ **Shipped** (Legacy Auth & Risky Sign-ins section on Security page; legacy-auth client breakdown + failed/risky counts + sign-in-by-country, cursor + ADD-on-upsert accumulates history beyond the ~30-day sign-in-log retention).
-7. **Stale registered devices** (Tier 2) + **Defender for O365 email threats** (Tier 2, spike first) + **Attack Simulation Training** (Tier 2) — once the no-consent Tier 1 items ship.
+7. ~~**Stale registered devices** (Tier 2) + **Defender for O365 email threats** (Tier 2) + **Attack Simulation Training** (Tier 2)~~ — ✅ **Shipped** (Stale Registered Devices tab on Identity & Devices; new Threat Protection page with Email Threats + Attack Simulation Training tabs; separate Defender capability chip on the Tenants page). Stale devices reuse `Directory.Read.All`; email threats reuse `SecurityAlert.Read.All` (MDO P1/P2-gated); Attack Simulation adds `AttackSimulation.Read.All` (MDO P2-gated, excluded from the consent probe).

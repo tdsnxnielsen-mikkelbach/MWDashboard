@@ -318,6 +318,20 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("device-patch", new[] { tenantId }), BuildKey("device-patch", null));
     }
 
+    // --- Stale registered devices (cached 60 min — daily-changing data) ---
+    public Task<List<StaleDeviceSnapshot>> GetStaleDevicesAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("stale-devices", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetStaleDevicesAsync(tenantIds), options);
+    }
+
+    public async Task SaveStaleDevicesAsync(string tenantId, DateTime reportDate, IEnumerable<StaleDeviceSnapshot> snapshots)
+    {
+        await _inner.SaveStaleDevicesAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("stale-devices", new[] { tenantId }), BuildKey("stale-devices", null));
+    }
+
     // --- Conditional Access (cached 60 min — daily-changing data) ---
     public Task<List<ConditionalAccessSnapshot>> GetConditionalAccessAsync(IEnumerable<string>? tenantIds)
     {
@@ -552,6 +566,34 @@ public class CachedMauDataService : IMauDataService
     {
         await _inner.SaveDefenderAlertsAsync(tenantId, reportDate, snapshots);
         await InvalidateAsync(BuildKey("defender-alerts", new[] { tenantId }), BuildKey("defender-alerts", null));
+    }
+
+    // --- Email threat protection (Defender for O365 / EOP) (60 min — daily-changing) ---
+    public Task<List<EmailThreatSnapshot>> GetEmailThreatsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("email-threats", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetEmailThreatsAsync(tenantIds), options);
+    }
+
+    public async Task SaveEmailThreatsAsync(string tenantId, DateTime reportDate, IEnumerable<EmailThreatSnapshot> snapshots)
+    {
+        await _inner.SaveEmailThreatsAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("email-threats", new[] { tenantId }), BuildKey("email-threats", null));
+    }
+
+    // --- Attack Simulation Training (60 min — daily-changing) ---
+    public Task<List<AttackSimSnapshot>> GetAttackSimulationsAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("attack-sim", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetAttackSimulationsAsync(tenantIds), options);
+    }
+
+    public async Task SaveAttackSimulationsAsync(string tenantId, DateTime reportDate, IEnumerable<AttackSimSnapshot> snapshots)
+    {
+        await _inner.SaveAttackSimulationsAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("attack-sim", new[] { tenantId }), BuildKey("attack-sim", null));
     }
 
     // --- Suspicious mailbox-rule / auto-forwarding audit (60 min — daily-changing) ---
@@ -819,6 +861,11 @@ public class CachedMauDataService : IMauDataService
     {
         var key = "MWDashboard:entra-tiers:all";
         return GetOrSetAsync(key, () => _inner.GetTenantEntraIdTiersAsync(), CacheOptions60Min);
+    }
+    public Task<List<TenantDefenderTier>> GetTenantDefenderTiersAsync()
+    {
+        var key = "MWDashboard:defender-tiers:all";
+        return GetOrSetAsync(key, () => _inner.GetTenantDefenderTiersAsync(), CacheOptions60Min);
     }
 
     // --- Workload Activity (15 min — dashboard-level) ---

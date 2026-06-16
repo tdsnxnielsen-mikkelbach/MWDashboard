@@ -1,0 +1,412 @@
+@page "/threat-protection"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@implements IDisposable
+
+<BrandedPageTitle Page="Threat Protection" />
+
+<div class="d-flex justify-space-between align-center mb-2">
+    <MudText Typo="Typo.h4">Threat Protection</MudText>
+    <ExportMenu Items="@(new[] {
+        ("Email Threats", "email-threats"),
+        ("Attack Simulation Training", "attack-sim") })" />
+</div>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Microsoft Defender for Office 365 email threat detections and Attack Simulation Training results.
+    Requires <PermissionTag Scope="SecurityAlert.Read.All" /> (email threats) and <PermissionTag Scope="AttackSimulation.Read.All" /> (simulations).
+    <strong>Defender license:</strong> email threat protection requires <strong>MDO Plan 1 or Plan 2</strong>; Attack Simulation Training requires <strong>MDO Plan 2</strong>.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <div class="d-flex flex-column align-center justify-center" style="min-height: 400px;">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-4">Loading threat-protection data...</MudText>
+    </div>
+}
+else if (!_hasAnyData)
+{
+    <MudAlert Severity="Severity.Info">
+        No threat-protection data available for the selected tenant(s).
+        @if (_unlicensedTenants.Count > 0)
+        {
+            <span>
+                The following tenant(s) are <strong>not licensed</strong> for Microsoft Defender for Office 365, so email threat
+                protection and Attack Simulation Training are unavailable: @string.Join(", ", _unlicensedTenants).
+            </span>
+        }
+        else
+        {
+            <span>Collect data from the Tenants page first. These insights require the listed Graph permissions to be consented.</span>
+        }
+    </MudAlert>
+}
+else
+{
+<MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4">
+
+    @* ---------------- Email Threats ---------------- *@
+    <MudTabPanel Text="Email Threats" Icon="@Icons.Material.Filled.MarkEmailRead">
+        @if (_emailThreats.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">
+                No email threat data available. Requires <PermissionTag Scope="SecurityAlert.Read.All" /> and a Defender for Office 365 license.
+            </MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Threats Blocked</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_totalBlocked.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">last 30 days</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Malware</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_malwareCount > 0 ? Color.Error : Color.Success)">@_malwareCount.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">detections</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Phishing</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_phishingCount > 0 ? Color.Warning : Color.Success)">@_phishingCount.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">detections</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Spam / Other</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_spamOtherCount.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">detections</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Threats by Type</MudText>
+                    <ApexChart TItem="LabelValue" Options="_threatDonutOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_threatBreakdown" Name="Threats"
+                                         SeriesType="SeriesType.Donut"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Blocked by Type</MudText>
+                    <ApexChart TItem="LabelValue" Options="_threatBarOptions" Height="320" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_threatBreakdown" Name="Blocked"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-1">Email Threat Detail</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+                        Email-threat alerts raised by Microsoft Defender for Office 365 in the last 30 days, grouped by threat
+                        category. Blocked counts reflect detected/quarantined messages.
+                    </MudText>
+                    <MudTable Items="_emailThreats" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                              GroupBy="@(TenantFilter.IsMultiTenantView ? _threatGroupDefinition : null)">
+                        <HeaderContent>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                            <MudTh>Threat Type</MudTh>
+                            <MudTh Style="text-align:right">Blocked</MudTh>
+                            <MudTh Style="text-align:right">Delivered</MudTh>
+                        </HeaderContent>
+                        <GroupHeaderTemplate>
+                            <MudTh Class="mud-table-cell-custom-group" colspan="@(TenantFilter.IsMultiTenantView ? 4 : 3)">
+                                @TenantFilter.GetTenantName(context.Key?.ToString() ?? string.Empty)
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-inline ml-2">
+                                    (@context.Items.Sum(t => t.BlockedCount).ToString("N0") blocked)
+                                </MudText>
+                            </MudTh>
+                        </GroupHeaderTemplate>
+                        <RowTemplate>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                            <MudTd DataLabel="Threat Type"><MudChip T="string" Size="Size.Small" Color="@ThreatColor(context.ThreatType)" Variant="Variant.Filled">@context.ThreatType</MudChip></MudTd>
+                            <MudTd DataLabel="Blocked" Style="text-align:right">@context.BlockedCount.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Delivered" Style="text-align:right">@context.DeliveredCount.ToString("N0")</MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Attack Simulation Training ---------------- *@
+    <MudTabPanel Text="Attack Simulation Training" Icon="@Icons.Material.Filled.Phishing">
+        @if (_attackSims.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">
+                No Attack Simulation Training data available. Requires <PermissionTag Scope="AttackSimulation.Read.All" /> and a Defender for Office 365 <strong>Plan 2</strong> license.
+            </MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Campaigns</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_attackSims.Count.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">most recent</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Avg Compromised Rate</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_avgCompromisedRate >= 10 ? Color.Error : _avgCompromisedRate > 0 ? Color.Warning : Color.Success)">@_avgCompromisedRate.ToString("0.#")%</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">across campaigns</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Users Clicked</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_totalClicked > 0 ? Color.Warning : Color.Success)">@_totalClicked.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">of @_totalTargeted.ToString("N0") targeted</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Users Reported</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_totalReported.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">good behavior</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Compromised Rate by Campaign</MudText>
+                    <ApexChart TItem="LabelValue" Options="_simBarOptions" Height="360" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_campaignRates" Name="Compromised %"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-1">Campaign Detail</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+                        Attack Simulation Training campaigns and their security-awareness funnel (targeted → clicked → reported).
+                        A lower compromised rate and higher report rate indicate stronger user resilience.
+                    </MudText>
+                    <MudTable Items="_attackSims" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                              GroupBy="@(TenantFilter.IsMultiTenantView ? _simGroupDefinition : null)">
+                        <HeaderContent>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                            <MudTh>Campaign</MudTh>
+                            <MudTh>Attack Type</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh Style="text-align:right">Targeted</MudTh>
+                            <MudTh Style="text-align:right">Clicked</MudTh>
+                            <MudTh Style="text-align:right">Reported</MudTh>
+                            <MudTh Style="text-align:right">Compromised</MudTh>
+                            <MudTh>Launched</MudTh>
+                        </HeaderContent>
+                        <GroupHeaderTemplate>
+                            <MudTh Class="mud-table-cell-custom-group" colspan="@(TenantFilter.IsMultiTenantView ? 9 : 8)">
+                                @TenantFilter.GetTenantName(context.Key?.ToString() ?? string.Empty)
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-inline ml-2">
+                                    (@context.Items.Count() campaign(s))
+                                </MudText>
+                            </MudTh>
+                        </GroupHeaderTemplate>
+                        <RowTemplate>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                            <MudTd DataLabel="Campaign">@context.CampaignName</MudTd>
+                            <MudTd DataLabel="Attack Type">@context.AttackType</MudTd>
+                            <MudTd DataLabel="Status"><MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@context.Status</MudChip></MudTd>
+                            <MudTd DataLabel="Targeted" Style="text-align:right">@context.TargetedUsers.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Clicked" Style="text-align:right">@context.ClickedCount.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Reported" Style="text-align:right">@context.ReportedCount.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Compromised" Style="text-align:right">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                                         Color="@(context.CompromisedRate >= 10 ? Color.Error : context.CompromisedRate > 0 ? Color.Warning : Color.Success)">
+                                    @context.CompromisedRate.ToString("0.#")%
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Launched">@(context.LaunchDate?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+</MudTabs>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _hasAnyData;
+    private int _chartKey;
+
+    private List<EmailThreatSnapshot> _emailThreats = [];
+    private List<AttackSimSnapshot> _attackSims = [];
+    private List<string> _unlicensedTenants = [];
+
+    // Groups the email-threat table by tenant (collapsible) in multi-tenant view.
+    private readonly TableGroupDefinition<EmailThreatSnapshot> _threatGroupDefinition = new()
+    {
+        GroupName = "Tenant",
+        Indentation = false,
+        Expandable = true,
+        Selector = s => s.TenantId
+    };
+
+    // Groups the attack-simulation table by tenant (collapsible) in multi-tenant view.
+    private readonly TableGroupDefinition<AttackSimSnapshot> _simGroupDefinition = new()
+    {
+        GroupName = "Tenant",
+        Indentation = false,
+        Expandable = true,
+        Selector = s => s.TenantId
+    };
+
+    // Email threat KPIs
+    private int _totalBlocked, _malwareCount, _phishingCount, _spamOtherCount;
+    private List<LabelValue> _threatBreakdown = [];
+
+    // Attack simulation KPIs
+    private int _totalTargeted, _totalClicked, _totalReported;
+    private double _avgCompromisedRate;
+    private List<LabelValue> _campaignRates = [];
+
+    private readonly ApexChartOptions<LabelValue> _threatDonutOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" }
+    };
+
+    private readonly ApexChartOptions<LabelValue> _threatBarOptions = new()
+    {
+        Legend = new Legend { Show = false },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = true } },
+        DataLabels = new DataLabels { Enabled = true }
+    };
+
+    private readonly ApexChartOptions<LabelValue> _simBarOptions = new()
+    {
+        Legend = new Legend { Show = false },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true, Distributed = true } },
+        DataLabels = new DataLabels { Enabled = true }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnTenantFilterChangedAsync()
+    {
+        return InvokeAsync(async () =>
+        {
+            TenantFilter.SetLoading(true);
+            _loading = true;
+            StateHasChanged();
+            await LoadData();
+            TenantFilter.SetLoading(false);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+
+        _emailThreats = (await MauDataService.GetEmailThreatsAsync(tenantIds))
+            .OrderByDescending(t => t.BlockedCount).ToList();
+        _attackSims = (await MauDataService.GetAttackSimulationsAsync(tenantIds))
+            .OrderByDescending(s => s.LaunchDate).ToList();
+
+        // Tenants without a Defender for Office 365 license, so the empty state can explain the gap.
+        var defenderTiers = await MauDataService.GetTenantDefenderTiersAsync();
+        var scoped = tenantIds?.ToHashSet();
+        _unlicensedTenants = defenderTiers
+            .Where(t => !t.HasEmailThreatProtection && (scoped == null || scoped.Contains(t.TenantId)))
+            .Select(t => TenantFilter.GetTenantName(t.TenantId))
+            .OrderBy(n => n)
+            .ToList();
+
+        _hasAnyData = _emailThreats.Count > 0 || _attackSims.Count > 0;
+
+        BuildEmailThreatMetrics();
+        BuildAttackSimMetrics();
+
+        _chartKey++;
+        _loading = false;
+    }
+
+    private void BuildEmailThreatMetrics()
+    {
+        _totalBlocked = _emailThreats.Sum(t => t.BlockedCount);
+        _malwareCount = _emailThreats.Where(t => t.ThreatType == "Malware").Sum(t => t.BlockedCount);
+        _phishingCount = _emailThreats.Where(t => t.ThreatType == "Phishing").Sum(t => t.BlockedCount);
+        _spamOtherCount = _emailThreats.Where(t => t.ThreatType is "Spam" or "Other").Sum(t => t.BlockedCount);
+
+        _threatBreakdown = _emailThreats
+            .GroupBy(t => t.ThreatType)
+            .Select(g => new LabelValue(g.Key, g.Sum(t => t.BlockedCount)))
+            .Where(x => x.Value > 0)
+            .OrderByDescending(x => x.Value)
+            .ToList();
+    }
+
+    private void BuildAttackSimMetrics()
+    {
+        _totalTargeted = _attackSims.Sum(s => s.TargetedUsers);
+        _totalClicked = _attackSims.Sum(s => s.ClickedCount);
+        _totalReported = _attackSims.Sum(s => s.ReportedCount);
+        _avgCompromisedRate = _attackSims.Count > 0
+            ? Math.Round(_attackSims.Average(s => s.CompromisedRate), 1)
+            : 0;
+
+        _campaignRates = _attackSims
+            .OrderByDescending(s => s.CompromisedRate)
+            .Take(15)
+            .Select(s => new LabelValue(s.CampaignName, (int)Math.Round(s.CompromisedRate)))
+            .ToList();
+    }
+
+    private static Color ThreatColor(string threatType) => threatType switch
+    {
+        "Malware" => Color.Error,
+        "Phishing" => Color.Warning,
+        "Spam" => Color.Info,
+        _ => Color.Default
+    };
+
+    public void Dispose()
+    {
+        TenantFilter.OnChangeAsync -= OnTenantFilterChangedAsync;
+    }
+
+    private record LabelValue(string Label, int Value);
+}

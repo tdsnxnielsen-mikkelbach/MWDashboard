@@ -150,6 +150,7 @@
                     <MudTh>Tenant Name</MudTh>
                     <MudTh>Tenant ID</MudTh>
                     <MudTh>Plan</MudTh>
+                    <MudTh>Defender</MudTh>
                     <MudTh>Active</MudTh>
                     <MudTh>Consent</MudTh>
                     <MudTh>Onboarded</MudTh>
@@ -194,6 +195,29 @@
                         {
                             <MudTooltip Text="Free tier — sign-in activity & inactive-account analysis require Entra ID P1/P2">
                                 <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Text">Free</MudChip>
+                            </MudTooltip>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="Defender">
+                        @{
+                            var mdo = GetDefenderTier(context.TenantId);
+                        }
+                        @if (mdo == "MDO P2")
+                        {
+                            <MudTooltip Text="Microsoft Defender for Office 365 Plan 2 — email threat protection + Attack Simulation Training">
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">MDO P2</MudChip>
+                            </MudTooltip>
+                        }
+                        else if (mdo == "MDO P1")
+                        {
+                            <MudTooltip Text="Microsoft Defender for Office 365 Plan 1 — email threat protection (no Attack Simulation Training)">
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Text">MDO P1</MudChip>
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <MudTooltip Text="Not licensed — email threat protection & Attack Simulation Training require Defender for Office 365 P1/P2">
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Text">Not licensed</MudChip>
                             </MudTooltip>
                         }
                     </MudTd>
@@ -250,6 +274,7 @@
     private List<TenantInfo> _tenants = [];
     private TenantInfo _newTenant = new();
     private Dictionary<string, string> _tiers = new();
+    private Dictionary<string, string> _defenderTiers = new();
     private MudForm _form = null!;
     private bool _loading = true;
     private string _message = string.Empty;
@@ -275,10 +300,14 @@
         _tenants = await db.Tenants.OrderBy(t => t.TenantName).ToListAsync();
         var tiers = await DataService.GetTenantEntraIdTiersAsync();
         _tiers = tiers.ToDictionary(t => t.TenantId, t => t.Tier);
+        var defenderTiers = await DataService.GetTenantDefenderTiersAsync();
+        _defenderTiers = defenderTiers.ToDictionary(t => t.TenantId, t => t.Tier);
         _loading = false;
     }
 
     private string GetTier(string tenantId) => _tiers.TryGetValue(tenantId, out var t) ? t : "Free";
+
+    private string GetDefenderTier(string tenantId) => _defenderTiers.TryGetValue(tenantId, out var t) ? t : "None";
 
     private async Task AddTenant()
     {
