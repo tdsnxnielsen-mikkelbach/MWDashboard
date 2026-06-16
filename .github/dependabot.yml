@@ -5,12 +5,26 @@
 
 version: 2
 updates:
-  # .NET dependencies
-  - package-ecosystem: "nuget" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # .NET dependencies — every project lives under src/
+  - package-ecosystem: "nuget"
+    directories:
+      - "/src/**"
     schedule:
       interval: "weekly"
- 
+    open-pull-requests-limit: 10
+    groups:
+      # Collapse the many shared packages (Microsoft.Graph, Azure.*, EF Core, etc.)
+      # across the 6 projects into a single PR per update run to reduce noise.
+      microsoft:
+        patterns:
+          - "Microsoft.*"
+          - "Azure.*"
+          - "System.*"
+      mudblazor-charts:
+        patterns:
+          - "MudBlazor*"
+          - "Blazor-ApexCharts"
+
   # GitHub Actions (CI/CD)
   - package-ecosystem: "github-actions"
     directory: "/"

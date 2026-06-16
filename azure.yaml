@@ -5,7 +5,7 @@ metadata:
 hooks:
   prepackage:
     shell: sh
-    run: dotnet build -c Release
+    run: dotnet build MWDashboard.slnx -c Release
   postdeploy:
     shell: pwsh
     run: |
