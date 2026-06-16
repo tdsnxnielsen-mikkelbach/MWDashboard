@@ -11,7 +11,14 @@
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["MWDashboard.Web.styles.css"]" />
     <ImportMap />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    @if (!string.IsNullOrEmpty(_faviconBase64))
+    {
+        <link rel="icon" type="@_faviconContentType" href="data:@_faviconContentType;base64,@_faviconBase64" />
+    }
+    else
+    {
+        <link rel="icon" type="image/png" href="favicon.png" />
+    }
     <HeadOutlet />
 </head>
 
@@ -23,3 +30,35 @@
 </body>
 
 </html>
+
+@code {
+    [Inject] private IDbContextFactory<MauDbContext> DbFactory { get; set; } = default!;
+
+    private string? _faviconBase64;
+    private string _faviconContentType = "image/png";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Render the custom favicon (stored as Base64 in the branding settings) inline as a
+        // data URI so an uploaded icon takes effect on the next page load — the static
+        // wwwroot/favicon.png is only the fallback when no custom favicon is configured.
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var favicon = await db.BrandingSettings
+                .AsNoTracking()
+                .Select(b => new { b.FaviconBase64, b.FaviconContentType })
+                .FirstOrDefaultAsync();
+            if (favicon != null && !string.IsNullOrEmpty(favicon.FaviconBase64))
+            {
+                _faviconBase64 = favicon.FaviconBase64;
+                if (!string.IsNullOrWhiteSpace(favicon.FaviconContentType))
+                    _faviconContentType = favicon.FaviconContentType;
+            }
+        }
+        catch
+        {
+            // Branding is best-effort; fall back to the static favicon on any failure.
+        }
+    }
+}
