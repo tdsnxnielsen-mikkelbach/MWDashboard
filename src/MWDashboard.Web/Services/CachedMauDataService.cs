@@ -596,6 +596,17 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("attack-sim", new[] { tenantId }), BuildKey("attack-sim", null));
     }
 
+    // --- Tenant purge: wipe all historical snapshot data for a tenant ---
+    public async Task<int> PurgeTenantDataAsync(string tenantId)
+    {
+        var deleted = await _inner.PurgeTenantDataAsync(tenantId);
+        // A purge spans every snapshot feature, so drop the entire cache rather than
+        // enumerating per-feature keys. Falls back to per-key TTL when Redis is unavailable.
+        if (_invalidationService != null)
+            await _invalidationService.FlushAllAsync();
+        return deleted;
+    }
+
     // --- Suspicious mailbox-rule / auto-forwarding audit (60 min — daily-changing) ---
     public Task<List<MailRuleEventSnapshot>> GetMailRuleEventsAsync(IEnumerable<string>? tenantIds, int days = 30)
     {

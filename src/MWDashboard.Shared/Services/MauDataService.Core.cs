@@ -334,4 +334,37 @@ public partial class MauDataService
 
         return tiers;
     }
+
+    public async Task<int> PurgeTenantDataAsync(string tenantId)
+    {
+        if (string.IsNullOrWhiteSpace(tenantId))
+            return 0;
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        // Bulk-delete every snapshot row for this tenant across all snapshot tables. Every snapshot
+        // entity carries a string TenantId column (no FK to TenantInfo), so we drive the purge off
+        // the EF model: any mapped entity that has a "TenantId" property — except the TenantInfo
+        // registration row itself, which is preserved — gets a single ExecuteDelete per table. New
+        // snapshot tables are automatically covered without touching this method.
+        var deleteHelper = typeof(MauDataService)
+            .GetMethod(nameof(DeleteByTenantAsync), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        var total = 0;
+        foreach (var entityType in db.Model.GetEntityTypes())
+        {
+            if (entityType.ClrType == typeof(TenantInfo)) continue;
+            if (entityType.FindProperty(nameof(MauSnapshot.TenantId)) == null) continue;
+
+            var typed = deleteHelper.MakeGenericMethod(entityType.ClrType);
+            total += await (Task<int>)typed.Invoke(null, [db, tenantId])!;
+        }
+
+        return total;
+    }
+
+    private static Task<int> DeleteByTenantAsync<T>(MauDbContext db, string tenantId) where T : class
+        => db.Set<T>()
+            .Where(e => EF.Property<string>(e, nameof(MauSnapshot.TenantId)) == tenantId)
+            .ExecuteDeleteAsync();
 }

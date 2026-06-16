@@ -26,6 +26,13 @@ public interface IMauDataService
     Task<List<TenantEntraTier>> GetTenantEntraIdTiersAsync();
     Task<List<TenantDefenderTier>> GetTenantDefenderTiersAsync();
 
+    /// <summary>
+    /// Permanently deletes ALL historical snapshot rows for a tenant across every snapshot table.
+    /// The tenant's registration row (<see cref="TenantInfo"/>) is left untouched. Irreversible.
+    /// Returns the total number of rows deleted.
+    /// </summary>
+    Task<int> PurgeTenantDataAsync(string tenantId);
+
     // Workload Activity
     Task<List<WorkloadActivitySnapshot>> GetWorkloadActivityAsync(IEnumerable<string>? tenantIds, int days = 30);
     Task SaveWorkloadActivityAsync(IEnumerable<WorkloadActivitySnapshot> activities);

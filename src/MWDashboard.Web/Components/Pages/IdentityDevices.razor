@@ -302,21 +302,49 @@ else
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Registered Devices by Platform</MudText>
-                    <ApexChart TItem="LabelValue" Options="_staleTotalBarOptions" Height="320" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_staleTotalBreakdown" Name="Devices"
-                                         SeriesType="SeriesType.Bar"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (TenantFilter.IsMultiTenantView && _staleTotalSeries.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_staleTotalBarOptions" Height="320" @key="_chartKey">
+                            @foreach (var s in _staleTotalSeries)
+                            {
+                                <ApexPointSeries TItem="LabelValue" Items="s.Value" Name="@s.Key"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                            }
+                        </ApexChart>
+                    }
+                    else
+                    {
+                        <ApexChart TItem="LabelValue" Options="_staleTotalBarOptions" Height="320" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_staleTotalBreakdown" Name="Devices"
+                                             SeriesType="SeriesType.Bar"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" md="6">
                 <MudPaper Class="pa-4" Elevation="2">
                     <MudText Typo="Typo.h6" Class="mb-3">Stale Devices by Platform</MudText>
-                    <ApexChart TItem="LabelValue" Options="_staleBarOptions" Height="320" @key="_chartKey">
-                        <ApexPointSeries TItem="LabelValue" Items="_staleBreakdown" Name="Stale"
-                                         SeriesType="SeriesType.Bar"
-                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
-                    </ApexChart>
+                    @if (TenantFilter.IsMultiTenantView && _staleSeries.Count > 0)
+                    {
+                        <ApexChart TItem="LabelValue" Options="_staleBarOptions" Height="320" @key="_chartKey">
+                            @foreach (var s in _staleSeries)
+                            {
+                                <ApexPointSeries TItem="LabelValue" Items="s.Value" Name="@s.Key"
+                                                 SeriesType="SeriesType.Bar"
+                                                 XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                            }
+                        </ApexChart>
+                    }
+                    else
+                    {
+                        <ApexChart TItem="LabelValue" Options="_staleBarOptions" Height="320" @key="_chartKey">
+                            <ApexPointSeries TItem="LabelValue" Items="_staleBreakdown" Name="Stale"
+                                             SeriesType="SeriesType.Bar"
+                                             XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                        </ApexChart>
+                    }
                 </MudPaper>
             </MudItem>
 
@@ -955,6 +983,9 @@ else
     private double _stalePercent;
     private List<LabelValue> _staleTotalBreakdown = [];
     private List<LabelValue> _staleBreakdown = [];
+    // Per-tenant series (one bar series per tenant) used in multi-tenant view.
+    private Dictionary<string, List<LabelValue>> _staleTotalSeries = [];
+    private Dictionary<string, List<LabelValue>> _staleSeries = [];
 
     // Conditional Access KPIs
     private int _totalPolicies, _enabledPolicies, _reportOnlyPolicies;
@@ -1007,7 +1038,11 @@ else
         Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 }
     };
 
-    private readonly ApexChartOptions<LabelValue> _staleTotalBarOptions = new()
+    private ApexChartOptions<LabelValue> _staleTotalBarOptions = MakeStaleDistributedBarOptions();
+    private ApexChartOptions<LabelValue> _staleBarOptions = MakeStaleDistributedBarOptions();
+
+    // Single-tenant: distributed (color-per-platform) bar.
+    private static ApexChartOptions<LabelValue> MakeStaleDistributedBarOptions() => new()
     {
         Legend = new Legend { Show = false },
         Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
@@ -1015,12 +1050,13 @@ else
         DataLabels = new DataLabels { Enabled = true }
     };
 
-    private readonly ApexChartOptions<LabelValue> _staleBarOptions = new()
+    // Multi-tenant: grouped bar with one series per tenant over the shared platform categories.
+    private static ApexChartOptions<LabelValue> MakeStaleTenantBarOptions(IEnumerable<string> categories) => new()
     {
-        Legend = new Legend { Show = false },
-        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
-        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = true } },
-        DataLabels = new DataLabels { Enabled = true }
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)", Stacked = false },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, Distributed = false } },
+        Xaxis = new XAxis { Categories = categories.ToList() }
     };
 
     protected override async Task OnInitializedAsync()
@@ -1203,6 +1239,42 @@ else
             .Where(x => x.Value > 0)
             .OrderByDescending(x => x.Value)
             .ToList();
+
+        if (TenantFilter.IsMultiTenantView)
+        {
+            // Platform categories shared by both charts, ordered by total devices descending.
+            var platforms = _staleDeviceList
+                .GroupBy(d => d.OsPlatform)
+                .Select(g => (Platform: g.Key, Total: g.Sum(d => d.TotalDevices)))
+                .Where(x => x.Total > 0)
+                .OrderByDescending(x => x.Total)
+                .Select(x => x.Platform)
+                .ToList();
+
+            _staleTotalSeries = BuildStalePlatformSeries(platforms, d => d.TotalDevices);
+            _staleSeries = BuildStalePlatformSeries(platforms, d => d.Stale90Plus);
+            _staleTotalBarOptions = MakeStaleTenantBarOptions(platforms);
+            _staleBarOptions = MakeStaleTenantBarOptions(platforms);
+        }
+        else
+        {
+            _staleTotalSeries = [];
+            _staleSeries = [];
+            _staleTotalBarOptions = MakeStaleDistributedBarOptions();
+            _staleBarOptions = MakeStaleDistributedBarOptions();
+        }
+    }
+
+    // Builds one bar series per tenant, aligned to the shared platform categories (0 where a tenant
+    // has no devices on that platform) so the grouped bars line up across tenants.
+    private Dictionary<string, List<LabelValue>> BuildStalePlatformSeries(List<string> platforms, Func<StaleDeviceSnapshot, int> value)
+    {
+        return _staleDeviceList
+            .GroupBy(d => TenantFilter.GetTenantName(d.TenantId))
+            .OrderBy(g => g.Key)
+            .ToDictionary(
+                g => g.Key,
+                g => platforms.Select(p => new LabelValue(p, g.Where(d => d.OsPlatform == p).Sum(value))).ToList());
     }
 
     private void BuildConditionalAccessMetrics()

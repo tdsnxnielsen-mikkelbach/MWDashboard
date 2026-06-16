@@ -7,6 +7,7 @@
 @inject IMauDataService DataService
 @inject TenantFilterService TenantFilter
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
 
 <BrandedPageTitle Page="Tenant Management" />
 
@@ -222,7 +223,9 @@
                         }
                     </MudTd>
                     <MudTd DataLabel="Active">
-                        <MudSwitch T="bool" Value="context.IsActive" ValueChanged="@(v => ToggleActive(context))" Color="Color.Success" />
+                        <MudTooltip Text="Active: collected on schedule (cron Job, Copilot-audit cron, Collect All) and users from this tenant can sign in. Deactivate to exclude it from collection and block sign-in — all data is kept.">
+                            <MudSwitch T="bool" Value="context.IsActive" ValueChanged="@(v => ToggleActive(context))" Color="Color.Success" />
+                        </MudTooltip>
                     </MudTd>
                     <MudTd DataLabel="Consent">
                         @if (context.PermissionsCheckedAt == null)
@@ -262,7 +265,14 @@
                             <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Info" Size="Size.Small" 
                                            Href="@GetConsentUrlForTenant(context.TenantId)" Target="_blank" />
                         </MudTooltip>
-                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteTenant(context))" />
+                        <MudTooltip Text="Purge ALL historical data for this tenant across every dashboard (keeps the registration). Permanent — cannot be undone.">
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" Color="Color.Error" Size="Size.Small"
+                                           Disabled="@(_purgingTenantId == context.TenantId)"
+                                           OnClick="@(() => PurgeTenant(context))" />
+                        </MudTooltip>
+                        <MudTooltip Text="Remove the tenant registration only. Historical data is kept (orphaned) and re-appears if the tenant is re-onboarded with the same ID. Use Purge to delete the data.">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteTenant(context))" />
+                        </MudTooltip>
                     </MudTd>
                 </RowTemplate>
             </MudTable>
@@ -378,6 +388,43 @@
         await TenantFilter.LoadTenantsAsync();
     }
 
+    private async Task PurgeTenant(TenantInfo tenant)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Purge all historical data?",
+            (MarkupString)(
+                $"This permanently deletes <strong>ALL</strong> collected snapshot history for " +
+                $"<strong>{tenant.TenantName}</strong> across every dashboard — usage, licenses, security, " +
+                "identity, governance and threat data.<br /><br />" +
+                "<strong>This cannot be undone.</strong> The tenant registration is kept, so future " +
+                "collections will start rebuilding history from scratch."),
+            yesText: "Purge all data",
+            cancelText: "Cancel");
+
+        if (confirmed != true) return;
+
+        _purgingTenantId = tenant.TenantId;
+        _message = string.Empty;
+        StateHasChanged();
+        try
+        {
+            var deleted = await DataService.PurgeTenantDataAsync(tenant.TenantId);
+            _message = $"Purged {deleted:N0} historical record(s) for '{tenant.TenantName}'.";
+            _severity = Severity.Success;
+            await TenantFilter.LoadTenantsAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = $"Failed to purge data for '{tenant.TenantName}': {ex.Message}";
+            _severity = Severity.Error;
+        }
+        finally
+        {
+            _purgingTenantId = null;
+            StateHasChanged();
+        }
+    }
+
     private string GetConsentUrlForTenant(string tenantId)
     {
         return $"https://login.microsoftonline.com/{Uri.EscapeDataString(tenantId)}/adminconsent" +
@@ -411,6 +458,7 @@
     private string? _collectingTenantId;
     private string? _editingTenantId;
     private string? _checkingTenantId;
+    private string? _purgingTenantId;
     private string _editDisplayName = string.Empty;
 
     // Collect-all progress state

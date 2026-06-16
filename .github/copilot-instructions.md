@@ -129,7 +129,7 @@ azd deploy
 ### EF Core Migrations (src/MWDashboard.Shared/Migrations/)
 - Add migrations from the Web project: `dotnet ef migrations add <Name> --project ../MWDashboard.Shared`
 - Auto-migrate on startup in both Web and Job
-- DbContext has 50 DbSets — all entities defined in `src/MWDashboard.Shared/Models/MauSnapshot.cs`
+- DbContext has 50 DbSets — all entities defined under `src/MWDashboard.Shared/Models/Snapshots/` (grouped by feature area: `CoreModels.cs`, `AdoptionSnapshots.cs`, `PostureSnapshots.cs`, `IdentitySnapshots.cs`, `UsageSnapshots.cs`, `GovernanceSnapshots.cs`, `ThreatSnapshots.cs`)
 
 ### Authentication & Authorization (src/MWDashboard.Web/)
 - **OpenID Connect** via `Microsoft.Identity.Web` — multi-tenant (`TenantId: "common"`), authorization code flow (`ResponseType: "code"`)
