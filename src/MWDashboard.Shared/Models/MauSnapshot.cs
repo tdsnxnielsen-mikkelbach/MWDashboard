@@ -456,6 +456,22 @@ public class DeviceComplianceSnapshot
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }
 
+// Device patch / OS-version hygiene — per (platform, OS version) device counts derived from the
+// same managedDevices list as DeviceComplianceSnapshot (no extra Graph call) (Tier 1)
+public class DevicePatchSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    public string OsPlatform { get; set; } = string.Empty;
+    public string OsVersion { get; set; } = string.Empty;
+    public int DeviceCount { get; set; }
+    // Devices whose lastSyncDateTime is older than the staleness threshold (default 30 days)
+    public int StaleCount { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
 // Conditional Access coverage — tenant-level policy counts + gap flags (Tier 2)
 public class ConditionalAccessSnapshot
 {

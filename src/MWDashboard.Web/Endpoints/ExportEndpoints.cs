@@ -113,6 +113,11 @@ public static class ExportEndpoints
                 Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), r.TotalDevices, r.CompliantCount, r.NonCompliantCount,
                     r.InGracePeriodCount, r.ErrorCount, r.UnknownCount, r.WindowsCount, r.IosCount, r.AndroidCount, r.MacOsCount, r.OtherOsCount))),
 
+        ["device-patch"] = new("device-patch-report.csv",
+            "TenantId,TenantName,ReportDate,OsPlatform,OsVersion,DeviceCount,StaleCount",
+            async (data, scope) => (await data.GetDevicePatchAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.OsPlatform), F(r.OsVersion), r.DeviceCount, r.StaleCount))),
+
         ["conditional-access"] = new("conditional-access-report.csv",
             "TenantId,TenantName,ReportDate,TotalPolicies,Enabled,ReportOnly,Disabled,BlocksLegacyAuth,RequiresMfa",
             async (data, scope) => (await data.GetConditionalAccessAsync(scope)).Select(r =>

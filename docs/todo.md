@@ -300,7 +300,7 @@ Each item follows the existing scaffolding pattern (the `new-model` skill): new 
     5. Wire into `OnDemandDataCollectionService`; add a **Legacy Auth & Risky Sign-ins** section to `/security` (legacy-auth-user KPI + per-client table + country breakdown). Surface the P1/P2 caveat on free tenants
     6. `signin-detail` export entry
 
-- [ ] **Windows patch / OS-version compliance** — turn the **already-collected** `managedDevices` data into a patch-hygiene story: OS-version distribution, out-of-date / unsupported builds, last-check-in age. No new Graph call if the device list is already pulled for the Device Compliance tab — just an added aggregation + projection.
+- [x] **Windows patch / OS-version compliance** — turn the **already-collected** `managedDevices` data into a patch-hygiene story: OS-version distribution, out-of-date / unsupported builds, last-check-in age. No new Graph call if the device list is already pulled for the Device Compliance tab — just an added aggregation + projection. ✅ **Shipped** — `DevicePatchSnapshot` aggregated in the existing `GetDeviceComplianceAsync` device walk (now also selects `osVersion` + `lastSyncDateTime`, **no extra Graph call**; returns a `(Compliance, Patch)` tuple) + **Patch / OS Versions** tab on `/identity` (top-versions bar + up-to-date/stale KPIs + **90-day stale-device trend line** from the retained delete-then-insert history + per-platform×version table, collapsible per-tenant groups in multi-tenant view) + `device-patch` export. Devices not synced in 30+ days count as stale.
   - Endpoint: `GET /deviceManagement/managedDevices` (`operatingSystem`, `osVersion`, `complianceState`, `lastSyncDateTime`) — **already consumed** for Device Compliance
   - Permission: `DeviceManagementManagedDevices.Read.All` **(already granted)**
   - Model: `DevicePatchSnapshot` (`TenantId`, `TenantName`, `ReportDate`, `OsPlatform`, `OsVersion`, `DeviceCount`, `StaleCount`, `CollectedAt`); composite unique index `(TenantId, OsPlatform, OsVersion, ReportDate)`
@@ -354,6 +354,6 @@ Each item follows the existing scaffolding pattern (the `new-model` skill): new 
 2. ~~**License assignment errors** (Tier 1)~~ — ✅ **Shipped** (License Assignment Issues section on Licenses page; seats-in-error + disabled-but-licensed seat waste).
 3. ~~**OAuth app consent grants** (Tier 1)~~ — ✅ **Shipped** (OAuth Apps tab on Identity & Devices page; high-risk scope + admin-consent flags).
 4. ~~**Mailbox non-owner access** (Tier 1)~~ — ✅ **Shipped** (Mailbox Access section on Security page; parser add-on to the existing `Audit.Exchange` collector, no extra API calls).
-5. **Windows patch / OS-version compliance** (Tier 1) — aggregation over already-collected device data.
+5. ~~**Windows patch / OS-version compliance** (Tier 1)~~ — ✅ **Shipped** (Patch / OS Versions tab on Identity & Devices page; aggregation over the already-collected `managedDevices` list, no extra Graph call; 30-day stale-check-in flag).
 6. **Legacy auth & risky sign-in detail** (Tier 1, P1/P2-gated) — extends the existing sign-in pipeline.
 7. **Stale registered devices** (Tier 2) + **Defender for O365 email threats** (Tier 2, spike first) + **Attack Simulation Training** (Tier 2) — once the no-consent Tier 1 items ship.

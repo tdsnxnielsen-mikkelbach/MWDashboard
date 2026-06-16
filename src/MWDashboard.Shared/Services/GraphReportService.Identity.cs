@@ -85,27 +85,34 @@ public partial class GraphReportService
     }
 
     // Intune device compliance — tenant-level point-in-time counts of managed devices by
-    // compliance state and operating system. Requires DeviceManagementManagedDevices.Read.All.
-    public async Task<DeviceComplianceSnapshot?> GetDeviceComplianceAsync(string tenantId)
+    // compliance state and operating system. Also derives per (platform, OS version) patch-hygiene
+    // counts from the same device list (no extra Graph call). Requires DeviceManagementManagedDevices.Read.All.
+    public async Task<(DeviceComplianceSnapshot? Compliance, List<DevicePatchSnapshot> Patch)> GetDeviceComplianceAsync(string tenantId)
     {
+        const int staleThresholdDays = 30;
         var client = CreateClientForTenant(tenantId);
 
         try
         {
             var page = await client.DeviceManagement.ManagedDevices.GetAsync(c =>
             {
-                c.QueryParameters.Select = ["id", "complianceState", "operatingSystem"];
+                c.QueryParameters.Select = ["id", "complianceState", "operatingSystem", "osVersion", "lastSyncDateTime"];
                 c.QueryParameters.Top = 999;
             });
 
-            if (page?.Value == null) return null;
+            if (page?.Value == null) return (null, []);
+
+            var today = DateTime.UtcNow.Date;
+            var staleCutoff = DateTime.UtcNow.AddDays(-staleThresholdDays);
 
             var snapshot = new DeviceComplianceSnapshot
             {
                 TenantId = tenantId,
-                ReportDate = DateTime.UtcNow.Date,
+                ReportDate = today,
                 CollectedAt = DateTime.UtcNow
             };
+
+            var patchMap = new Dictionary<(string Platform, string Version), DevicePatchSnapshot>();
 
             void Accumulate(Microsoft.Graph.Models.ManagedDevice d)
             {
@@ -126,29 +133,48 @@ public partial class GraphReportService
                 }
 
                 var os = (d.OperatingSystem ?? string.Empty).ToLowerInvariant();
-                if (os.Contains("windows")) snapshot.WindowsCount++;
-                else if (os.Contains("ios") || os.Contains("ipados")) snapshot.IosCount++;
-                else if (os.Contains("android")) snapshot.AndroidCount++;
-                else if (os.Contains("mac")) snapshot.MacOsCount++;
-                else snapshot.OtherOsCount++;
+                string platform;
+                if (os.Contains("windows")) { snapshot.WindowsCount++; platform = "Windows"; }
+                else if (os.Contains("ios") || os.Contains("ipados")) { snapshot.IosCount++; platform = "iOS"; }
+                else if (os.Contains("android")) { snapshot.AndroidCount++; platform = "Android"; }
+                else if (os.Contains("mac")) { snapshot.MacOsCount++; platform = "macOS"; }
+                else { snapshot.OtherOsCount++; platform = "Other"; }
+
+                var version = string.IsNullOrWhiteSpace(d.OsVersion) ? "Unknown" : d.OsVersion.Trim();
+                var key = (platform, version);
+                if (!patchMap.TryGetValue(key, out var patch))
+                {
+                    patch = new DevicePatchSnapshot
+                    {
+                        TenantId = tenantId,
+                        ReportDate = today,
+                        OsPlatform = platform,
+                        OsVersion = version,
+                        CollectedAt = DateTime.UtcNow
+                    };
+                    patchMap[key] = patch;
+                }
+                patch.DeviceCount++;
+                if (d.LastSyncDateTime.HasValue && d.LastSyncDateTime.Value.UtcDateTime < staleCutoff)
+                    patch.StaleCount++;
             }
 
             var iterator = Microsoft.Graph.PageIterator<Microsoft.Graph.Models.ManagedDevice, Microsoft.Graph.Models.ManagedDeviceCollectionResponse>
                 .CreatePageIterator(client, page, d => { Accumulate(d); return true; });
             await iterator.IterateAsync();
 
-            return snapshot;
+            return (snapshot, patchMap.Values.ToList());
         }
         catch (Microsoft.Graph.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
         {
             _logger.LogWarning("Device compliance unavailable for tenant {TenantId}: insufficient permissions. " +
                 "Requires DeviceManagementManagedDevices.Read.All.", tenantId);
-            return null;
+            return (null, []);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get device compliance for tenant {TenantId}", tenantId);
-            return null;
+            return (null, []);
         }
     }
 

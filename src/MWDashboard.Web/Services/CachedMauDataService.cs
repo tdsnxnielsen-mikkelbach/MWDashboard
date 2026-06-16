@@ -297,6 +297,27 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("device-compliance", new[] { snapshot.TenantId }), BuildKey("device-compliance", null));
     }
 
+    // --- Device patch / OS-version hygiene (cached 60 min — daily-changing data) ---
+    public Task<List<DevicePatchSnapshot>> GetDevicePatchAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("device-patch", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetDevicePatchAsync(tenantIds), options);
+    }
+
+    public Task<List<DevicePatchSnapshot>> GetDevicePatchHistoryAsync(IEnumerable<string>? tenantIds, int days = 90)
+    {
+        var key = BuildKey("device-patch-history", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetDevicePatchHistoryAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveDevicePatchAsync(string tenantId, DateTime reportDate, IEnumerable<DevicePatchSnapshot> snapshots)
+    {
+        await _inner.SaveDevicePatchAsync(tenantId, reportDate, snapshots);
+        await InvalidateAsync(BuildKey("device-patch", new[] { tenantId }), BuildKey("device-patch", null));
+    }
+
     // --- Conditional Access (cached 60 min — daily-changing data) ---
     public Task<List<ConditionalAccessSnapshot>> GetConditionalAccessAsync(IEnumerable<string>? tenantIds)
     {

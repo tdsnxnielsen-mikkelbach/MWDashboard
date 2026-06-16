@@ -85,6 +85,11 @@ public interface IMauDataService
     Task<List<DeviceComplianceSnapshot>> GetDeviceComplianceAsync(IEnumerable<string>? tenantIds);
     Task SaveDeviceComplianceAsync(DeviceComplianceSnapshot snapshot);
 
+    // Device patch / OS-version hygiene
+    Task<List<DevicePatchSnapshot>> GetDevicePatchAsync(IEnumerable<string>? tenantIds);
+    Task<List<DevicePatchSnapshot>> GetDevicePatchHistoryAsync(IEnumerable<string>? tenantIds, int days = 90);
+    Task SaveDevicePatchAsync(string tenantId, DateTime reportDate, IEnumerable<DevicePatchSnapshot> snapshots);
+
     // Conditional Access
     Task<List<ConditionalAccessSnapshot>> GetConditionalAccessAsync(IEnumerable<string>? tenantIds);
     Task SaveConditionalAccessAsync(ConditionalAccessSnapshot snapshot);

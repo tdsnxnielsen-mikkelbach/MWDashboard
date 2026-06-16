@@ -55,6 +55,51 @@ public partial class MauDataService
         await db.SaveChangesAsync();
     }
 
+    // Device patch / OS-version hygiene (delete-then-insert per (TenantId, ReportDate))
+    public async Task<List<DevicePatchSnapshot>> GetDevicePatchAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var query = db.DevicePatchSnapshots.AsNoTracking().AsQueryable();
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        // Keep only rows from the latest ReportDate per tenant (reduced in SQL).
+        return await query
+            .Where(s => s.ReportDate == query.Where(x => x.TenantId == s.TenantId).Max(x => x.ReportDate))
+            .OrderByDescending(s => s.DeviceCount)
+            .ToListAsync();
+    }
+
+    // Full retained history within the window (drives the stale-device trend chart).
+    public async Task<List<DevicePatchSnapshot>> GetDevicePatchHistoryAsync(IEnumerable<string>? tenantIds, int days = 90)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var cutoff = DateTime.UtcNow.AddDays(-days).Date;
+        var query = db.DevicePatchSnapshots.AsNoTracking().Where(s => s.ReportDate >= cutoff);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveDevicePatchAsync(string tenantId, DateTime reportDate, IEnumerable<DevicePatchSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        // Replace the day's rows so removed OS versions don't linger.
+        var existing = await db.DevicePatchSnapshots
+            .Where(s => s.TenantId == tenantId && s.ReportDate == reportDate)
+            .ToListAsync();
+        if (existing.Count > 0)
+            db.DevicePatchSnapshots.RemoveRange(existing);
+
+        db.DevicePatchSnapshots.AddRange(snapshots);
+        await db.SaveChangesAsync();
+    }
+
     // Conditional Access
     public async Task<List<ConditionalAccessSnapshot>> GetConditionalAccessAsync(IEnumerable<string>? tenantIds)
     {

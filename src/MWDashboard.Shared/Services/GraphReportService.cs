@@ -26,7 +26,7 @@ public interface IGraphReportService
     Task<MfaRegistrationSnapshot?> GetMfaRegistrationAsync(string tenantId);
     Task<InactiveAccountSnapshot?> GetInactiveAccountsAsync(string tenantId);
     Task<(List<ServiceHealthSnapshot> Services, List<ServiceHealthIssueSnapshot> Issues)> GetServiceHealthAsync(string tenantId);
-    Task<DeviceComplianceSnapshot?> GetDeviceComplianceAsync(string tenantId);
+    Task<(DeviceComplianceSnapshot? Compliance, List<DevicePatchSnapshot> Patch)> GetDeviceComplianceAsync(string tenantId);
     Task<ConditionalAccessSnapshot?> GetConditionalAccessAsync(string tenantId);
     Task<GuestUserSnapshot?> GetGuestUsersAsync(string tenantId);
     Task<RiskyUserSnapshot?> GetRiskyUsersAsync(string tenantId);

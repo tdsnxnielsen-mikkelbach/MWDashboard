@@ -190,11 +190,17 @@ public class OnDemandDataCollectionService : IDataCollectionService
         await _dataService.SaveServiceHealthIssuesAsync(healthIssues);
 
         // Intune device compliance (all tiers)
-        var deviceCompliance = await _graphService.GetDeviceComplianceAsync(tenantId);
+        var (deviceCompliance, devicePatch) = await _graphService.GetDeviceComplianceAsync(tenantId);
         if (deviceCompliance != null)
         {
             deviceCompliance.TenantName = tenantName;
             await _dataService.SaveDeviceComplianceAsync(deviceCompliance);
+        }
+        if (devicePatch.Count > 0)
+        {
+            foreach (var p in devicePatch)
+                p.TenantName = tenantName;
+            await _dataService.SaveDevicePatchAsync(tenantId, devicePatch[0].ReportDate, devicePatch);
         }
 
         // Conditional Access coverage (all tiers)

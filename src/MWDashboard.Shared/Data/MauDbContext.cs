@@ -28,6 +28,7 @@ public class MauDbContext : DbContext
     public DbSet<ServiceHealthSnapshot> ServiceHealthSnapshots => Set<ServiceHealthSnapshot>();
     public DbSet<ServiceHealthIssueSnapshot> ServiceHealthIssueSnapshots => Set<ServiceHealthIssueSnapshot>();
     public DbSet<DeviceComplianceSnapshot> DeviceComplianceSnapshots => Set<DeviceComplianceSnapshot>();
+    public DbSet<DevicePatchSnapshot> DevicePatchSnapshots => Set<DevicePatchSnapshot>();
     public DbSet<ConditionalAccessSnapshot> ConditionalAccessSnapshots => Set<ConditionalAccessSnapshot>();
     public DbSet<GuestUserSnapshot> GuestUserSnapshots => Set<GuestUserSnapshot>();
     public DbSet<RiskyUserSnapshot> RiskyUserSnapshots => Set<RiskyUserSnapshot>();
@@ -237,6 +238,15 @@ public class MauDbContext : DbContext
             entity.HasIndex(e => new { e.TenantId, e.ReportDate }).IsUnique();
             entity.Property(e => e.TenantId).HasMaxLength(100);
             entity.Property(e => e.TenantName).HasMaxLength(250);
+        });
+
+        modelBuilder.Entity<DevicePatchSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.OsPlatform, e.OsVersion, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.OsPlatform).HasMaxLength(100);
+            entity.Property(e => e.OsVersion).HasMaxLength(100);
         });
 
         modelBuilder.Entity<ConditionalAccessSnapshot>(entity =>

@@ -12,6 +12,7 @@
     <MudText Typo="Typo.h4">Identity &amp; Devices</MudText>
     <ExportMenu Items="@(new[] {
         ("Device Compliance", "device-compliance"),
+        ("Patch / OS Versions", "device-patch"),
         ("Conditional Access", "conditional-access"),
         ("Guest Users", "guests"),
         ("Risky Users", "risky-users"),
@@ -130,6 +131,131 @@ else
                     </MudPaper>
                 </MudItem>
             }
+        </MudGrid>
+        }
+    </MudTabPanel>
+
+    @* ---------------- Patch / OS Versions ---------------- *@
+    <MudTabPanel Text="Patch / OS Versions" Icon="@Icons.Material.Filled.SystemUpdate">
+        @if (_devicePatch.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">No Intune-managed device data available. Requires <PermissionTag Scope="DeviceManagementManagedDevices.Read.All" />.</MudAlert>
+        }
+        else
+        {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Managed Devices</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_patchTotalDevices.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">across @_distinctOsVersions OS build(s)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Up-to-date Check-in</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_freshPercent.ToString("0.#")%</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">synced in last 30 days</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Stale Devices</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_staleDevices > 0 ? Color.Warning : Color.Success)">@_staleDevices.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">no check-in 30+ days</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Distinct OS Versions</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_distinctOsVersions.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">unique builds in fleet</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-3">Top OS Versions by Device Count</MudText>
+                    <ApexChart TItem="LabelValue" Options="_versionBarOptions" Height="360" @key="_chartKey">
+                        <ApexPointSeries TItem="LabelValue" Items="_topOsVersions" Name="Devices"
+                                         SeriesType="SeriesType.Bar"
+                                         XValue="@(e => e.Label)" YValue="@(e => (decimal?)e.Value)" />
+                    </ApexChart>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-1">Stale-Device Trend (90 days)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+                        Managed devices with no Intune check-in for 30+ days, per collection day. A rising line means patch coverage is
+                        slipping (devices dropping off the network or no longer syncing policy).
+                    </MudText>
+                    @if (_staleTrendSeries.Count > 0)
+                    {
+                        <ApexChart TItem="TrendPoint" Options="_staleTrendOptions" Height="320" @key="_chartKey">
+                            @foreach (var series in _staleTrendSeries)
+                            {
+                                <ApexPointSeries TItem="TrendPoint" Items="series.Value" Name="@series.Key"
+                                                 SeriesType="SeriesType.Line"
+                                                 XValue="@(e => e.Date.ToString("MMM dd"))"
+                                                 YValue="@(e => (decimal?)e.Stale)" />
+                            }
+                        </ApexChart>
+                    }
+                    else
+                    {
+                        <MudText Color="Color.Secondary">Not enough history yet — the trend appears after a few daily collections.</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudPaper Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="mb-1">OS-Version Breakdown</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+                        Managed-device distribution by platform and OS build. Stale devices (no Intune check-in for 30+ days) may be
+                        missing recent security updates and warrant follow-up.
+                    </MudText>
+                    <MudTable Items="_devicePatch" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" FixedHeader="true" Height="460px"
+                              GroupBy="@(TenantFilter.IsMultiTenantView ? _patchGroupDefinition : null)">
+                        <HeaderContent>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                            <MudTh>Platform</MudTh>
+                            <MudTh>OS Version</MudTh>
+                            <MudTh Style="text-align:right">Devices</MudTh>
+                            <MudTh Style="text-align:right">Stale (30+ d)</MudTh>
+                        </HeaderContent>
+                        <GroupHeaderTemplate>
+                            <MudTh Class="mud-table-cell-custom-group" colspan="@(TenantFilter.IsMultiTenantView ? 5 : 4)">
+                                @TenantFilter.GetTenantName(context.Key?.ToString() ?? string.Empty)
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-inline ml-2">
+                                    (@context.Items.Sum(d => d.DeviceCount).ToString("N0") devices, @context.Items.Sum(d => d.StaleCount).ToString("N0") stale)
+                                </MudText>
+                            </MudTh>
+                        </GroupHeaderTemplate>
+                        <RowTemplate>
+                            @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                            <MudTd DataLabel="Platform"><MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@context.OsPlatform</MudChip></MudTd>
+                            <MudTd DataLabel="OS Version">@context.OsVersion</MudTd>
+                            <MudTd DataLabel="Devices" Style="text-align:right">@context.DeviceCount.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Stale (30+ d)" Style="text-align:right">
+                                @if (context.StaleCount > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">@context.StaleCount.ToString("N0")</MudChip>
+                                }
+                                else
+                                {
+                                    <span>0</span>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                        </PagerContent>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
         </MudGrid>
         }
     </MudTabPanel>
@@ -655,6 +781,8 @@ else
     private int _chartKey;
 
     private List<DeviceComplianceSnapshot> _devices = [];
+    private List<DevicePatchSnapshot> _devicePatch = [];
+    private List<DevicePatchSnapshot> _devicePatchHistory = [];
     private List<ConditionalAccessSnapshot> _conditionalAccess = [];
     private List<GuestUserSnapshot> _guests = [];
     private List<RiskyUserSnapshot> _riskyUsers = [];
@@ -672,11 +800,26 @@ else
         Selector = s => s.TenantId
     };
 
+    // Groups the OS-version table by tenant (collapsible) in multi-tenant view.
+    private readonly TableGroupDefinition<DevicePatchSnapshot> _patchGroupDefinition = new()
+    {
+        GroupName = "Tenant",
+        Indentation = false,
+        Expandable = true,
+        Selector = s => s.TenantId
+    };
+
     // Device KPIs
     private int _totalDevices, _compliantDevices, _nonCompliantDevices, _graceErrorDevices;
     private double _compliancePercent;
     private List<LabelValue> _complianceBreakdown = [];
     private List<LabelValue> _platformBreakdown = [];
+
+    // Device patch / OS-version KPIs
+    private int _patchTotalDevices, _staleDevices, _distinctOsVersions;
+    private double _freshPercent;
+    private List<LabelValue> _topOsVersions = [];
+    private Dictionary<string, List<TrendPoint>> _staleTrendSeries = [];
 
     // Conditional Access KPIs
     private int _totalPolicies, _enabledPolicies, _reportOnlyPolicies;
@@ -713,6 +856,22 @@ else
         DataLabels = new DataLabels { Enabled = true }
     };
 
+    private readonly ApexChartOptions<LabelValue> _versionBarOptions = new()
+    {
+        Legend = new Legend { Show = false },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = true, Distributed = true } },
+        DataLabels = new DataLabels { Enabled = true }
+    };
+
+    private readonly ApexChartOptions<TrendPoint> _staleTrendOptions = new()
+    {
+        Legend = new Legend { Show = true, Position = LegendPosition.Bottom },
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)" },
+        Yaxis = [new YAxis { Min = 0, Title = new AxisTitle { Text = "Stale devices" } }],
+        Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 }
+    };
+
     protected override async Task OnInitializedAsync()
     {
         TenantFilter.OnChangeAsync += OnTenantFilterChangedAsync;
@@ -740,6 +899,9 @@ else
         var tenantIds = TenantFilter.GetFilteredTenantIds();
 
         _devices = await MauDataService.GetDeviceComplianceAsync(tenantIds);
+        _devicePatch = (await MauDataService.GetDevicePatchAsync(tenantIds))
+            .OrderByDescending(p => p.DeviceCount).ToList();
+        _devicePatchHistory = await MauDataService.GetDevicePatchHistoryAsync(tenantIds, days: 90);
         _conditionalAccess = await MauDataService.GetConditionalAccessAsync(tenantIds);
         _guests = await MauDataService.GetGuestUsersAsync(tenantIds);
         _riskyUsers = await MauDataService.GetRiskyUsersAsync(tenantIds);
@@ -760,9 +922,10 @@ else
             .ToList();
 
         _hasAnyData = _devices.Count > 0 || _conditionalAccess.Count > 0 || _guests.Count > 0 || _riskyUsers.Count > 0
-            || _appCredentials.Count > 0 || _privilegedRoles.Count > 0 || _oauthGrants.Count > 0;
+            || _appCredentials.Count > 0 || _privilegedRoles.Count > 0 || _oauthGrants.Count > 0 || _devicePatch.Count > 0;
 
         BuildDeviceMetrics();
+        BuildDevicePatchMetrics();
         BuildConditionalAccessMetrics();
         BuildGuestMetrics();
         BuildRiskyUserMetrics();
@@ -816,6 +979,53 @@ else
             new("Other", _devices.Sum(d => d.OtherOsCount))
         ];
         _platformBreakdown = _platformBreakdown.Where(x => x.Value > 0).ToList();
+    }
+
+    private void BuildDevicePatchMetrics()
+    {
+        _patchTotalDevices = _devicePatch.Sum(p => p.DeviceCount);
+        _staleDevices = _devicePatch.Sum(p => p.StaleCount);
+        _distinctOsVersions = _devicePatch
+            .Select(p => (p.OsPlatform, p.OsVersion))
+            .Distinct()
+            .Count();
+        _freshPercent = _patchTotalDevices > 0
+            ? (double)(_patchTotalDevices - _staleDevices) / _patchTotalDevices * 100
+            : 0;
+
+        // Top OS versions across the fleet (aggregate across tenants by platform + version).
+        _topOsVersions = _devicePatch
+            .GroupBy(p => $"{p.OsPlatform} {p.OsVersion}")
+            .Select(g => new LabelValue(g.Key, g.Sum(p => p.DeviceCount)))
+            .OrderByDescending(x => x.Value)
+            .Take(12)
+            .ToList();
+
+        // Stale-device trend over the retained history — per-tenant series in multi-tenant view.
+        _staleTrendSeries = [];
+        if (TenantFilter.IsMultiTenantView)
+        {
+            foreach (var group in _devicePatchHistory.GroupBy(s => s.TenantId))
+            {
+                var points = group
+                    .GroupBy(s => s.ReportDate)
+                    .OrderBy(g => g.Key)
+                    .Select(g => new TrendPoint(g.Key, g.Sum(s => s.StaleCount)))
+                    .ToList();
+                if (points.Count > 0)
+                    _staleTrendSeries[TenantFilter.GetTenantName(group.Key)] = points;
+            }
+        }
+        else
+        {
+            var points = _devicePatchHistory
+                .GroupBy(s => s.ReportDate)
+                .OrderBy(g => g.Key)
+                .Select(g => new TrendPoint(g.Key, g.Sum(s => s.StaleCount)))
+                .ToList();
+            if (points.Count > 0)
+                _staleTrendSeries["Stale devices"] = points;
+        }
     }
 
     private void BuildConditionalAccessMetrics()
@@ -877,4 +1087,5 @@ else
     }
 
     private record LabelValue(string Label, int Value);
+    private record TrendPoint(DateTime Date, int Stale);
 }
