@@ -48,7 +48,7 @@ jobs:
         shell: pwsh
 
       - name: Log in with Azure CLI (for postdeploy hook)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
