@@ -96,16 +96,19 @@ else
             <MudText Typo="Typo.h6" Class="mb-3">Light Theme</MudText>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">Primary</MudText>
+                <span class="color-swatch mr-3" style="background:@_lightPrimary.ToString(MudColorOutputFormats.Hex);" title="Current: @_lightPrimary.ToString(MudColorOutputFormats.Hex)"></span>
                 <MudColorPicker @bind-Value="_lightPrimary" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
                                PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">Secondary</MudText>
+                <span class="color-swatch mr-3" style="background:@_lightSecondary.ToString(MudColorOutputFormats.Hex);" title="Current: @_lightSecondary.ToString(MudColorOutputFormats.Hex)"></span>
                 <MudColorPicker @bind-Value="_lightSecondary" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
                                PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">AppBar</MudText>
+                <span class="color-swatch mr-3" style="background:@_lightAppbar.ToString(MudColorOutputFormats.Hex);" title="Current: @_lightAppbar.ToString(MudColorOutputFormats.Hex)"></span>
                 <MudColorPicker @bind-Value="_lightAppbar" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
                                PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
@@ -117,16 +120,19 @@ else
             <MudText Typo="Typo.h6" Class="mb-3">Dark Theme</MudText>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">Primary</MudText>
+                <span class="color-swatch mr-3" style="background:@_darkPrimary.ToString(MudColorOutputFormats.Hex);" title="Current: @_darkPrimary.ToString(MudColorOutputFormats.Hex)"></span>
                 <MudColorPicker @bind-Value="_darkPrimary" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
                                PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">Secondary</MudText>
+                <span class="color-swatch mr-3" style="background:@_darkSecondary.ToString(MudColorOutputFormats.Hex);" title="Current: @_darkSecondary.ToString(MudColorOutputFormats.Hex)"></span>
                 <MudColorPicker @bind-Value="_darkSecondary" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
                                PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
             <div class="d-flex align-center mb-3">
                 <MudText Class="mr-3" Style="min-width:100px;">AppBar</MudText>
+                <span class="color-swatch mr-3" style="background:@_darkAppbar.ToString(MudColorOutputFormats.Hex);" title="Current: @_darkAppbar.ToString(MudColorOutputFormats.Hex)"></span>
                 <MudColorPicker @bind-Value="_darkAppbar" ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" 
                                PickerVariant="PickerVariant.Inline" Style="width:200px;" />
             </div>
