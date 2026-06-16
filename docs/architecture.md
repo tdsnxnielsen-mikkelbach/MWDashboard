@@ -270,14 +270,14 @@ flowchart TD
 | Graph reports max D180 (~6 months) | Scheduled job snapshots daily; history accumulates over time |
 | Admin consent required per tenant | Built-in consent URL generator on Tenants page |
 | Concealed usernames in some tenants | Dashboard uses aggregated counts only |
-| Graph API throttling | Retry with exponential backoff (SDK built-in) |
+| Graph API throttling | SDK retry with exponential backoff **plus** an in-pipeline adaptive concurrency controller (AIMD) that watches live 429/503s and self-tunes the per-tenant collection parallelism — see [Adaptive Graph throttle handling](#adaptive-graph-throttle-handling) |
 | Azure SQL Serverless cold-start (~60s) | EF Core `EnableRetryOnFailure` (5 retries, 30s max delay) + 60s command timeout |
 | Sign-in logs require Entra ID P1/P2 | Security page gracefully shows info alert if unavailable |
 | Copilot usage requires Copilot licenses | Copilot page shows info alert when no data; collection logs warning |
 | Department data requires User.Read.All | Department page shows info alert; collection handles 403 gracefully |
 | Concealed usernames in activity reports | Segmentation uses aggregated counts only; no PII stored |
 | Graph Beta SDK is preview | Used for sign-in and Copilot endpoints; stable API used elsewhere |
-| Container App Job max 1hr runtime | Sufficient for hundreds of tenants; parallelism=1 ensures serialized collection |
+| Container App Job max 1hr runtime | Sufficient for hundreds of tenants; tenants collected in parallel (bounded, `Collection:MaxParallelTenants`, default 4) and each tenant's ~30 metric calls run concurrently (bounded, `Collection:MaxParallelMetricsPerTenant`, default 6) |
 
 ## Caching Strategy
 
@@ -288,6 +288,26 @@ flowchart TD
 | In-Memory (fallback) | Single instance | Session lifetime | Local dev when Redis is unavailable |
 
 **Invalidation**: `Save*` methods invalidate affected keys and publish them on the Redis pub/sub channel `MWDashboard:cache-invalidation` so every Web replica drops them. Because the Collector/Job collect in a separate process using the non-caching data service, they can't invalidate per-key — so after a successful **remote** collection the Web calls `RedisCacheInvalidationService.FlushAllAsync()` to drop all `MWDashboard:*` keys at once (the local-fallback path already invalidates per-key via `CachedMauDataService`).
+
+## Collection Concurrency & Adaptive Graph Throttle Handling
+
+A single tenant's data collection is a sequence of ~30 independent Graph "get metric → save snapshot" steps. `OnDemandDataCollectionService` runs these **concurrently** with a bounded, self-tuning degree of parallelism instead of strictly serially, shrinking the per-tenant collection window without provoking sustained Graph throttling.
+
+**Phased pipeline** (`CollectForTenantAsync`):
+
+1. **Phase 0 — Licenses (serial)**: collected first because it derives the tenant's Entra ID tier (`TenantEntraTier.FromLicenses`) and Defender tier (`TenantDefenderTier.FromLicenses`), which gate the premium-only steps (sign-in summary/detail, inactive accounts, risky users, email threats, attack simulation).
+2. **Phase 1 — Metrics (adaptive concurrency)**: ~30 always-on steps plus the conditionally-added premium steps run through `RunStepsAsync`. Each step is isolated in a try/catch, so one feature's failure is logged and never aborts the rest.
+3. **Phase 2 — Derived (serial)**: consumption-score computation and the consent-permission probe run last because they depend on Phase 1 output.
+
+### Adaptive Graph throttle handling
+
+Concurrency is governed by an **AIMD** (additive-increase / multiplicative-decrease) controller fed by a real-time throttle signal observed directly in the Graph HTTP pipeline:
+
+- **`ThrottleObservingHandler`** — a `DelegatingHandler` appended **innermost** in the Graph SDK middleware (via `GraphClientFactory.CreateDefaultHandlers()` + `.Add(...)`), so it sees raw `429 Too Many Requests` / `503 Service Unavailable` responses *before* the SDK's retry handler acts. On a throttle it reads the server's `Retry-After` (delta → date → 10 s default) and records it.
+- **`GraphThrottleSignal`** — a per-tenant, lock-free (`Interlocked`) signal that tracks the last throttle time, the furthest server-mandated resume time, and a throttle counter. Cached per tenant in `GraphReportService` (`GetThrottleSignal(tenantId)`) and shared by that tenant's v1 and beta clients.
+- **Adaptive gate** (`RunStepsAsync`) — effective concurrency starts at the configured cap; on a recent throttle it **halves** (multiplicative decrease), and after a clean window it recovers by **+1** toward the cap (additive increase). Any server `Retry-After` is honored before the next request is issued. Target changes are logged.
+
+The cap is `Collection:MaxParallelMetricsPerTenant` (default 6) and acts purely as a **ceiling** — with no throttling the gate simply runs at the cap with negligible overhead, behaving identically to a fixed semaphore. The same signal/handler plumbing applies whether collection runs in the Collector container, the scheduled Job, or the Web local-fallback path.
 
 ## Observability (OpenTelemetry + Azure Monitor)
 
