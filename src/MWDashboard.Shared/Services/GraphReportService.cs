@@ -3,6 +3,7 @@ using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
+using Microsoft.Kiota.Authentication.Azure;
 using MWDashboard.Shared.Models;
 using BetaGraphClient = Microsoft.Graph.Beta.GraphServiceClient;
 
@@ -55,6 +56,13 @@ public interface IGraphReportService
     /// Returns an empty set if the tenant has no Copilot SKU (so all chat users are unlicensed).
     /// </summary>
     Task<HashSet<string>> GetCopilotLicensedUpnsAsync(string tenantId);
+
+    /// <summary>
+    /// Live, in-process Graph throttle signal for the tenant, fed by the HTTP middleware. The
+    /// collection pipeline reads it to adapt its concurrency in real time (no Application Insights
+    /// round-trip). The same instance is shared by the tenant's v1 and beta clients.
+    /// </summary>
+    GraphThrottleSignal GetThrottleSignal(string tenantId);
 }
 
 public partial class GraphReportService : IGraphReportService
@@ -69,6 +77,10 @@ public partial class GraphReportService : IGraphReportService
     private readonly ConcurrentDictionary<string, ClientSecretCredential> _credentialCache = new();
     private readonly ConcurrentDictionary<string, GraphServiceClient> _clientCache = new();
     private readonly ConcurrentDictionary<string, BetaGraphClient> _betaClientCache = new();
+
+    // One live throttle signal per tenant, shared by that tenant's v1 + beta clients. Graph throttles
+    // per-app/per-tenant, so the tenant is the correct granularity for the back-pressure signal.
+    private readonly ConcurrentDictionary<string, GraphThrottleSignal> _signalCache = new();
 
     public GraphReportService(IConfiguration config, ILogger<GraphReportService> logger)
     {
@@ -94,11 +106,38 @@ public partial class GraphReportService : IGraphReportService
             _config["AzureAd:ClientId"],
             _config["AzureAd:ClientSecret"]));
 
+    /// <summary>Live per-tenant Graph throttle signal (shared by the v1 + beta clients).</summary>
+    public GraphThrottleSignal GetThrottleSignal(string tenantId)
+        => _signalCache.GetOrAdd(tenantId, _ => new GraphThrottleSignal());
+
+    // Builds an HttpClient with the Graph SDK's default middleware (incl. the retry handler) plus our
+    // ThrottleObservingHandler appended innermost, so it observes every raw 429/503 before the retry
+    // handler acts. The same per-tenant signal backs both the v1 and beta clients.
+    private HttpClient BuildObservedHttpClient(string tenantId)
+    {
+        var signal = GetThrottleSignal(tenantId);
+        var observer = new ThrottleObservingHandler(signal, tenantId, _logger);
+
+        // Both the v1 and beta SDKs share Microsoft.Graph.Core's GraphClientFactory, so the same
+        // default-middleware pipeline + observer applies to either client.
+        var handlers = GraphClientFactory.CreateDefaultHandlers();
+        handlers.Add(observer);
+        return GraphClientFactory.Create(handlers);
+    }
+
     private GraphServiceClient CreateClientForTenant(string tenantId)
         => _clientCache.GetOrAdd(tenantId, tid =>
-            new GraphServiceClient(GetCredentialForTenant(tid), ["https://graph.microsoft.com/.default"]));
+        {
+            var authProvider = new AzureIdentityAuthenticationProvider(
+                GetCredentialForTenant(tid), scopes: ["https://graph.microsoft.com/.default"]);
+            return new GraphServiceClient(BuildObservedHttpClient(tid), authProvider);
+        });
 
     private BetaGraphClient CreateBetaClientForTenant(string tenantId)
         => _betaClientCache.GetOrAdd(tenantId, tid =>
-            new BetaGraphClient(GetCredentialForTenant(tid), ["https://graph.microsoft.com/.default"]));
+        {
+            var authProvider = new AzureIdentityAuthenticationProvider(
+                GetCredentialForTenant(tid), scopes: ["https://graph.microsoft.com/.default"]);
+            return new BetaGraphClient(BuildObservedHttpClient(tid), authProvider);
+        });
 }

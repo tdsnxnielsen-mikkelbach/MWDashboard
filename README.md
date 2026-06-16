@@ -11,7 +11,8 @@ A Blazor Web App that visualizes Monthly Active Users (MAU) across Microsoft 365
 - **Microsoft Graph Beta SDK** — Sign-in logs with full authentication details (Entra ID P1/P2)
 - **EF Core + Azure SQL** — Data persistence (Serverless tier with auto-pause)
 - **Azure Managed Redis** — Distributed caching for dashboard performance
-- **Azure Container Apps** — Hosting: web UI, on-demand collector (scales 0→N), and scheduled jobs (data collection)
+- **Azure Container Apps** — Hosting for five workloads: the web UI, the on-demand collector (internal, scales 0→3), the Copilot-audit collector (internal, Office 365 Management Activity API — unlicensed Copilot Chat + external sharing + suspicious mailbox rules + DLP matches), the consent callback (external, HMAC-validated tenant auto-registration), and the scheduled collector Job (daily 2:00 AM UTC cron)
+- **Azure Static Web Apps** — Customer-facing consent landing page (isolated from the dashboard; no access to customer data)
 - **Azure Key Vault** — Secrets management (AD credentials, Redis connection string)
 - **Application Insights** — Distributed tracing, metrics, and logging via OpenTelemetry
 - **Managed Identities** — Passwordless auth to SQL, ACR, and Key Vault
@@ -33,6 +34,8 @@ MWDashboard/
     ├── MWDashboard.Shared/             # Shared library (Models, Data, Services)
     ├── MWDashboard.Web/                # Blazor UI → Azure Container App
     ├── MWDashboard.Collector/          # On-demand collection API → Azure Container App (internal)
+    ├── MWDashboard.CopilotAudit/       # Office 365 Management Activity API collector → Azure Container App (internal)
+    ├── MWDashboard.Consent/            # Consent callback API → Azure Container App (external)
     └── MWDashboard.Job/                # Scheduled data collector → Azure Container App Job
 ```
 
