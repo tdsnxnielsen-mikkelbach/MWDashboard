@@ -695,6 +695,29 @@ public class CachedMauDataService : IMauDataService
         await InvalidateAsync(BuildKey("mailbox-access", null));
     }
 
+    // --- Legacy-auth & risky sign-in detail (15 min — security data, queried frequently) ---
+    public Task<List<SignInDetailSnapshot>> GetSignInDetailAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        var key = BuildKey("signin-detail", tenantIds, days);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions15Min;
+        return GetOrSetAsync(key, () => _inner.GetSignInDetailAsync(tenantIds, days), options);
+    }
+
+    public async Task SaveSignInDetailAsync(IEnumerable<SignInDetailSnapshot> snapshots)
+    {
+        await _inner.SaveSignInDetailAsync(snapshots);
+        foreach (var tid in snapshots.Select(s => s.TenantId).Distinct())
+            await InvalidateAsync(BuildKey("signin-detail", new[] { tid }));
+        await InvalidateAsync(BuildKey("signin-detail", null));
+    }
+
+    // The sign-in-detail cursor is collection state, never cached.
+    public Task<DateTime?> GetSignInDetailCursorAsync(string tenantId)
+        => _inner.GetSignInDetailCursorAsync(tenantId);
+
+    public Task UpdateSignInDetailCursorAsync(string tenantId, DateTime cursorUtc)
+        => _inner.UpdateSignInDetailCursorAsync(tenantId, cursorUtc);
+
     // --- Pass-through for write operations; cached reads below ---
 
     // --- MAU History (15 min — dashboard-level, queried frequently) ---

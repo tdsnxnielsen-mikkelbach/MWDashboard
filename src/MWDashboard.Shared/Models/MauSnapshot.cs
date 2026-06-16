@@ -63,6 +63,15 @@ public class TenantInfo
     /// Null means no directory-audit collection has run yet for this tenant.
     /// </summary>
     public DateTime? DirectoryAuditCursorUtc { get; set; }
+
+    /// <summary>
+    /// Cursor for the Microsoft Graph (beta) <c>/auditLogs/signIns</c> legacy-auth / risky sign-in
+    /// collection: the <c>createdDateTime</c> (UTC) of the most recent sign-in already processed.
+    /// Only newer sign-ins are pulled, so the tenant's ~30-day sign-in-log retention is never
+    /// re-scanned — history accumulates in our DB. Null means no sign-in-detail collection has run yet.
+    /// (Entra ID P1/P2 only — skipped on free-tier tenants.)
+    /// </summary>
+    public DateTime? SignInDetailCursorUtc { get; set; }
 }
 
 public class LicenseSnapshot
@@ -910,5 +919,33 @@ public class MailboxAccessSnapshot
     public string AccessType { get; set; } = string.Empty;
     public int EventCount { get; set; }
     public int DistinctMailboxes { get; set; }
+    public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Daily per-(client-app × country) aggregate of interactive sign-ins, used to surface
+/// <strong>legacy-authentication</strong> protocol usage (POP/IMAP/SMTP and other clients that bypass
+/// modern auth / MFA) plus failed- and risky-sign-in breakdowns and a sign-in-by-country view.
+/// Sourced from the Microsoft Graph beta <c>/auditLogs/signIns</c> endpoint (requires
+/// <c>AuditLog.Read.All</c>) and <strong>gated behind Microsoft Entra ID P1/P2</strong> — skipped on
+/// free-tier tenants. Pulled incrementally via <c>TenantInfo.SignInDetailCursorUtc</c> so history
+/// accumulates beyond the tenant's ~30-day sign-in-log retention.
+/// </summary>
+public class SignInDetailSnapshot
+{
+    public int Id { get; set; }
+    public string TenantId { get; set; } = string.Empty;
+    public string TenantName { get; set; } = string.Empty;
+    public DateTime ReportDate { get; set; }
+    /// <summary>The client app reported by Entra, e.g. <c>Browser</c>, <c>Mobile Apps and Desktop clients</c>, <c>IMAP4</c>, <c>POP3</c>, <c>SMTP</c>, <c>Exchange ActiveSync</c>, <c>Other clients</c>.</summary>
+    public string ClientApp { get; set; } = string.Empty;
+    /// <summary>True when the client app is a legacy-auth protocol (anything other than <c>Browser</c> / <c>Mobile Apps and Desktop clients</c>) — these bypass modern auth and most MFA / Conditional Access.</summary>
+    public bool IsLegacyAuth { get; set; }
+    /// <summary>Sign-in country/region from <c>location.countryOrRegion</c> (<c>Unknown</c> when absent).</summary>
+    public string Country { get; set; } = string.Empty;
+    public int SuccessCount { get; set; }
+    public int FailureCount { get; set; }
+    /// <summary>Number of sign-ins whose aggregated risk level was low/medium/high (Identity Protection).</summary>
+    public int RiskyCount { get; set; }
     public DateTime CollectedAt { get; set; } = DateTime.UtcNow;
 }

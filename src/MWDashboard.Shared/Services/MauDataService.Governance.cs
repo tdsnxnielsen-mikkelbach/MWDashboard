@@ -572,4 +572,71 @@ public partial class MauDataService
         }
         await db.SaveChangesAsync();
     }
+
+    // Legacy-auth & risky sign-in detail — Microsoft Graph (beta) /auditLogs/signIns.
+    // History is accumulated in our DB: new sign-ins (newer than the cursor) are ADDED to the existing
+    // per-day aggregate so a day split across collection runs is never under-counted, and data survives
+    // beyond the tenant's ~30-day sign-in-log retention. The legacy-auth flag is a function of the
+    // client app, so it is consistent within a (ClientApp, Country) row.
+    public async Task<List<SignInDetailSnapshot>> GetSignInDetailAsync(IEnumerable<string>? tenantIds, int days = 30)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var query = db.SignInDetailSnapshots.AsNoTracking().Where(s => s.ReportDate >= cutoff);
+        if (tenantIds != null)
+        {
+            var ids = tenantIds.ToList();
+            query = query.Where(s => ids.Contains(s.TenantId));
+        }
+        return await query.OrderBy(s => s.ReportDate).ToListAsync();
+    }
+
+    public async Task SaveSignInDetailAsync(IEnumerable<SignInDetailSnapshot> snapshots)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        foreach (var snapshot in snapshots)
+        {
+            var existing = await db.SignInDetailSnapshots.FirstOrDefaultAsync(s =>
+                s.TenantId == snapshot.TenantId &&
+                s.ClientApp == snapshot.ClientApp &&
+                s.Country == snapshot.Country &&
+                s.ReportDate == snapshot.ReportDate);
+            if (existing != null)
+            {
+                // Accumulate: the cursor guarantees no sign-in is pulled twice, so adding is correct.
+                existing.TenantName = snapshot.TenantName;
+                existing.IsLegacyAuth = snapshot.IsLegacyAuth;
+                existing.SuccessCount += snapshot.SuccessCount;
+                existing.FailureCount += snapshot.FailureCount;
+                existing.RiskyCount += snapshot.RiskyCount;
+                existing.CollectedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                db.SignInDetailSnapshots.Add(snapshot);
+            }
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<DateTime?> GetSignInDetailCursorAsync(string tenantId)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        return tenant?.SignInDetailCursorUtc;
+    }
+
+    public async Task UpdateSignInDetailCursorAsync(string tenantId, DateTime cursorUtc)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.TenantId == tenantId);
+        if (tenant == null) return;
+
+        // Never move the cursor backwards.
+        if (tenant.SignInDetailCursorUtc == null || cursorUtc > tenant.SignInDetailCursorUtc)
+        {
+            tenant.SignInDetailCursorUtc = cursorUtc;
+            await db.SaveChangesAsync();
+        }
+    }
 }

@@ -225,6 +225,100 @@ public partial class GraphReportService
         return summaries;
     }
 
+    // Legacy-auth & risky sign-in detail — Microsoft Graph (beta) /auditLogs/signIns.
+    // Aggregates sign-ins newer than the cursor by (client app, country, day): success/failure
+    // counts, risky-sign-in counts (Identity Protection riskLevelAggregated), and a legacy-auth flag
+    // (anything other than "Browser"/"Mobile Apps and Desktop clients" bypasses modern auth/MFA).
+    // No per-user identities are stored — only aggregate counts. Requires AuditLog.Read.All and is
+    // gated behind Entra ID P1/P2 (the caller skips free-tier tenants). The newest sign-in timestamp
+    // seen is returned so the caller can advance the per-tenant cursor.
+    public async Task<(List<SignInDetailSnapshot> Snapshots, DateTime? MaxCreatedDateTime)> GetSignInDetailAsync(string tenantId, DateTime? sinceUtc)
+    {
+        var since = sinceUtc ?? DateTime.UtcNow.AddDays(-30);
+        // key: (clientApp, country, day) -> (success, failure, risky, isLegacy)
+        var buckets = new Dictionary<(string ClientApp, string Country, DateTime Day), (int Success, int Failure, int Risky, bool Legacy)>();
+        DateTime? maxCreated = null;
+
+        try
+        {
+            var betaClient = CreateBetaClientForTenant(tenantId);
+            var response = await betaClient.AuditLogs.SignIns.GetAsync(c =>
+            {
+                c.QueryParameters.Filter = $"createdDateTime ge {since:yyyy-MM-ddTHH:mm:ssZ}";
+                c.QueryParameters.Top = 999;
+                c.QueryParameters.Select = ["createdDateTime", "clientAppUsed", "status", "location", "riskLevelAggregated"];
+                c.QueryParameters.Orderby = ["createdDateTime"];
+            });
+
+            while (response?.Value != null)
+            {
+                foreach (var s in response.Value)
+                {
+                    var when = s.CreatedDateTime?.UtcDateTime;
+                    if (when == null) continue;
+                    if (maxCreated == null || when > maxCreated) maxCreated = when;
+
+                    var clientApp = string.IsNullOrEmpty(s.ClientAppUsed) ? "Unknown" : s.ClientAppUsed;
+                    var legacy = IsLegacyAuthClient(clientApp);
+                    var country = string.IsNullOrEmpty(s.Location?.CountryOrRegion) ? "Unknown" : s.Location.CountryOrRegion;
+                    var key = (clientApp, country, when.Value.Date);
+
+                    (int Success, int Failure, int Risky, bool Legacy) agg = buckets.TryGetValue(key, out var a) ? a : (0, 0, 0, legacy);
+                    var failed = s.Status?.ErrorCode is not null and not 0;
+                    if (failed) agg.Failure++; else agg.Success++;
+                    if (IsRiskySignIn(s.RiskLevelAggregated)) agg.Risky++;
+                    agg.Legacy = legacy;
+                    buckets[key] = agg;
+                }
+
+                if (string.IsNullOrEmpty(response.OdataNextLink)) break;
+                response = await betaClient.AuditLogs.SignIns.WithUrl(response.OdataNextLink).GetAsync();
+            }
+        }
+        catch (Microsoft.Graph.Beta.Models.ODataErrors.ODataError odataEx) when (odataEx.ResponseStatusCode == 403)
+        {
+            // Sign-in logs require an Entra ID P1/P2 license; a free-tier tenant returns 403 even when
+            // AuditLog.Read.All is fully consented, so distinguish that from a genuine consent gap.
+            var detail = $"{odataEx.Error?.Code} {odataEx.Error?.Message} {odataEx.Message}";
+            if (IsPremiumLicenseError(detail))
+                _logger.LogWarning("Sign-in detail unavailable for tenant {TenantId}: reading sign-in logs requires a Microsoft Entra ID P1/P2 license (permissions are consented). Detail: {Detail}", tenantId, detail.Trim());
+            else
+                _logger.LogWarning("Sign-in detail unavailable for tenant {TenantId}: insufficient permissions. Requires AuditLog.Read.All. Detail: {Detail}", tenantId, detail.Trim());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get sign-in detail for tenant {TenantId}", tenantId);
+        }
+
+        var snapshots = buckets.Select(kvp => new SignInDetailSnapshot
+        {
+            TenantId = tenantId,
+            ReportDate = kvp.Key.Day,
+            ClientApp = kvp.Key.ClientApp,
+            Country = kvp.Key.Country,
+            IsLegacyAuth = kvp.Value.Legacy,
+            SuccessCount = kvp.Value.Success,
+            FailureCount = kvp.Value.Failure,
+            RiskyCount = kvp.Value.Risky,
+            CollectedAt = DateTime.UtcNow
+        }).ToList();
+
+        return (snapshots, maxCreated);
+    }
+
+    // Modern-auth clients are "Browser" and "Mobile Apps and Desktop clients"; every other
+    // clientAppUsed value (IMAP4, POP3, SMTP, Exchange ActiveSync, Other clients, etc.) is a
+    // legacy-auth protocol that bypasses modern auth and most MFA / Conditional Access.
+    private static bool IsLegacyAuthClient(string clientApp) =>
+        !clientApp.Equals("Browser", StringComparison.OrdinalIgnoreCase) &&
+        !clientApp.Equals("Mobile Apps and Desktop clients", StringComparison.OrdinalIgnoreCase) &&
+        !clientApp.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsRiskySignIn(Microsoft.Graph.Beta.Models.RiskLevel? level) =>
+        level is Microsoft.Graph.Beta.Models.RiskLevel.Low
+            or Microsoft.Graph.Beta.Models.RiskLevel.Medium
+            or Microsoft.Graph.Beta.Models.RiskLevel.High;
+
     private static string ClassifySecurityService(string appDisplayName)
     {
         var name = appDisplayName.ToLowerInvariant();

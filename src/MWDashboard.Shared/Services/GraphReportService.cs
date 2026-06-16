@@ -43,6 +43,7 @@ public interface IGraphReportService
     Task<(List<DirectoryAuditSnapshot> Snapshots, DateTime? MaxActivityDateTime)> GetDirectoryAuditsAsync(string tenantId, DateTime? sinceUtc);
     Task<List<LicenseAssignmentIssueSnapshot>> GetLicenseAssignmentIssuesAsync(string tenantId, IEnumerable<LicenseSnapshot> licenses);
     Task<List<OAuthGrantSnapshot>> GetOAuthGrantsAsync(string tenantId);
+    Task<(List<SignInDetailSnapshot> Snapshots, DateTime? MaxCreatedDateTime)> GetSignInDetailAsync(string tenantId, DateTime? sinceUtc);
     Task<List<string>> CheckMissingPermissionsAsync(string tenantId);
 
     /// <summary>

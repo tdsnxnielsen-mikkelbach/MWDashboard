@@ -190,6 +190,12 @@ public interface IMauDataService
     // Mailbox non-owner / delegate access — Office 365 Management Activity API (Audit.Exchange)
     Task<List<MailboxAccessSnapshot>> GetMailboxAccessAsync(IEnumerable<string>? tenantIds, int days = 30);
     Task SaveMailboxAccessAsync(IEnumerable<MailboxAccessSnapshot> snapshots);
+
+    // Legacy-auth & risky sign-in detail — Microsoft Graph (beta) /auditLogs/signIns (history accumulated in-DB)
+    Task<List<SignInDetailSnapshot>> GetSignInDetailAsync(IEnumerable<string>? tenantIds, int days = 30);
+    Task SaveSignInDetailAsync(IEnumerable<SignInDetailSnapshot> snapshots);
+    Task<DateTime?> GetSignInDetailCursorAsync(string tenantId);
+    Task UpdateSignInDetailCursorAsync(string tenantId, DateTime cursorUtc);
 }
 
 /// <summary>

@@ -12,6 +12,7 @@
     <MudText Typo="Typo.h4">Security Services</MudText>
     <ExportMenu Items="@(new[] {
         ("Sign-ins & MFA", "security"),
+        ("Legacy Auth & Risky Sign-ins", "signin-detail"),
         ("Defender Alerts", "defender-alerts"),
         ("Suspicious Mail Rules", "mail-rules"),
         ("Mailbox Access", "mailbox-access"),
@@ -659,6 +660,125 @@ else
     }
 </MudPaper>
 
+@* Legacy Authentication & Risky Sign-ins (P1/P2-gated) *@
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-1">
+        <MudIcon Icon="@Icons.Material.Filled.GppMaybe" Class="mr-2" />
+        Legacy Auth & Risky Sign-ins (last 30 days)
+    </MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        Legacy-authentication protocol usage (POP/IMAP/SMTP and other clients that bypass modern auth and most MFA / Conditional Access),
+        plus failed- and risky-sign-in counts and a sign-in-by-country view, from the Entra sign-in logs (<PermissionTag Scope="AuditLog.Read.All" />).
+        <strong>Requires Microsoft Entra ID P1/P2</strong> — free-tier tenants cannot expose sign-in logs. History accumulates here beyond the tenant's ~30-day retention.
+    </MudText>
+    @if (_signInDetail.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">
+            No sign-in detail recorded yet for the selected tenant(s). This is expected on <strong>Entra ID Free</strong> tenants
+            (sign-in logs require <strong>P1/P2</strong>), or before the first collection has run. Data builds up daily as the dashboard collects.
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Legacy-Auth Sign-ins</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_legacyAuthSignIns > 0 ? Color.Warning : Color.Success)">@_legacyAuthSignIns.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">bypass modern auth</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Failed Sign-ins</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_failedSignIns > 0 ? Color.Error : Color.Success)">@_failedSignIns.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">unsuccessful attempts</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Risky Sign-ins</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_riskySignIns > 0 ? Color.Error : Color.Success)">@_riskySignIns.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">low/medium/high risk</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" sm="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Countries</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Info">@_distinctCountries.ToString("N0")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">distinct sign-in locations</MudText>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="7">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">By Client App</MudText>
+                <MudTable Items="_signInByClient" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Client App</MudTh>
+                        <MudTh>Type</MudTh>
+                        <MudTh Style="text-align:right">Success</MudTh>
+                        <MudTh Style="text-align:right">Failure</MudTh>
+                        <MudTh Style="text-align:right">Risky</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Client App">@context.ClientApp</MudTd>
+                        <MudTd DataLabel="Type">
+                            @if (context.IsLegacy)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Legacy</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">Modern</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Success" Style="text-align:right">@context.Success.ToString("N0")</MudTd>
+                        <MudTd DataLabel="Failure" Style="text-align:right">
+                            @if (context.Failure > 0)
+                            {
+                                <MudText Color="Color.Warning" Typo="Typo.body2">@context.Failure.ToString("N0")</MudText>
+                            }
+                            else { <text>0</text> }
+                        </MudTd>
+                        <MudTd DataLabel="Risky" Style="text-align:right">
+                            @if (context.Risky > 0)
+                            {
+                                <MudText Color="Color.Error" Typo="Typo.body2">@context.Risky.ToString("N0")</MudText>
+                            }
+                            else { <text>0</text> }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+
+            <MudItem xs="12" md="5">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">By Country (top 15)</MudText>
+                @if (_signInByCountry.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">No location data available for the selected tenant(s).</MudText>
+                }
+                else
+                {
+                    <MudTable Items="_signInByCountry" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            <MudTh>Country / Region</MudTh>
+                            <MudTh Style="text-align:right">Sign-ins</MudTh>
+                            <MudTh Style="text-align:right">Failures</MudTh>
+                            <MudTh Style="text-align:right">Risky</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Country / Region">@context.Country</MudTd>
+                            <MudTd DataLabel="Sign-ins" Style="text-align:right">@context.Total.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Failures" Style="text-align:right">@context.Failure.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Risky" Style="text-align:right">@context.Risky.ToString("N0")</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
+
 @* Change Log — Directory Audit (admin & directory changes over time) *@
 <MudPaper Class="pa-4 mb-4" Elevation="2">
     <MudText Typo="Typo.h6" Class="mb-1">
@@ -791,6 +911,12 @@ else
     private List<DirectoryAuditSnapshot> _directoryAudits = [];
     private int _auditTotal, _auditFailures, _auditCategoryCount;
 
+    // Legacy-auth & risky sign-in detail aggregates
+    private List<SignInDetailSnapshot> _signInDetail = [];
+    private int _legacyAuthSignIns, _failedSignIns, _riskySignIns, _distinctCountries;
+    private List<ClientAppStat> _signInByClient = [];
+    private List<CountryStat> _signInByCountry = [];
+
     // Groups the Change Log table by tenant (collapsible) in multi-tenant view.
     private readonly TableGroupDefinition<DirectoryAuditSnapshot> _auditGroupDefinition = new()
     {
@@ -905,6 +1031,29 @@ else
         _auditTotal = _directoryAudits.Sum(s => s.EventCount);
         _auditFailures = _directoryAudits.Sum(s => s.FailureCount);
         _auditCategoryCount = _directoryAudits.Select(s => s.Category).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+        // Legacy-auth & risky sign-in detail aggregates (last 30 days, P1/P2 only)
+        _signInDetail = await MauDataService.GetSignInDetailAsync(tenantIds, days: 30);
+        _legacyAuthSignIns = _signInDetail.Where(s => s.IsLegacyAuth).Sum(s => s.SuccessCount + s.FailureCount);
+        _failedSignIns = _signInDetail.Sum(s => s.FailureCount);
+        _riskySignIns = _signInDetail.Sum(s => s.RiskyCount);
+        _distinctCountries = _signInDetail
+            .Where(s => !string.Equals(s.Country, "Unknown", StringComparison.OrdinalIgnoreCase))
+            .Select(s => s.Country).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        _signInByClient = _signInDetail
+            .GroupBy(s => s.ClientApp)
+            .Select(g => new ClientAppStat(g.Key, g.Any(x => x.IsLegacyAuth),
+                g.Sum(x => x.SuccessCount), g.Sum(x => x.FailureCount), g.Sum(x => x.RiskyCount)))
+            .OrderByDescending(c => c.IsLegacy).ThenByDescending(c => c.Success + c.Failure)
+            .ToList();
+        _signInByCountry = _signInDetail
+            .Where(s => !string.Equals(s.Country, "Unknown", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(s => s.Country)
+            .Select(g => new CountryStat(g.Key, g.Sum(x => x.SuccessCount + x.FailureCount),
+                g.Sum(x => x.FailureCount), g.Sum(x => x.RiskyCount)))
+            .OrderByDescending(c => c.Total)
+            .Take(15)
+            .ToList();
 
         _dailySignIns = _summaries
             .GroupBy(s => s.ReportDate.ToString("MM-dd"))
@@ -1023,6 +1172,9 @@ else
         public int SuccessCount { get; set; }
         public int FailureCount { get; set; }
     }
+
+    private record ClientAppStat(string ClientApp, bool IsLegacy, int Success, int Failure, int Risky);
+    private record CountryStat(string Country, int Total, int Failure, int Risky);
 
     public void Dispose()
     {

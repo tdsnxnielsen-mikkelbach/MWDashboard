@@ -57,6 +57,18 @@ public class OnDemandDataCollectionService : IDataCollectionService
             var signIns = await _graphService.GetSignInSummaryAsync(tenantId);
             if (signIns.Count > 0)
                 await _dataService.SaveSecuritySummariesAsync(signIns);
+
+            // Legacy-auth & risky sign-in detail (P1/P2 only). Uses a per-tenant cursor and
+            // accumulates history in-DB so data survives beyond the tenant's ~30-day sign-in retention.
+            var signInCursor = await _dataService.GetSignInDetailCursorAsync(tenantId);
+            var (signInDetail, maxSignInTime) = await _graphService.GetSignInDetailAsync(tenantId, signInCursor);
+            if (signInDetail.Count > 0)
+            {
+                foreach (var d in signInDetail) d.TenantName = tenantName;
+                await _dataService.SaveSignInDetailAsync(signInDetail);
+            }
+            if (maxSignInTime.HasValue)
+                await _dataService.UpdateSignInDetailCursorAsync(tenantId, maxSignInTime.Value);
         }
         else
         {

@@ -265,6 +265,12 @@ public static class ExportEndpoints
             async (data, scope) => (await data.GetMailboxAccessAsync(scope)).Select(r =>
                 Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.AccessType),
                     r.EventCount, r.DistinctMailboxes))),
+
+        ["signin-detail"] = new("signin-detail-report.csv",
+            "TenantId,TenantName,ReportDate,ClientApp,IsLegacyAuth,Country,SuccessCount,FailureCount,RiskyCount",
+            async (data, scope) => (await data.GetSignInDetailAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.ClientApp), r.IsLegacyAuth,
+                    F(r.Country), r.SuccessCount, r.FailureCount, r.RiskyCount))),
     };
 
     public static void MapExportEndpoints(this WebApplication app)

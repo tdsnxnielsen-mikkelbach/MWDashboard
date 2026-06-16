@@ -53,6 +53,7 @@ public class MauDbContext : DbContext
     public DbSet<LicenseAssignmentIssueSnapshot> LicenseAssignmentIssueSnapshots => Set<LicenseAssignmentIssueSnapshot>();
     public DbSet<OAuthGrantSnapshot> OAuthGrantSnapshots => Set<OAuthGrantSnapshot>();
     public DbSet<MailboxAccessSnapshot> MailboxAccessSnapshots => Set<MailboxAccessSnapshot>();
+    public DbSet<SignInDetailSnapshot> SignInDetailSnapshots => Set<SignInDetailSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -455,6 +456,15 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantId).HasMaxLength(100);
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.AccessType).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<SignInDetailSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.ClientApp, e.Country, e.ReportDate }).IsUnique();
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.ClientApp).HasMaxLength(100);
+            entity.Property(e => e.Country).HasMaxLength(100);
         });
     }
 }
