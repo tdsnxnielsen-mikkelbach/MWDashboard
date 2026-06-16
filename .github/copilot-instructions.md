@@ -48,10 +48,12 @@ azd deploy
 - Use `IDbContextFactory<MauDbContext>` — create a new context per method call (`await using var db = await _dbFactory.CreateDbContextAsync()`)
 - All query methods accept `IEnumerable<string>? tenantIds` — `null` means "all tenants" (no WHERE clause = query optimization)
 - Save methods use upsert logic: check existing by composite key, update if found, add if not
+- `PurgeTenantDataAsync(string tenantId)` bulk-deletes every snapshot entity scoped by `TenantId` (reflection-driven `ExecuteDeleteAsync` over all DbSets **except** `TenantInfo`), keeping the tenant registration/consent intact so the next collection rebuilds history. The `CachedMauDataService` decorator calls `_invalidationService?.FlushAllAsync()` afterward. Surfaced as the **Purge** button on `/tenants`
 - Interfaces defined alongside implementations (e.g., `IMauDataService` + `MauDataService`)
 
 ### Graph API Services (src/MWDashboard.Web/Services/ or src/MWDashboard.Shared/Services/)
 - `CreateClientForTenant(string tenantId)` creates a `GraphServiceClient` with `ClientSecretCredential`
+- **Adaptive throttle detection**: each tenant's v1 and beta clients are built through `BuildObservedHttpClient(tenantId)`, which appends a `ThrottleObservingHandler` **innermost** in the Graph SDK middleware (`GraphClientFactory.CreateDefaultHandlers()` + `.Add(...)` — note there is **no** `Microsoft.Graph.Beta.GraphClientFactory`; both v1 and beta share `Microsoft.Graph.GraphClientFactory` from Microsoft.Graph.Core). The handler observes raw 429/503s **before** the SDK retry handler, reads `Retry-After`, and records it on a per-tenant `GraphThrottleSignal` (lock-free `Interlocked`, cached in `GraphReportService._signalCache`, exposed via `IGraphReportService.GetThrottleSignal(tenantId)`). Clients use `AzureIdentityAuthenticationProvider` (namespace `Microsoft.Kiota.Authentication.Azure`, `scopes: ["https://graph.microsoft.com/.default"]`). The signal drives the collection pipeline's adaptive concurrency (see Background Collection)
 - Report endpoints return CSV streams — parse with header matching
 - Beta API uses separate `BetaGraphClient` instance (sign-ins + Copilot usage)
 - Always handle `ServiceException` gracefully (tenant may not have required license)
@@ -90,6 +92,12 @@ azd deploy
 - One-shot console app: collects all data for active tenants, then exits
 - Runs as Azure Container App Job (cron: `0 2 * * *`)
 - Same `IGraphReportService` / `IMauDataService` interfaces as web
+- Tenants are collected **in parallel** with bounded concurrency (`SemaphoreSlim`, `Collection:MaxParallelTenants`, default 4)
+
+### Collection Pipeline & Adaptive Concurrency (src/MWDashboard.Shared/Services/OnDemandDataCollectionService.cs)
+- `CollectForTenantAsync` is **phased**: Phase 0 collects licenses serially (drives `TenantEntraTier`/`TenantDefenderTier`, gating premium steps); Phase 1 runs ~30 independent get-metric→save steps through `RunStepsAsync`; Phase 2 computes the consumption score + runs the consent probe (both depend on Phase 1)
+- `RunStepsAsync(tenantName, GraphThrottleSignal signal, steps, ct)` runs Phase-1 steps **concurrently** with an **AIMD adaptive gate**: target starts at the cap, halves on a recent throttle (`signal.ThrottledWithin(5s)`), recovers +1 per clean window toward the cap, and honors `signal.RetryAfterDelay()` before each acquire. Each step is isolated in try/catch (one feature's failure never aborts the others)
+- Cap = `Collection:MaxParallelMetricsPerTenant` (default 6) — a **ceiling only**; with no throttling it behaves like a fixed semaphore at the cap. The signal is fed by `ThrottleObservingHandler` (see Graph API Services)
 
 ### On-Demand Collector (src/MWDashboard.Collector/)
 - Minimal API with single endpoint: `POST /collect/{tenantId}?tenantName=...`
