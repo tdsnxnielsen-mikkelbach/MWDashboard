@@ -9,16 +9,19 @@
 <BrandedPageTitle Page="Security Services" />
 
 <div class="d-flex justify-space-between align-center mb-2">
-    <MudText Typo="Typo.h4">Security Services</MudText>
-    <ExportMenu Items="@(new[] {
-        ("Sign-ins & MFA", "security"),
-        ("Legacy Auth & Risky Sign-ins", "signin-detail"),
-        ("Defender Alerts", "defender-alerts"),
-        ("Suspicious Mail Rules", "mail-rules"),
-        ("Mailbox Access", "mailbox-access"),
-        ("DLP Policy Matches", "dlp-events"),
-        ("Change Log (Directory Audit)", "directory-audit"),
-        ("External Sharing", "external-sharing") })" />
+    <MudText Typo="Typo.h4" data-tour="page-header">Security Services</MudText>
+    <div class="d-flex align-center gap-2">
+        <PageTour PageKey="security" />
+        <span data-tour="page-export"><ExportMenu Items="@(new[] {
+            ("Sign-ins & MFA", "security"),
+            ("Legacy Auth & Risky Sign-ins", "signin-detail"),
+            ("Defender Alerts", "defender-alerts"),
+            ("Suspicious Mail Rules", "mail-rules"),
+            ("Mailbox Access", "mailbox-access"),
+            ("DLP Policy Matches", "dlp-events"),
+            ("Change Log (Directory Audit)", "directory-audit"),
+            ("External Sharing", "external-sharing") })" /></span>
+    </div>
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Sign-in activity and MFA metrics from Entra audit logs, Microsoft Defender alerts, and external file-sharing activity.

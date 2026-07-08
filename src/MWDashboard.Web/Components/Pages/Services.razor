@@ -9,8 +9,11 @@
 <BrandedPageTitle Page="Services" />
 
 <div class="d-flex justify-space-between align-center mb-4">
-    <MudText Typo="Typo.h4">Service Usage Overview</MudText>
-    <ExportButton Feature="mau" />
+    <MudText Typo="Typo.h4" data-tour="page-header">Service Usage Overview</MudText>
+    <div class="d-flex align-center gap-2">
+        <PageTour PageKey="services" />
+        <span data-tour="page-export"><ExportButton Feature="mau" /></span>
+    </div>
 </div>
 
 @if (_loading)

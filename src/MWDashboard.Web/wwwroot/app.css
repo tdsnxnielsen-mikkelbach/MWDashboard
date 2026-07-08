@@ -123,3 +123,41 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* driver.js guided-tour popover — dark-mode styling so tour cards match the app theme.
+   Applied when the tour is started in dark mode (see wwwroot/js/tour.js). */
+.driver-popover.mwd-tour-dark {
+    background-color: #1e1e2e;
+    color: #e0e0e0;
+}
+
+.driver-popover.mwd-tour-dark .driver-popover-title {
+    color: #ffffff;
+}
+
+.driver-popover.mwd-tour-dark .driver-popover-description {
+    color: #cfcfe0;
+}
+
+.driver-popover.mwd-tour-dark .driver-popover-progress-text {
+    color: #a0a0b0;
+}
+
+.driver-popover.mwd-tour-dark .driver-popover-arrow {
+    /* keep the arrow color in sync with the dark card background */
+    border-color: #1e1e2e;
+}
+
+.driver-popover.mwd-tour-dark .driver-popover-close-btn {
+    color: #a0a0b0;
+}
+
+.driver-popover.mwd-tour-dark .driver-popover-navigation-btns button {
+    background-color: #2d2d3d;
+    color: #ffffff;
+    text-shadow: none;
+}
+
+.driver-popover.mwd-tour-dark .driver-popover-navigation-btns button:hover {
+    background-color: #3a3a4d;
+}

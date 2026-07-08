@@ -9,10 +9,13 @@
 <BrandedPageTitle Page="Secure Score" />
 
 <div class="d-flex justify-space-between align-center mb-2">
-    <MudText Typo="Typo.h4">Microsoft Secure Score</MudText>
-    <ExportMenu Items="@(new[] {
-        ("Score History", "secure-scores"),
-        ("Control Details", "secure-score-controls") })" />
+    <MudText Typo="Typo.h4" data-tour="page-header">Microsoft Secure Score</MudText>
+    <div class="d-flex align-center gap-2">
+        <PageTour PageKey="securescore" />
+        <span data-tour="page-export"><ExportMenu Items="@(new[] {
+            ("Score History", "secure-scores"),
+            ("Control Details", "secure-score-controls") })" /></span>
+    </div>
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Security posture score and prioritized remediation actions from Microsoft Defender.

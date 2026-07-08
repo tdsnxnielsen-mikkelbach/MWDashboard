@@ -23,8 +23,11 @@ else
     @* Export + Header *@
     <MudItem xs="12">
         <div class="d-flex justify-space-between align-center">
-            <MudText Typo="Typo.h5">Consumption Overview</MudText>
-            <ExportButton Feature="consumption" />
+            <MudText Typo="Typo.h5" data-tour="page-header">Consumption Overview</MudText>
+            <div class="d-flex align-center gap-2">
+                <PageTour PageKey="consumption" />
+                <span data-tour="page-export"><ExportButton Feature="consumption" /></span>
+            </div>
         </div>
     </MudItem>
 

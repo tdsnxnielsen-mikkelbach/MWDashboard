@@ -38,7 +38,9 @@
         <MudSpacer />
         @if (TenantFilter.IsHomeTenantUser)
         {
-            <TenantSelector />
+            <div data-tour="tenant-filter" class="d-inline-flex align-center">
+                <TenantSelector />
+            </div>
         }
         else
         {
@@ -54,7 +56,7 @@
             </Authorized>
         </AuthorizeView>
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" 
-                       Color="Color.Inherit" OnClick="ToggleDarkMode" />
+                       Color="Color.Inherit" OnClick="ToggleDarkMode" data-tour="theme-toggle" />
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">

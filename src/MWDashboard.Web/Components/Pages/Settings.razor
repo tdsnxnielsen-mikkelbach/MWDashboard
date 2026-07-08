@@ -15,7 +15,10 @@
     return;
 }
 
-<MudText Typo="Typo.h4" Class="mb-4">Branding & Appearance</MudText>
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h4" data-tour="page-header">Branding & Appearance</MudText>
+    <PageTour PageKey="settings" />
+</div>
 
 @if (_loading)
 {

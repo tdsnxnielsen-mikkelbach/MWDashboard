@@ -1,5 +1,29 @@
 # TODO — Future Enhancements
 
+## Guided Product Tours (driver.js) ✅ COMPLETED
+
+**Priority**: Medium
+**Status**: ✅ **Completed** — driver.js-powered interactive walkthrough on every page with a per-page "Tour" restart button and first-visit auto-start
+**Context**: New/occasional users need onboarding. Add a classic "next → next → done" product tour (a.k.a. guided walkthrough / coach marks) that highlights the key elements of each dashboard page one at a time. Built on [driver.js](https://driverjs.com) (lightweight, dependency-free, ~5 KB) served from `wwwroot/lib/driver` (no CDN dependency — the app runs in locked-down tenants).
+
+### Requirements
+- A guided tour is available on **every** page.
+- The user can **restart the tour per page** (a visible "Tour" button in each page header).
+- First visit to a page auto-starts its tour once (remembered via `localStorage`); subsequent visits don't nag.
+- Common navigation elements (tenant filter, nav menu, theme toggle) are explained on every tour; page-specific elements are explained per page.
+
+### Implementation breakdown
+1. [x] Add driver.js assets (`driver.js.iife.js` + `driver.css`) to `wwwroot/lib/driver` (self-hosted, no CDN).
+2. [x] Reference the driver.js script + stylesheet in `App.razor`.
+3. [x] Create `wwwroot/js/tour.js` interop module (`startTour`, `shouldAutoStart`, `markSeen`) wrapping `window.driver.js.driver`, theme-aware, with per-page `localStorage` gating.
+4. [x] Add a `TourStep` record + central `TourSteps` definitions (one step list per page + shared nav steps) under `MWDashboard.Web/Services`.
+5. [x] Create a reusable `PageTour` shared component (renders the "Tour" restart button, auto-starts once on first visit).
+6. [x] Add `data-tour` anchors to shared chrome (app bar tenant filter + theme toggle, nav menu) in `MainLayout`/`NavMenu`/`TenantSelector`.
+7. [x] Add `<PageTour>` + `data-tour` anchors to every dashboard page.
+8. [x] Build and verify.
+
+---
+
 ## Partner Center API Integration (Cost/Billing Data)
 
 **Priority**: High  

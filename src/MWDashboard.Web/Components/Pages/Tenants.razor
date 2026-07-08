@@ -17,7 +17,10 @@
     return;
 }
 
-<MudText Typo="Typo.h4" Class="mb-4">Tenant Management</MudText>
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h4" data-tour="page-header">Tenant Management</MudText>
+    <PageTour PageKey="tenants" />
+</div>
 
 @{
     var tenantsNeedingConsent = _tenants.Where(t => !string.IsNullOrWhiteSpace(t.MissingPermissions)).ToList();
@@ -92,7 +95,8 @@
             <div class="d-flex justify-space-between align-center mb-3">
                 <MudText Typo="Typo.h6">Registered Tenants</MudText>
                 <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.CloudSync"
-                           OnClick="CollectAll" Disabled="@(_collectingAll || _collectingTenantId != null)">
+                           OnClick="CollectAll" Disabled="@(_collectingAll || _collectingTenantId != null)"
+                           data-tour="page-action">
                     @(_collectingAll ? "Collecting…" : "Collect All Tenants")
                 </MudButton>
             </div>

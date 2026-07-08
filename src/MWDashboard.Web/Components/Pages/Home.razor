@@ -22,12 +22,16 @@ else
     @* Header + Export All *@
     <MudItem xs="12">
         <div class="d-flex justify-space-between align-center">
-            <MudText Typo="Typo.h4">Dashboard Overview</MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                       StartIcon="@Icons.Material.Filled.CloudDownload"
-                       Href="/api/export-all" Target="_blank" rel="noopener">
-                Export All Data
-            </MudButton>
+            <MudText Typo="Typo.h4" data-tour="page-header">Dashboard Overview</MudText>
+            <div class="d-flex align-center gap-2">
+                <PageTour PageKey="home" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.CloudDownload"
+                           Href="/api/export-all" Target="_blank" rel="noopener"
+                           data-tour="page-export">
+                    Export All Data
+                </MudButton>
+            </div>
         </div>
     </MudItem>
 
