@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -97,6 +98,17 @@ if (!string.IsNullOrEmpty(redisConnection))
     // Register IConnectionMultiplexer for pub/sub invalidation
     redisMultiplexer = ConnectionMultiplexer.Connect(redisConnection);
     builder.Services.AddSingleton<IConnectionMultiplexer>(redisMultiplexer);
+
+    // Persist ASP.NET Core Data Protection keys to Redis so the key ring is SHARED across
+    // every Web replica and survives revision restarts/deploys. Without this the keys land
+    // on each container's ephemeral filesystem, so replicas can't decrypt each other's OIDC
+    // correlation/nonce cookies. Correlation then fails, stale .AspNetCore.Correlation.*
+    // cookies pile up in the browser, and the oversized request/response headers make the
+    // Container Apps (Envoy) ingress reset the HTTP/2 stream — surfacing as
+    // ERR_HTTP2_PROTOCOL_ERROR on /signin-oidc.
+    builder.Services.AddDataProtection()
+        .PersistKeysToStackExchangeRedis(redisMultiplexer, "MWDashboard:DataProtection-Keys")
+        .SetApplicationName("MWDashboard");
 }
 else
 {
