@@ -9,8 +9,11 @@
 <BrandedPageTitle Page="Department Adoption" />
 
 <div class="d-flex justify-space-between align-center mb-4">
-    <MudText Typo="Typo.h4">Department Adoption</MudText>
-    <ExportButton Feature="departments" />
+    <MudText Typo="Typo.h4" data-tour="page-header">Department Adoption</MudText>
+    <div class="d-flex align-center gap-2">
+        <PageTour PageKey="departments" />
+        <span data-tour="page-export"><ExportButton Feature="departments" /></span>
+    </div>
 </div>
 
 @if (_loading)

@@ -12,8 +12,10 @@
 <BrandedPageTitle Page="Copilot Adoption" />
 
 <div class="d-flex justify-space-between align-center mb-4">
-    <MudText Typo="Typo.h4">Microsoft 365 Copilot Adoption</MudText>
+    <MudText Typo="Typo.h4" data-tour="page-header">Microsoft 365 Copilot Adoption</MudText>
     <div class="d-flex align-center gap-2">
+        <PageTour PageKey="copilot" />
+        <span data-tour="page-action">
         <MudTooltip Text="Pull the latest unlicensed Copilot Chat audit activity for the selected tenant(s) now. New events can take up to 12 hours to appear after first enabling.">
             <MudButton Variant="Variant.Outlined"
                        Color="Color.Primary"
@@ -23,7 +25,8 @@
                 @(_polling ? "Polling…" : "Poll Copilot Chat")
             </MudButton>
         </MudTooltip>
-        <ExportButton Feature="copilot" />
+        </span>
+        <span data-tour="page-export"><ExportButton Feature="copilot" /></span>
     </div>
 </div>
 

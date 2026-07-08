@@ -1,0 +1,78 @@
+@*
+    Renders a "Tour" button that launches a driver.js guided walkthrough for the current
+    page, and auto-starts that walkthrough once on the visitor's first visit (remembered in
+    localStorage). Steps come from the central TourSteps catalogue keyed by PageKey.
+
+    Usage:  <PageTour PageKey="home" />
+*@
+@using MWDashboard.Web.Services
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<MudTooltip Text="Take a guided tour of this page">
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+               StartIcon="@Icons.Material.Filled.Explore"
+               OnClick="StartTourAsync"
+               data-tour="page-tour-btn">
+        Tour
+    </MudButton>
+</MudTooltip>
+
+@code {
+    /// <summary>Short page key used to look up steps and remember the "seen" state.</summary>
+    [Parameter, EditorRequired] public string PageKey { get; set; } = string.Empty;
+
+    /// <summary>When true (default), the tour opens automatically on the first visit to this page.</summary>
+    [Parameter] public bool AutoStart { get; set; } = true;
+
+    private IJSObjectReference? _module;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !AutoStart || string.IsNullOrEmpty(PageKey))
+            return;
+
+        try
+        {
+            var module = await GetModuleAsync();
+            var shouldStart = await module.InvokeAsync<bool>("shouldAutoStart", PageKey);
+            if (shouldStart)
+            {
+                // Give page content a moment to finish rendering before highlighting elements.
+                await Task.Delay(700);
+                await module.InvokeVoidAsync("startTour", PageKey, TourSteps.Get(PageKey));
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit torn down mid-navigation; ignore.
+        }
+    }
+
+    private async Task StartTourAsync()
+    {
+        try
+        {
+            var module = await GetModuleAsync();
+            await module.InvokeVoidAsync("startTour", PageKey, TourSteps.Get(PageKey));
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit torn down; ignore.
+        }
+    }
+
+    private async ValueTask<IJSObjectReference> GetModuleAsync()
+        => _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/tour.js");
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try { await _module.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* ignore */ }
+        }
+    }
+}

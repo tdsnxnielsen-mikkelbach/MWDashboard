@@ -9,17 +9,20 @@
 <BrandedPageTitle Page="Identity & Devices" />
 
 <div class="d-flex justify-space-between align-center mb-2">
-    <MudText Typo="Typo.h4">Identity &amp; Devices</MudText>
-    <ExportMenu Items="@(new[] {
-        ("Device Compliance", "device-compliance"),
-        ("Patch / OS Versions", "device-patch"),
-        ("Stale Registered Devices", "stale-devices"),
-        ("Conditional Access", "conditional-access"),
-        ("Guest Users", "guests"),
-        ("Risky Users", "risky-users"),
-        ("App Credential Expiry", "app-credential-expiry"),
-        ("OAuth Apps", "oauth-grants"),
-        ("Privileged Roles", "privileged-roles") })" />
+    <MudText Typo="Typo.h4" data-tour="page-header">Identity &amp; Devices</MudText>
+    <div class="d-flex align-center gap-2">
+        <PageTour PageKey="identity" />
+        <span data-tour="page-export"><ExportMenu Items="@(new[] {
+            ("Device Compliance", "device-compliance"),
+            ("Patch / OS Versions", "device-patch"),
+            ("Stale Registered Devices", "stale-devices"),
+            ("Conditional Access", "conditional-access"),
+            ("Guest Users", "guests"),
+            ("Risky Users", "risky-users"),
+            ("App Credential Expiry", "app-credential-expiry"),
+            ("OAuth Apps", "oauth-grants"),
+            ("Privileged Roles", "privileged-roles") })" /></span>
+    </div>
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Device compliance, Conditional Access coverage, guest/external accounts, identity risk, app credential expiry, and privileged role membership.

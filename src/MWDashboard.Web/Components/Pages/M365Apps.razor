@@ -21,8 +21,11 @@ else
 <MudGrid>
     <MudItem xs="12">
         <div class="d-flex justify-space-between align-center">
-            <MudText Typo="Typo.h5">M365 App Platform Usage</MudText>
-            <ExportButton Feature="m365apps" />
+            <MudText Typo="Typo.h5" data-tour="page-header">M365 App Platform Usage</MudText>
+            <div class="d-flex align-center gap-2">
+                <PageTour PageKey="m365apps" />
+                <span data-tour="page-export"><ExportButton Feature="m365apps" /></span>
+            </div>
         </div>
     </MudItem>
 

@@ -10,15 +10,18 @@
 <BrandedPageTitle Page="Usage & Governance" />
 
 <div class="d-flex justify-space-between align-center mb-2">
-    <MudText Typo="Typo.h4">Usage &amp; Governance</MudText>
-    <ExportMenu Items="@(new[] {
-        ("Mailbox Usage", "mailbox-usage"),
-        ("Top Mailboxes", "top-mailboxes"),
-        ("Teams Devices", "teams-devices"),
-        ("SharePoint &amp; OneDrive", "site-usage"),
-        ("Top Sites / Accounts", "site-usage-detail"),
-        ("Viva Engage", "yammer"),
-        ("Groups &amp; Teams", "groups") })" />
+    <MudText Typo="Typo.h4" data-tour="page-header">Usage &amp; Governance</MudText>
+    <div class="d-flex align-center gap-2">
+        <PageTour PageKey="usage" />
+        <span data-tour="page-export"><ExportMenu Items="@(new[] {
+            ("Mailbox Usage", "mailbox-usage"),
+            ("Top Mailboxes", "top-mailboxes"),
+            ("Teams Devices", "teams-devices"),
+            ("SharePoint &amp; OneDrive", "site-usage"),
+            ("Top Sites / Accounts", "site-usage-detail"),
+            ("Viva Engage", "yammer"),
+            ("Groups &amp; Teams", "groups") })" /></span>
+    </div>
 </div>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
     Mailbox storage, Teams device adoption, SharePoint &amp; OneDrive usage, Viva Engage activity, and Microsoft 365 group sprawl.

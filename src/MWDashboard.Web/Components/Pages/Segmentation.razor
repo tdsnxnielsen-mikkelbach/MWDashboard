@@ -9,8 +9,11 @@
 <BrandedPageTitle Page="User Segmentation" />
 
 <div class="d-flex justify-space-between align-center mb-4">
-    <MudText Typo="Typo.h4">User Segmentation</MudText>
-    <ExportButton Feature="segmentation" />
+    <MudText Typo="Typo.h4" data-tour="page-header">User Segmentation</MudText>
+    <div class="d-flex align-center gap-2">
+        <PageTour PageKey="segmentation" />
+        <span data-tour="page-export"><ExportButton Feature="segmentation" /></span>
+    </div>
 </div>
 
 @if (_loading)
