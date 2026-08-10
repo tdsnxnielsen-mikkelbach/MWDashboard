@@ -6,7 +6,7 @@
     <title>MWDashboard - Consent Complete</title>
     <script src="https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js"></script>
     <script>
-        var defined = '%%APPINSIGHTS_CONNECTION_STRING%%';
+        var defined = 'InstrumentationKey=b3e83f92-205a-4eae-bdd3-4954a2b963ae;IngestionEndpoint=https://swedencentral-0.in.applicationinsights.azure.com/;LiveEndpoint=https://swedencentral.livediagnostics.monitor.azure.com/;ApplicationId=0aadb1b2-c074-437e-8e11-c32350097cbd';
         if (defined && !defined.startsWith('%%')) {
             var cfg = { connectionString: defined };
             var init = new Microsoft.ApplicationInsights.ApplicationInsights({ config: cfg });
@@ -148,7 +148,7 @@
                 const meta = document.querySelector('meta[name="callback-url"]');
                 if (meta) return meta.content;
                 // Default for production — replaced during deployment
-                return '%%CONSENT_CALLBACK_URL%%';
+                return 'https://ca-consent-kthwiemporht2.icywave-d7c263d2.swedencentral.azurecontainerapps.io';
             }
 
             async function computeToken(tenantId) {
@@ -167,12 +167,12 @@
 
             function getSharedSecret() {
                 // Injected at deploy time — replaced during build/deploy
-                return '%%CONSENT_SHARED_SECRET%%';
+                return 'PSI8Q~BTWnQbGzU7hur1FUixMLaz3fLgn1SWycav';
             }
 
             function getDashboardUrl() {
                 // Injected at deploy time — replaced during build/deploy
-                var url = '%%DASHBOARD_URL%%';
+                var url = 'https://ca-web-kthwiemporht2.icywave-d7c263d2.swedencentral.azurecontainerapps.io';
                 return (url && !url.startsWith('%%')) ? url : '';
             }
 

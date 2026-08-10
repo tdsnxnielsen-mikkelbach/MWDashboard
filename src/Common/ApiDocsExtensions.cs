@@ -24,10 +24,7 @@ public static class ApiDocsExtensions
     /// <summary>Fallback key used when <c>ApiDocs:ApiKey</c> is not configured.</summary>
     public const string DefaultApiKey = "mwd-scalar-9F3b7Qk2xR8vTn6L";
 
-    /// <summary>Cookie the Web "API" page sets after a successful unlock so same-origin
-    /// Scalar/OpenAPI requests (iframe + doc fetch) pass the gate automatically.</summary>
-    public const string CookieName = "mwd_apidocs";
-
+    private const string SchemeName = "ApiKey";
     private const string HeaderName = "X-API-Key";
     private const string QueryName = "apiKey";
 
@@ -43,10 +40,25 @@ public static class ApiDocsExtensions
                 document.Info.Title = title;
                 document.Info.Version = "v1";
                 document.Info.Description =
-                    "Protected API reference. Supply the API key via the X-API-Key header, " +
-                    "the ?apiKey= query string, or unlock it through the dashboard API page.";
+                    "Browse the reference freely. Calling a protected endpoint requires the API key — " +
+                    "set it under Authentication (sent as the X-API-Key header).";
                 if (!string.IsNullOrWhiteSpace(publicBasePath))
                     document.Servers = [new OpenApiServer { Url = publicBasePath }];
+
+                document.Components ??= new OpenApiComponents();
+                document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+                document.Components.SecuritySchemes[SchemeName] = new OpenApiSecurityScheme
+                {
+                    Type = SecuritySchemeType.ApiKey,
+                    In = ParameterLocation.Header,
+                    Name = HeaderName,
+                    Description = "API key sent as the X-API-Key header."
+                };
+                document.Security ??= [];
+                document.Security.Add(new OpenApiSecurityRequirement
+                {
+                    [new OpenApiSecuritySchemeReference(SchemeName, document)] = new List<string>()
+                });
                 return Task.CompletedTask;
             });
         });
@@ -54,23 +66,26 @@ public static class ApiDocsExtensions
     }
 
     /// <summary>
-    /// Adds the API-key gate for <c>/openapi</c>, <c>/scalar</c> and <c>/proxy</c>, maps the OpenAPI
-    /// document, the Scalar UI (optionally aggregating extra proxied documents), and the unlock
-    /// endpoint that stores the key in a session cookie.
+    /// Maps the OpenAPI document and Scalar UI (optionally aggregating extra proxied documents),
+    /// both open to browse. Only actual proxied API <em>calls</em> (<c>/proxy/*</c>) require the
+    /// API key, supplied as the X-API-Key header (Scalar's Authentication) or the ?apiKey= query.
     /// </summary>
     public static void MapApiDocs(this WebApplication app, string title,
-        params (string Name, string Title, string RoutePattern)[] extraDocuments)
+        (string Name, string Title, string RoutePattern)[]? extraDocuments = null)
     {
         var key = app.Configuration.GetApiDocsKey();
 
+        // Browsing the reference is open; the key is enforced only on real proxied calls, never on
+        // the proxied OpenAPI document itself (so the reference can load without a key).
         app.Use(async (ctx, next) =>
         {
             var path = ctx.Request.Path;
-            if ((path.StartsWithSegments("/openapi") || path.StartsWithSegments("/scalar") || path.StartsWithSegments("/proxy"))
+            if (path.StartsWithSegments("/proxy", out var remaining)
+                && !remaining.Value!.Contains("/openapi", StringComparison.OrdinalIgnoreCase)
                 && !IsAuthorized(ctx, key))
             {
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await ctx.Response.WriteAsync("API key required.");
+                await ctx.Response.WriteAsync("API key required. Set X-API-Key under Authentication in the API reference.");
                 return;
             }
             await next();
@@ -80,43 +95,16 @@ public static class ApiDocsExtensions
         app.MapScalarApiReference(options =>
         {
             options.WithTitle(title);
-            if (extraDocuments.Length > 0)
+            if (extraDocuments is { Length: > 0 })
             {
                 options.AddDocument("v1", title);
                 foreach (var (name, docTitle, route) in extraDocuments)
                     options.AddDocument(name, docTitle, route);
             }
         });
-
-        // Validates the key and stores it in a short-lived cookie so the Scalar UI and its
-        // OpenAPI document fetch pass the gate on subsequent same-origin requests.
-        app.MapPost("/api-docs/unlock", (HttpContext ctx) =>
-        {
-            var provided = ctx.Request.HasFormContentType
-                ? ctx.Request.Form["key"].ToString()
-                : ctx.Request.Query["key"].ToString();
-
-            if (!string.Equals(provided, key, StringComparison.Ordinal))
-                return Results.Unauthorized();
-
-            ctx.Response.Cookies.Append(CookieName, key, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = ctx.Request.IsHttps,
-                SameSite = SameSiteMode.Strict,
-                MaxAge = TimeSpan.FromHours(8)
-            });
-            return Results.Ok();
-        }).DisableAntiforgery();
     }
 
-    private static bool IsAuthorized(HttpContext ctx, string key)
-    {
-        if (string.Equals(ctx.Request.Headers[HeaderName], key, StringComparison.Ordinal))
-            return true;
-        if (string.Equals(ctx.Request.Query[QueryName], key, StringComparison.Ordinal))
-            return true;
-        return ctx.Request.Cookies.TryGetValue(CookieName, out var cookie)
-            && string.Equals(cookie, key, StringComparison.Ordinal);
-    }
+    private static bool IsAuthorized(HttpContext ctx, string key) =>
+        string.Equals(ctx.Request.Headers[HeaderName], key, StringComparison.Ordinal)
+        || string.Equals(ctx.Request.Query[QueryName], key, StringComparison.Ordinal);
 }
