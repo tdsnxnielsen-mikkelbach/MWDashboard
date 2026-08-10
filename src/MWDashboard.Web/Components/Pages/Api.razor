@@ -1,0 +1,91 @@
+@page "/api"
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject TenantFilterService TenantFilter
+@inject IJSRuntime JS
+
+<BrandedPageTitle Page="API" />
+
+@if (!TenantFilter.IsHomeTenantUser)
+{
+    NavigationManager.NavigateTo("/", replace: true);
+    return;
+}
+
+<div class="d-flex justify-space-between align-center mb-2">
+    <MudText Typo="Typo.h4" data-tour="page-header">API Reference</MudText>
+</div>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Interactive OpenAPI reference (Scalar) for the dashboard's HTTP endpoints. Access is protected by an API key.
+</MudText>
+
+@if (!_unlocked)
+{
+    <MudPaper Class="pa-6 mx-auto" Elevation="2" MaxWidth="480px">
+        <div class="d-flex align-center mb-3">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Class="mr-2" />
+            <MudText Typo="Typo.h6">Unlock API Reference</MudText>
+        </div>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Enter the API key to open the Scalar reference. The key is validated server-side and stored
+            for this browser session only.
+        </MudText>
+        <MudTextField @bind-Value="_key" Label="API Key" Variant="Variant.Outlined"
+                      InputType="InputType.Password" Immediate="true"
+                      OnKeyDown="OnKeyDown" Class="mb-3" />
+        @if (_error)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">Invalid API key.</MudAlert>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                   StartIcon="@Icons.Material.Filled.LockOpen" OnClick="UnlockAsync"
+                   Disabled="_busy">
+            @(_busy ? "Verifying…" : "Unlock")
+        </MudButton>
+    </MudPaper>
+}
+else
+{
+    <iframe src="/scalar/v1" title="API Reference"
+            style="width:100%;height:calc(100vh - 200px);border:0;border-radius:8px;"></iframe>
+}
+
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
+    private string _key = string.Empty;
+    private bool _unlocked;
+    private bool _busy;
+    private bool _error;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await UnlockAsync();
+    }
+
+    private async Task UnlockAsync()
+    {
+        if (_busy || string.IsNullOrWhiteSpace(_key))
+            return;
+
+        _busy = true;
+        _error = false;
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("mwApiDocs.unlock", _key);
+            if (ok)
+                _unlocked = true;
+            else
+                _error = true;
+        }
+        catch
+        {
+            _error = true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

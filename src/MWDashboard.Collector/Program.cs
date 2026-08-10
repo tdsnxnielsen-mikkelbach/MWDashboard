@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MWDashboard.Shared.Data;
 using MWDashboard.Shared.Services;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using MWDashboard.ApiDocs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,9 @@ builder.Services.AddDbContextFactory<MauDbContext>(options =>
 builder.Services.AddScoped<IGraphReportService, GraphReportService>();
 builder.Services.AddScoped<IMauDataService, MauDataService>();
 builder.Services.AddScoped<IDataCollectionService, OnDemandDataCollectionService>();
+
+// Scalar OpenAPI reference (key-gated)
+builder.Services.AddApiDocs("MW Dashboard Collector API");
 
 var app = builder.Build();
 
@@ -59,5 +63,8 @@ app.MapPost("/collect/{tenantId}", async (string tenantId, HttpContext ctx, ISer
 
 // Health check endpoint
 app.MapGet("/health", () => Results.Ok("healthy"));
+
+// OpenAPI document + Scalar UI (key-gated)
+app.MapApiDocs("MW Dashboard Collector API");
 
 app.Run();

@@ -3,6 +3,7 @@ using MWDashboard.CopilotAudit;
 using MWDashboard.Shared.Data;
 using MWDashboard.Shared.Services;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using MWDashboard.ApiDocs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +36,9 @@ builder.Services.AddScoped<IDlpAuditCollectionService, DlpAuditCollectionService
 
 // Internal cron scheduler — advances the per-tenant cursor on a fixed interval.
 builder.Services.AddHostedService<CopilotAuditScheduleService>();
+
+// Scalar OpenAPI reference (key-gated)
+builder.Services.AddApiDocs("MW Dashboard Copilot Audit API");
 
 var app = builder.Build();
 
@@ -113,5 +117,8 @@ app.MapPost("/collect/{tenantId}", async (string tenantId, HttpContext ctx, ISer
 
 // Health check endpoint
 app.MapGet("/health", () => Results.Ok("healthy"));
+
+// OpenAPI document + Scalar UI (key-gated)
+app.MapApiDocs("MW Dashboard Copilot Audit API");
 
 app.Run();

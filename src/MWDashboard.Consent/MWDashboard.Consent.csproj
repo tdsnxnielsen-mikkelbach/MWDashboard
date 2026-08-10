@@ -16,4 +16,14 @@
     <ProjectReference Include="..\MWDashboard.Shared\MWDashboard.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Common\ApiDocsExtensions.cs" Link="ApiDocsExtensions.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.18" />
+  </ItemGroup>
+
 </Project>

@@ -7,6 +7,7 @@ using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.Graph;
 using System.Security.Cryptography;
 using System.Text;
+using MWDashboard.ApiDocs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,6 +45,9 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
+
+// Scalar OpenAPI reference (key-gated)
+builder.Services.AddApiDocs("MW Dashboard Consent API");
 
 var app = builder.Build();
 
@@ -169,6 +173,9 @@ app.MapPost("/consent-callback", async (HttpContext ctx, IServiceProvider sp, IC
 
 // Health check endpoint
 app.MapGet("/health", () => Results.Ok("healthy"));
+
+// OpenAPI document + Scalar UI (key-gated)
+app.MapApiDocs("MW Dashboard Consent API");
 
 app.Run();
 

@@ -12,6 +12,7 @@ using MWDashboard.Web.Endpoints;
 using MWDashboard.Web.Services;
 using StackExchange.Redis;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using MWDashboard.ApiDocs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -177,6 +178,9 @@ else
 // Cache warm-up on startup
 builder.Services.AddHostedService<CacheWarmupService>();
 
+// Scalar OpenAPI reference (exposed via the /api page, gated by an API key)
+builder.Services.AddApiDocs("MW Dashboard API");
+
 var app = builder.Build();
 
 // Auto-migrate database on startup
@@ -233,5 +237,8 @@ app.MapRazorComponents<App>()
 
 // Export endpoints for dashboard data (CSV) — tenant scope enforced server-side
 app.MapExportEndpoints();
+
+// OpenAPI document + Scalar UI (key-gated), surfaced through the /api page
+app.MapApiDocs("MW Dashboard API");
 
 app.Run();
