@@ -4,8 +4,12 @@ metadata:
   template: MWDashboard@0.0.1
 hooks:
   prepackage:
-    shell: sh
-    run: dotnet build MWDashboard.slnx -c Release
+    posix:
+      shell: sh
+      run: dotnet build MWDashboard.slnx -c Release
+    windows:
+      shell: pwsh
+      run: dotnet build MWDashboard.slnx -c Release
   postdeploy:
     shell: pwsh
     run: |

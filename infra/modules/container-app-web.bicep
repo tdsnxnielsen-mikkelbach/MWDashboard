@@ -83,6 +83,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           keyVaultUrl: '${keyVaultUri}secrets/RedisConnectionString'
           identity: 'system'
         }
+        {
+          name: 'api-docs-key'
+          keyVaultUrl: '${keyVaultUri}secrets/ApiDocsKey'
+          identity: 'system'
+        }
       ]
     }
     template: {
@@ -126,6 +131,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'CopilotAuditBaseUrl'
               value: copilotAuditFqdn != '' ? 'https://${copilotAuditFqdn}' : ''
+            }
+            {
+              name: 'ApiDocs__ApiKey'
+              secretRef: 'api-docs-key'
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'

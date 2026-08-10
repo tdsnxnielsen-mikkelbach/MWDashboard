@@ -26,6 +26,10 @@ param redisConnectionString string
 @secure()
 param consentSharedSecret string
 
+@description('API docs (Scalar/OpenAPI) access key to store')
+@secure()
+param apiDocsKey string
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
   location: location
@@ -71,6 +75,14 @@ resource secretConsentShared 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   name: 'ConsentSharedSecret'
   properties: {
     value: consentSharedSecret
+  }
+}
+
+resource secretApiDocsKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'ApiDocsKey'
+  properties: {
+    value: apiDocsKey
   }
 }
 

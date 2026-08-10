@@ -72,6 +72,11 @@ resource containerAppCopilotAudit 'Microsoft.App/containerApps@2024-03-01' = {
           keyVaultUrl: '${keyVaultUri}secrets/AzureAdClientSecret'
           identity: managedIdentityId
         }
+        {
+          name: 'api-docs-key'
+          keyVaultUrl: '${keyVaultUri}secrets/ApiDocsKey'
+          identity: managedIdentityId
+        }
       ]
     }
     template: {
@@ -111,6 +116,10 @@ resource containerAppCopilotAudit 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'ApiDocs__PublicBasePath'
               value: '/proxy/copilotaudit'
+            }
+            {
+              name: 'ApiDocs__ApiKey'
+              secretRef: 'api-docs-key'
             }
           ]
         }

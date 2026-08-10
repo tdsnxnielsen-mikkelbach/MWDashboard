@@ -24,11 +24,18 @@ param azureAdTenantId string
 @secure()
 param consentSharedSecret string
 
+@description('Access key for the Scalar/OpenAPI reference. If empty a stable per-environment key is generated.')
+@secure()
+param apiDocsKey string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = {
   'azd-env-name': environmentName
 }
+
+// Fall back to a stable, non-committed key per environment when none is supplied via API_DOCS_KEY.
+var apiDocsKeyResolved = !empty(apiDocsKey) ? apiDocsKey : '${uniqueString(subscription().id, environmentName, 'apidocs-a')}${uniqueString(subscription().id, environmentName, 'apidocs-b')}'
 
 // Resource Group
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
@@ -132,6 +139,7 @@ module keyVault './modules/key-vault.bicep' = {
     azureAdClientSecret: azureAdClientSecret
     redisConnectionString: redis.outputs.connectionString
     consentSharedSecret: consentSharedSecret
+    apiDocsKey: apiDocsKeyResolved
   }
 }
 
