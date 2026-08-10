@@ -181,6 +181,40 @@ builder.Services.AddHostedService<CacheWarmupService>();
 // Scalar OpenAPI reference (exposed via the /api page, gated by an API key)
 builder.Services.AddApiDocs("MW Dashboard API");
 
+// Reverse proxy: expose the internal-ingress Collector/CopilotAudit APIs to the browser-facing
+// Scalar UI under /proxy/*. Destinations reuse the internal FQDNs already injected as env vars.
+// The API-key header is injected so the proxied service's own /openapi gate passes.
+var apiDocsKey = builder.Configuration.GetApiDocsKey();
+var proxyRoutes = new List<Yarp.ReverseProxy.Configuration.RouteConfig>();
+var proxyClusters = new List<Yarp.ReverseProxy.Configuration.ClusterConfig>();
+void AddProxyBackend(string id, string? baseUrl)
+{
+    if (string.IsNullOrWhiteSpace(baseUrl))
+        return;
+    proxyRoutes.Add(new Yarp.ReverseProxy.Configuration.RouteConfig
+    {
+        RouteId = id,
+        ClusterId = id,
+        Match = new Yarp.ReverseProxy.Configuration.RouteMatch { Path = $"/proxy/{id}/{{**catch-all}}" },
+        Transforms =
+        [
+            new Dictionary<string, string> { ["PathRemovePrefix"] = $"/proxy/{id}" },
+            new Dictionary<string, string> { ["RequestHeader"] = "X-API-Key", ["Set"] = apiDocsKey },
+        ]
+    });
+    proxyClusters.Add(new Yarp.ReverseProxy.Configuration.ClusterConfig
+    {
+        ClusterId = id,
+        Destinations = new Dictionary<string, Yarp.ReverseProxy.Configuration.DestinationConfig>
+        {
+            ["primary"] = new() { Address = baseUrl }
+        }
+    });
+}
+AddProxyBackend("collector", collectorBaseUrl);
+AddProxyBackend("copilotaudit", copilotAuditBaseUrl);
+builder.Services.AddReverseProxy().LoadFromMemory(proxyRoutes, proxyClusters);
+
 var app = builder.Build();
 
 // Auto-migrate database on startup
@@ -238,7 +272,16 @@ app.MapRazorComponents<App>()
 // Export endpoints for dashboard data (CSV) — tenant scope enforced server-side
 app.MapExportEndpoints();
 
-// OpenAPI document + Scalar UI (key-gated), surfaced through the /api page
-app.MapApiDocs("MW Dashboard API");
+// OpenAPI + Scalar UI (key-gated), aggregating the proxied backend docs. The gate registered
+// here also protects the /proxy/* reverse-proxy routes below.
+var extraDocs = new List<(string, string, string)>();
+if (!string.IsNullOrWhiteSpace(collectorBaseUrl))
+    extraDocs.Add(("collector", "Collector API", "/proxy/collector/openapi/v1.json"));
+if (!string.IsNullOrWhiteSpace(copilotAuditBaseUrl))
+    extraDocs.Add(("copilotaudit", "Copilot Audit API", "/proxy/copilotaudit/openapi/v1.json"));
+app.MapApiDocs("MW Dashboard API", extraDocs.ToArray());
+
+// Reverse proxy to the internal Collector/CopilotAudit APIs (protected by the gate above)
+app.MapReverseProxy();
 
 app.Run();

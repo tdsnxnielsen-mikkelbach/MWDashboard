@@ -108,6 +108,10 @@ resource containerAppCopilotAudit 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsightsConnectionString
             }
+            {
+              name: 'ApiDocs__PublicBasePath'
+              value: '/proxy/copilotaudit'
+            }
           ]
         }
       ]

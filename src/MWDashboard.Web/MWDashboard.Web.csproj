@@ -36,6 +36,7 @@
     <PackageReference Include="Microsoft.Identity.Web" Version="4.12.2" />
     <PackageReference Include="Microsoft.Identity.Web.UI" Version="4.12.2" />
     <PackageReference Include="MudBlazor" Version="9.6.0" />
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
   </ItemGroup>
 
 </Project>

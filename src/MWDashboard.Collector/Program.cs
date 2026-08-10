@@ -30,7 +30,7 @@ builder.Services.AddScoped<IMauDataService, MauDataService>();
 builder.Services.AddScoped<IDataCollectionService, OnDemandDataCollectionService>();
 
 // Scalar OpenAPI reference (key-gated)
-builder.Services.AddApiDocs("MW Dashboard Collector API");
+builder.Services.AddApiDocs("MW Dashboard Collector API", builder.Configuration["ApiDocs:PublicBasePath"]);
 
 var app = builder.Build();
 

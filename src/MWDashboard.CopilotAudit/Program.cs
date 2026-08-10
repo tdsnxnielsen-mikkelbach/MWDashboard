@@ -38,7 +38,7 @@ builder.Services.AddScoped<IDlpAuditCollectionService, DlpAuditCollectionService
 builder.Services.AddHostedService<CopilotAuditScheduleService>();
 
 // Scalar OpenAPI reference (key-gated)
-builder.Services.AddApiDocs("MW Dashboard Copilot Audit API");
+builder.Services.AddApiDocs("MW Dashboard Copilot Audit API", builder.Configuration["ApiDocs:PublicBasePath"]);
 
 var app = builder.Build();
 
