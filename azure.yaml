@@ -17,23 +17,26 @@ hooks:
       $swaName = $env:CONSENT_STATIC_NAME
       $rgName = (az group list --tag "azd-env-name=$env:AZURE_ENV_NAME" --query "[0].name" -o tsv)
       if (-not $swaName -or -not $rgName) { Write-Error "Could not resolve SWA name ($swaName) or resource group ($rgName)"; exit 1 }
-      # Inject placeholders
-      $html = Get-Content ./static/consent-complete/index.html -Raw
-      $callbackUrl = "https://$($env:CONSENT_CALLBACK_FQDN)"
-      $secret = $env:CONSENT_SHARED_SECRET
-      $aiConnStr = $env:APPLICATIONINSIGHTS_CONNECTION_STRING
       if (-not $env:CONSENT_CALLBACK_FQDN) { Write-Error "CONSENT_CALLBACK_FQDN not set"; exit 1 }
-      if (-not $secret) { Write-Error "CONSENT_SHARED_SECRET not set"; exit 1 }
+      if (-not $env:CONSENT_SHARED_SECRET) { Write-Error "CONSENT_SHARED_SECRET not set"; exit 1 }
+      # Inject placeholders into a throwaway staging copy so the tracked source keeps its %%placeholders%% (never commit secrets)
+      $staging = Join-Path ([System.IO.Path]::GetTempPath()) "consent-static-$($env:AZURE_ENV_NAME)"
+      if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
+      Copy-Item ./static/consent-complete $staging -Recurse
+      $indexPath = Join-Path $staging 'index.html'
+      $html = Get-Content $indexPath -Raw
+      $callbackUrl = "https://$($env:CONSENT_CALLBACK_FQDN)"
       $html = $html.Replace('%%CONSENT_CALLBACK_URL%%', $callbackUrl)
-      $html = $html.Replace('%%CONSENT_SHARED_SECRET%%', $secret)
-      if ($aiConnStr) { $html = $html.Replace('%%APPINSIGHTS_CONNECTION_STRING%%', $aiConnStr) }
+      $html = $html.Replace('%%CONSENT_SHARED_SECRET%%', $env:CONSENT_SHARED_SECRET)
+      if ($env:APPLICATIONINSIGHTS_CONNECTION_STRING) { $html = $html.Replace('%%APPINSIGHTS_CONNECTION_STRING%%', $env:APPLICATIONINSIGHTS_CONNECTION_STRING) }
       if ($env:WEB_URI) { $html = $html.Replace('%%DASHBOARD_URL%%', $env:WEB_URI) }
-      Set-Content ./static/consent-complete/index.html -Value $html -NoNewline
+      Set-Content $indexPath -Value $html -NoNewline
       Write-Host "Injected consent callback URL: $callbackUrl"
-      # Get deployment token and deploy
+      # Get deployment token and deploy the staging copy
       $token = (az staticwebapp secrets list --name $swaName --resource-group $rgName --query "properties.apiKey" -o tsv)
       if (-not $token) { Write-Error "Could not retrieve SWA deployment token"; exit 1 }
-      npx @azure/static-web-apps-cli deploy ./static/consent-complete --deployment-token $token --env production
+      npx --yes @azure/static-web-apps-cli deploy $staging --deployment-token $token --env production
+      if ($LASTEXITCODE -ne 0) { Write-Error "SWA CLI deploy failed (exit $LASTEXITCODE). Ensure Node.js/npx is installed and on PATH."; exit 1 }
       Write-Host "Static Web App deployed successfully"
 services:
   web:
