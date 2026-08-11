@@ -393,4 +393,75 @@ public static class ExportEndpoints
     private static string DN(DateTime? value) => value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
 
     private static string N(double value) => value.ToString("F2", CultureInfo.InvariantCulture);
+
+    // --- JSON read-API reuse -------------------------------------------------
+    // The same dataset registry backs the programmatic read API (ApiEndpoints). Rows are the
+    // exact CSV lines produced above, parsed back into column-keyed objects so both surfaces
+    // stay in lock-step from a single source of truth.
+
+    /// <summary>All exportable/queryable dataset feature keys.</summary>
+    internal static IReadOnlyCollection<string> FeatureNames => Exports.Keys;
+
+    /// <summary>Column names for a dataset, or false if the feature key is unknown.</summary>
+    internal static bool TryGetColumns(string feature, out string[] columns)
+    {
+        if (Exports.TryGetValue(feature, out var export))
+        {
+            columns = ParseCsvLine(export.Header);
+            return true;
+        }
+        columns = [];
+        return false;
+    }
+
+    /// <summary>
+    /// Builds a dataset as JSON-friendly rows (each a column→value map). Returns null when the
+    /// feature key is unknown. Tenant scope must already be resolved server-side by the caller.
+    /// All values are strings (mirroring the CSV projection).
+    /// </summary>
+    internal static async Task<(string[] Columns, List<Dictionary<string, string>> Rows)?> BuildJsonTableAsync(
+        string feature, IMauDataService data, IEnumerable<string>? scope)
+    {
+        if (!Exports.TryGetValue(feature, out var export))
+            return null;
+
+        var columns = ParseCsvLine(export.Header);
+        var lines = await export.BuildRows(data, scope);
+        var rows = new List<Dictionary<string, string>>();
+        foreach (var line in lines)
+        {
+            var values = ParseCsvLine(line);
+            var row = new Dictionary<string, string>(columns.Length, StringComparer.Ordinal);
+            for (var i = 0; i < columns.Length; i++)
+                row[columns[i]] = i < values.Length ? values[i] : string.Empty;
+            rows.Add(row);
+        }
+        return (columns, rows);
+    }
+
+    /// <summary>Parses one CSV line produced by <see cref="Join"/>/<see cref="F"/> (RFC-4180 quoting).</summary>
+    private static string[] ParseCsvLine(string line)
+    {
+        var result = new List<string>();
+        var sb = new StringBuilder();
+        var inQuotes = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i++; }
+                    else inQuotes = false;
+                }
+                else sb.Append(c);
+            }
+            else if (c == '"') inQuotes = true;
+            else if (c == ',') { result.Add(sb.ToString()); sb.Clear(); }
+            else sb.Append(c);
+        }
+        result.Add(sb.ToString());
+        return [.. result];
+    }
 }

@@ -178,6 +178,9 @@ else
 // Cache warm-up on startup
 builder.Services.AddHostedService<CacheWarmupService>();
 
+// Programmatic read API: per-tenant key store (keys configured under ReadApi:Keys)
+builder.Services.AddSingleton<ReadApiKeyStore>();
+
 // Scalar OpenAPI reference (exposed via the /api page, gated by an API key)
 builder.Services.AddApiDocs("MW Dashboard API");
 
@@ -271,6 +274,9 @@ app.MapRazorComponents<App>()
 
 // Export endpoints for dashboard data (CSV) — tenant scope enforced server-side
 app.MapExportEndpoints();
+
+// Programmatic JSON read API — tenant scope derived from the read-API key
+app.MapReadApiEndpoints();
 
 // OpenAPI + Scalar UI (key-gated), aggregating the proxied backend docs. The gate registered
 // here also protects the /proxy/* reverse-proxy routes below.
