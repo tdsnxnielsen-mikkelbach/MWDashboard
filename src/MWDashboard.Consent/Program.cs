@@ -169,10 +169,28 @@ app.MapPost("/consent-callback", async (HttpContext ctx, IServiceProvider sp, IC
     }
 
     return Results.Ok(new { status = "registered", tenantId, tenantName, displayName });
-});
+})
+.WithName("ConsentCallback")
+.WithTags("Consent")
+.WithSummary("Admin-consent callback — verify consent and register a tenant")
+.WithDescription(
+    "Landing endpoint for the Azure AD admin-consent redirect, invoked by the consent Static Web App. " +
+    "Requires two query parameters: `tenant` (the Entra directory GUID that just granted consent) and " +
+    "`token` (an HMAC-SHA256 of the tenant id, keyed with the shared secret, proving the request " +
+    "originates from the trusted consent page). On a valid token the endpoint calls Microsoft Graph " +
+    "`GET /organization` to confirm consent and read the tenant's *.onmicrosoft.com domain and display " +
+    "name, upserts the tenant into the database as active, and kicks off an initial background data " +
+    "collection. Returns 401 for an invalid token and 400 when the `tenant` parameter is missing.")
+.Produces(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status400BadRequest)
+.Produces(StatusCodes.Status401Unauthorized);
 
 // Health check endpoint
-app.MapGet("/health", () => Results.Ok("healthy"));
+app.MapGet("/health", () => Results.Ok("healthy"))
+    .WithName("Health")
+    .WithTags("Diagnostics")
+    .WithSummary("Liveness/health probe")
+    .WithDescription("Returns HTTP 200 with the literal text \"healthy\" when the service is running. Used by Container Apps health probes.");
 
 // OpenAPI document + Scalar UI (key-gated)
 app.MapApiDocs("MW Dashboard Consent API");

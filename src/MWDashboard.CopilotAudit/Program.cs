@@ -113,10 +113,28 @@ app.MapPost("/collect/{tenantId}", async (string tenantId, HttpContext ctx, ISer
     }
 
     return Results.Ok(new { status = "completed", tenantId, tenantName });
-});
+})
+.WithName("CollectAudit")
+.WithTags("Audit Collection")
+.WithSummary("Collect Office 365 Management Activity audit data for a single tenant")
+.WithDescription(
+    "Pulls the stateful, subscription-based audit feeds from the Office 365 Management Activity API " +
+    "(not Microsoft Graph) and advances the per-tenant cursors within the 7-day retention window. " +
+    "A single call runs four collectors in sequence: unlicensed Copilot Chat usage (Audit.General), " +
+    "external file-sharing activity (Audit.SharePoint), suspicious mailbox rules & non-owner mailbox " +
+    "access (Audit.Exchange) and DLP policy matches (DLP.All). Recognized, admin-actionable tenant " +
+    "states (e.g. unified audit logging disabled, subscription not yet provisioned) are logged as " +
+    "warnings and do not fail the request. The `tenantId` is the Entra directory GUID; `tenantName` " +
+    "is a query parameter used for logging.")
+.Produces(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status400BadRequest);
 
 // Health check endpoint
-app.MapGet("/health", () => Results.Ok("healthy"));
+app.MapGet("/health", () => Results.Ok("healthy"))
+    .WithName("Health")
+    .WithTags("Diagnostics")
+    .WithSummary("Liveness/health probe")
+    .WithDescription("Returns HTTP 200 with the literal text \"healthy\" when the service is running. Used by Container Apps health probes.");
 
 // OpenAPI document + Scalar UI (key-gated)
 app.MapApiDocs("MW Dashboard Copilot Audit API");

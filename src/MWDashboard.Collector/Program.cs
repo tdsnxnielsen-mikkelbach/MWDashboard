@@ -59,10 +59,26 @@ app.MapPost("/collect/{tenantId}", async (string tenantId, HttpContext ctx, ISer
 
     logger.LogInformation("Collection completed for tenant {TenantName} ({TenantId})", tenantName, tenantId);
     return Results.Ok(new { status = "completed", tenantId, tenantName });
-});
+})
+.WithName("CollectTenant")
+.WithTags("Collection")
+.WithSummary("Collect all Microsoft 365 metrics for a single tenant")
+.WithDescription(
+    "Runs the full on-demand collection pipeline for the given tenant: pulls licenses, usage, " +
+    "adoption, security posture, identity and governance metrics from the Microsoft Graph and " +
+    "Reports APIs, then upserts the snapshots into the database. Collection is phased and runs " +
+    "the independent metric steps concurrently with an adaptive, throttle-aware concurrency gate. " +
+    "The `tenantId` is the Entra directory (tenant) GUID; `tenantName` is passed as a query " +
+    "parameter and used for logging and display. Returns once collection has completed.")
+.Produces(StatusCodes.Status200OK)
+.Produces(StatusCodes.Status400BadRequest);
 
 // Health check endpoint
-app.MapGet("/health", () => Results.Ok("healthy"));
+app.MapGet("/health", () => Results.Ok("healthy"))
+    .WithName("Health")
+    .WithTags("Diagnostics")
+    .WithSummary("Liveness/health probe")
+    .WithDescription("Returns HTTP 200 with the literal text \"healthy\" when the service is running. Used by Container Apps health probes.");
 
 // OpenAPI document + Scalar UI (key-gated)
 app.MapApiDocs("MW Dashboard Collector API");

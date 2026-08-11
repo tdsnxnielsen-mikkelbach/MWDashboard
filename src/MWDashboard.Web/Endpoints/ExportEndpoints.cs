@@ -303,7 +303,18 @@ public static class ExportEndpoints
             var rows = await export.BuildRows(data, scope);
             await WriteCsvAsync(ctx, export.FileName, export.Header, rows);
             return Results.Empty;
-        });
+        })
+        .WithName("ExportDataset")
+        .WithTags("Data Export")
+        .WithSummary("Download a single dashboard dataset as CSV")
+        .WithDescription(
+            "Streams one dashboard dataset as a CSV file. The `{feature}` route value selects the " +
+            "dataset (e.g. `licenses`, `secure-score`, `service-health`, `signin-detail`) — the same " +
+            "feature keys used by the on-page export buttons. Tenant scope is always derived from the " +
+            "signed-in user's claims: home-tenant users export every tenant, customer-tenant users are " +
+            "restricted to their own tenant. Returns 404 for an unknown feature key.")
+        .Produces(StatusCodes.Status200OK, contentType: "text/csv")
+        .Produces(StatusCodes.Status404NotFound);
 
         // All datasets bundled into a single ZIP: /api/export-all
         app.MapGet("/api/export-all", async (IMauDataService data, HttpContext ctx, IConfiguration cfg) =>
@@ -325,7 +336,15 @@ public static class ExportEndpoints
                 foreach (var line in rows)
                     await writer.WriteLineAsync(line);
             }
-        }).RequireAuthorization();
+        }).RequireAuthorization()
+        .WithName("ExportAll")
+        .WithTags("Data Export")
+        .WithSummary("Download every dashboard dataset as a single ZIP")
+        .WithDescription(
+            "Bundles all dashboard datasets into one ZIP archive, each dataset as a separate CSV entry. " +
+            "Backs the Dashboard's \"Export All Data\" button. Tenant scope is derived from the signed-in " +
+            "user's claims exactly like the single-dataset export, preserving tenant-data isolation.")
+        .Produces(StatusCodes.Status200OK, contentType: "application/zip");
     }
 
     /// <summary>
