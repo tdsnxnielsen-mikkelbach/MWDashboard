@@ -879,6 +879,10 @@ public class CachedMauDataService : IMauDataService
         return GetOrSetAsync(key, () => _inner.GetTenantDefenderTiersAsync(), CacheOptions60Min);
     }
 
+    // Onboarding/status directory is not cached — freshness matters for onboarding badges.
+    public Task<List<TenantDirectoryEntry>> GetTenantDirectoryAsync(IEnumerable<string>? tenantIds)
+        => _inner.GetTenantDirectoryAsync(tenantIds);
+
     // --- Workload Activity (15 min — dashboard-level) ---
     public Task<List<WorkloadActivitySnapshot>> GetWorkloadActivityAsync(IEnumerable<string>? tenantIds, int days = 30)
     {

@@ -27,6 +27,14 @@ public interface IMauDataService
     Task<List<TenantDefenderTier>> GetTenantDefenderTiersAsync();
 
     /// <summary>
+    /// Onboarding/status directory of registered tenants (no snapshot datasets pulled). Includes
+    /// inactive/offboarded tenants so callers can distinguish them from active ones. When
+    /// <paramref name="tenantIds"/> is null, all tenants are returned; otherwise the result is
+    /// restricted to the given tenant IDs.
+    /// </summary>
+    Task<List<TenantDirectoryEntry>> GetTenantDirectoryAsync(IEnumerable<string>? tenantIds);
+
+    /// <summary>
     /// Permanently deletes ALL historical snapshot rows for a tenant across every snapshot table.
     /// The tenant's registration row (<see cref="TenantInfo"/>) is left untouched. Irreversible.
     /// Returns the total number of rows deleted.

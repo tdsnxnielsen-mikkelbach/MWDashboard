@@ -81,11 +81,14 @@ public static class ApiEndpoints
         .Produces(StatusCodes.Status200OK)
         .Produces(StatusCodes.Status401Unauthorized);
 
-        // GET /api/v1/data/{feature} — query one dataset as JSON
-        group.MapGet("data/{feature}", async (string feature, IMauDataService data, HttpContext ctx) =>
+        // GET /api/v1/data/{feature} — query one dataset as JSON (optionally scoped to one tenant)
+        group.MapGet("data/{feature}", async (string feature, string? tenantId, IMauDataService data, HttpContext ctx) =>
         {
             var resolved = (ResolvedScope)ctx.Items[ScopeItemKey]!;
-            var table = await ExportEndpoints.BuildJsonTableAsync(feature, data, resolved.TenantIds);
+            if (!TryScopeToTenant(resolved, tenantId, out var scope, out var error))
+                return error!;
+
+            var table = await ExportEndpoints.BuildJsonTableAsync(feature, data, scope);
             if (table is null)
                 return Results.NotFound(new { error = $"Unknown dataset '{feature}'." });
 
@@ -97,12 +100,124 @@ public static class ApiEndpoints
         .WithDescription(
             "Returns the collected snapshot rows for the given dataset as JSON objects keyed by " +
             "column name. The `{feature}` route value is one of the keys returned by /api/v1/datasets " +
-            "(e.g. `licenses`, `mau`, `consumption`, `secure-scores`). All values are strings. Tenant " +
-            "scope is derived from the read-API key: a tenant-bound key only ever returns its own " +
-            "tenant's data; an unrestricted (home/admin) key returns all tenants. Returns 404 for an " +
-            "unknown feature key.")
+            "(e.g. `licenses`, `mau`, `consumption`, `secure-scores`). All values are strings. Pass an " +
+            "optional `?tenantId={guid}` to restrict the result to a single tenant — useful with an " +
+            "unrestricted (home/admin) key that would otherwise return every tenant. Tenant scope is " +
+            "still enforced from the read-API key: a tenant-bound key may only ever request its own " +
+            "tenant (any other `tenantId` yields 403). Returns 404 for an unknown feature key, 400 for " +
+            "a malformed `tenantId`.")
         .Produces(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status400BadRequest)
         .Produces(StatusCodes.Status401Unauthorized)
+        .Produces(StatusCodes.Status403Forbidden)
         .Produces(StatusCodes.Status404NotFound);
+
+        // GET /api/v1/tenants — onboarding/status directory (no dataset pull)
+        group.MapGet("tenants", async (IMauDataService data, HttpContext ctx) =>
+        {
+            var resolved = (ResolvedScope)ctx.Items[ScopeItemKey]!;
+            var directory = await data.GetTenantDirectoryAsync(resolved.TenantIds);
+            return Results.Ok(directory);
+        })
+        .WithName("ListTenants")
+        .WithSummary("List onboarded tenants and their status")
+        .WithDescription(
+            "Returns the onboarding/status directory of registered tenants — `tenantId`, `tenantName`, " +
+            "`isActive`, `onboardedAt`, `missingPermissions` (array) and `lastCollectedAt` (null when a " +
+            "tenant is onboarded but no data has been collected yet) — without pulling any dataset. " +
+            "Inactive/offboarded tenants are included so callers can distinguish them. Tenant scope is " +
+            "derived from the read-API key: an unrestricted (home/admin) key lists all tenants; a " +
+            "tenant-bound key lists only its own.")
+        .Produces(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status401Unauthorized);
+
+        // GET /api/v1/summary/{tenantId} — per-tenant headline (mau + licenses + copilot in one call)
+        group.MapGet("summary/{tenantId}", async (string tenantId, IMauDataService data, HttpContext ctx) =>
+        {
+            var resolved = (ResolvedScope)ctx.Items[ScopeItemKey]!;
+            if (!TryScopeToTenant(resolved, tenantId, out var scope, out var error))
+                return error!;
+
+            var mau = await data.GetLatestMauByServiceAsync(scope);
+            var licenses = await data.GetLatestLicensesAsync(scope);
+            var copilot = await data.GetCopilotUsageAsync(scope);
+
+            var stamps = mau.Select(m => m.CollectedAt)
+                .Concat(licenses.Select(l => l.CollectedAt))
+                .Concat(copilot.Select(c => c.CollectedAt))
+                .ToList();
+            DateTime? asOf = stamps.Count > 0 ? stamps.Max() : null;
+
+            return Results.Ok(new
+            {
+                tenantId,
+                asOf,
+                mau = mau
+                    .OrderBy(m => m.ServiceName, StringComparer.Ordinal)
+                    .Select(m => new { m.ServiceName, m.ActiveUserCount }),
+                licenses = licenses
+                    .OrderBy(l => l.SkuPartNumber, StringComparer.Ordinal)
+                    .Select(l => new
+                    {
+                        l.SkuPartNumber,
+                        l.SkuId,
+                        l.TotalLicenses,
+                        l.ConsumedLicenses,
+                        utilizationPct = l.TotalLicenses > 0
+                            ? Math.Round((double)l.ConsumedLicenses / l.TotalLicenses * 100, 2)
+                            : 0
+                    }),
+                copilot = copilot
+                    .OrderBy(c => c.AppName, StringComparer.Ordinal)
+                    .Select(c => new { c.AppName, c.ActiveUsers, c.TotalAssignedLicenses })
+            });
+        })
+        .WithName("GetTenantSummary")
+        .WithSummary("Per-tenant headline summary")
+        .WithDescription(
+            "Returns a single tenant's headline metrics in one call: latest-month `mau` (per service), " +
+            "`licenses` (per SKU with `skuId` and computed `utilizationPct`) and `copilot` (per app). " +
+            "`asOf` is the most recent collection timestamp across the three datasets. Tenant scope is " +
+            "enforced from the read-API key: a tenant-bound key may only request its own tenant (any " +
+            "other `{tenantId}` yields 403). Returns 400 for a malformed `tenantId`.")
+        .Produces(StatusCodes.Status200OK)
+        .Produces(StatusCodes.Status400BadRequest)
+        .Produces(StatusCodes.Status401Unauthorized)
+        .Produces(StatusCodes.Status403Forbidden);
+    }
+
+    /// <summary>
+    /// Narrows the key-resolved scope to a single tenant from client-supplied <paramref name="tenantId"/>,
+    /// enforcing data isolation: an unrestricted (admin) key may target any tenant; a tenant-bound key
+    /// may only ever target its own tenant. Returns false with an <paramref name="error"/> result on a
+    /// malformed GUID (400) or a cross-tenant request (403). When <paramref name="tenantId"/> is null/blank,
+    /// the original key scope is preserved unchanged.
+    /// </summary>
+    private static bool TryScopeToTenant(
+        ResolvedScope resolved, string? tenantId, out IEnumerable<string>? scope, out IResult? error)
+    {
+        scope = resolved.TenantIds;
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(tenantId))
+            return true;
+
+        if (!Guid.TryParse(tenantId, out _))
+        {
+            error = Results.BadRequest(new { error = "tenantId must be a GUID." });
+            return false;
+        }
+
+        if (resolved.TenantIds is not null &&
+            !resolved.TenantIds.Contains(tenantId, StringComparer.OrdinalIgnoreCase))
+        {
+            error = Results.Problem(
+                "This API key is not authorized for the requested tenant.",
+                statusCode: StatusCodes.Status403Forbidden);
+            return false;
+        }
+
+        scope = [tenantId];
+        return true;
     }
 }

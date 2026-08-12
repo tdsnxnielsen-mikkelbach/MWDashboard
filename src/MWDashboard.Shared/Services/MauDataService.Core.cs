@@ -335,6 +335,40 @@ public partial class MauDataService
         return tiers;
     }
 
+    public async Task<List<TenantDirectoryEntry>> GetTenantDirectoryAsync(IEnumerable<string>? tenantIds)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var tenantsQuery = db.Tenants.AsNoTracking().AsQueryable();
+        List<string>? ids = null;
+        if (tenantIds != null)
+        {
+            ids = tenantIds.ToList();
+            tenantsQuery = tenantsQuery.Where(t => ids.Contains(t.TenantId));
+        }
+        var tenants = await tenantsQuery.OrderBy(t => t.TenantName).ToListAsync();
+
+        // Data freshness proxy: most recent MAU collection timestamp per tenant.
+        var mauQuery = db.MauSnapshots.AsNoTracking().AsQueryable();
+        if (ids != null)
+            mauQuery = mauQuery.Where(m => ids.Contains(m.TenantId));
+        var lastCollected = await mauQuery
+            .GroupBy(m => m.TenantId)
+            .Select(g => new { TenantId = g.Key, Last = g.Max(m => m.CollectedAt) })
+            .ToDictionaryAsync(x => x.TenantId, x => x.Last);
+
+        return tenants.Select(t => new TenantDirectoryEntry(
+            t.TenantId,
+            t.TenantName,
+            t.IsActive,
+            t.OnboardedAt,
+            string.IsNullOrWhiteSpace(t.MissingPermissions)
+                ? []
+                : t.MissingPermissions.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            lastCollected.TryGetValue(t.TenantId, out var last) ? last : null))
+            .ToList();
+    }
+
     public async Task<int> PurgeTenantDataAsync(string tenantId)
     {
         if (string.IsNullOrWhiteSpace(tenantId))

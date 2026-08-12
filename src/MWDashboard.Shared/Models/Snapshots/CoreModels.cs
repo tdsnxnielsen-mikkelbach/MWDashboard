@@ -74,6 +74,19 @@ public class TenantInfo
     public DateTime? SignInDetailCursorUtc { get; set; }
 }
 
+/// <summary>
+/// Lightweight onboarding/status projection of a <see cref="TenantInfo"/> for the programmatic
+/// read API (no snapshot datasets pulled). <see cref="LastCollectedAt"/> is the most recent
+/// <see cref="MauSnapshot.CollectedAt"/> for the tenant (null = onboarded but no data collected yet).
+/// </summary>
+public sealed record TenantDirectoryEntry(
+    string TenantId,
+    string TenantName,
+    bool IsActive,
+    DateTime OnboardedAt,
+    IReadOnlyList<string> MissingPermissions,
+    DateTime? LastCollectedAt);
+
 public class LicenseSnapshot
 {
     public int Id { get; set; }
