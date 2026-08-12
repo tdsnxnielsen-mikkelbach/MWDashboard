@@ -7,3 +7,4 @@ param azureAdClientSecret = readEnvironmentVariable('AZURE_AD_CLIENT_SECRET', ''
 param azureAdTenantId = readEnvironmentVariable('AZURE_AD_TENANT_ID', '')
 param consentSharedSecret = readEnvironmentVariable('CONSENT_SHARED_SECRET', '')
 param apiDocsKey = readEnvironmentVariable('API_DOCS_KEY', '')
+param readApiKey = readEnvironmentVariable('READ_API_KEY', '')

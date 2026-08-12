@@ -28,6 +28,10 @@ param consentSharedSecret string
 @secure()
 param apiDocsKey string = ''
 
+@description('Admin key for the programmatic read (JSON data) API. If empty a stable per-environment key is generated.')
+@secure()
+param readApiKey string = ''
+
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = {
@@ -36,6 +40,9 @@ var tags = {
 
 // Fall back to a stable, non-committed key per environment when none is supplied via API_DOCS_KEY.
 var apiDocsKeyResolved = !empty(apiDocsKey) ? apiDocsKey : '${uniqueString(subscription().id, environmentName, 'apidocs-a')}${uniqueString(subscription().id, environmentName, 'apidocs-b')}'
+
+// Fall back to a stable, non-committed key per environment when none is supplied via READ_API_KEY.
+var readApiKeyResolved = !empty(readApiKey) ? readApiKey : '${uniqueString(subscription().id, environmentName, 'readapi-a')}${uniqueString(subscription().id, environmentName, 'readapi-b')}'
 
 // Resource Group
 resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
@@ -140,6 +147,7 @@ module keyVault './modules/key-vault.bicep' = {
     redisConnectionString: redis.outputs.connectionString
     consentSharedSecret: consentSharedSecret
     apiDocsKey: apiDocsKeyResolved
+    readApiKey: readApiKeyResolved
   }
 }
 

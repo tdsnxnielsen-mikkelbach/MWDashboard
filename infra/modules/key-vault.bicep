@@ -30,6 +30,10 @@ param consentSharedSecret string
 @secure()
 param apiDocsKey string
 
+@description('Read API (programmatic JSON data API) admin key to store')
+@secure()
+param readApiKey string
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
   location: location
@@ -83,6 +87,14 @@ resource secretApiDocsKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   name: 'ApiDocsKey'
   properties: {
     value: apiDocsKey
+  }
+}
+
+resource secretReadApiKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'ReadApiKey'
+  properties: {
+    value: readApiKey
   }
 }
 

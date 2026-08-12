@@ -88,6 +88,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           keyVaultUrl: '${keyVaultUri}secrets/ApiDocsKey'
           identity: 'system'
         }
+        {
+          name: 'read-api-key'
+          keyVaultUrl: '${keyVaultUri}secrets/ReadApiKey'
+          identity: 'system'
+        }
       ]
     }
     template: {
@@ -135,6 +140,18 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'ApiDocs__ApiKey'
               secretRef: 'api-docs-key'
+            }
+            {
+              name: 'ReadApi__Keys__0__Key'
+              secretRef: 'read-api-key'
+            }
+            {
+              name: 'ReadApi__Keys__0__TenantId'
+              value: 'all'
+            }
+            {
+              name: 'ReadApi__Keys__0__Name'
+              value: 'admin'
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
