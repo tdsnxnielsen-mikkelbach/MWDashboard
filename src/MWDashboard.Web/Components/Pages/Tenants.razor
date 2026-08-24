@@ -311,7 +311,8 @@
     {
         _loading = true;
         await using var db = await DbFactory.CreateDbContextAsync();
-        _tenants = await db.Tenants.OrderBy(t => t.TenantName).ToListAsync();
+        // Pricing-only customers imported from the ION Gateway are managed on the Resellers page, not here.
+        _tenants = await db.Tenants.Where(t => !t.PricingOnly).OrderBy(t => t.TenantName).ToListAsync();
         var tiers = await DataService.GetTenantEntraIdTiersAsync();
         _tiers = tiers.ToDictionary(t => t.TenantId, t => t.Tier);
         var defenderTiers = await DataService.GetTenantDefenderTiersAsync();

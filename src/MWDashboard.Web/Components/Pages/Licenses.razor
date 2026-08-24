@@ -15,7 +15,8 @@
         <span data-tour="page-export"><ExportMenu Items="@(new[] {
             ("Licenses", "licenses"),
             ("License Issues", "license-issues"),
-            ("Subscription Renewals", "subscriptions") })" /></span>
+            ("Subscription Renewals", "subscriptions"),
+            ("License Pricing (ION)", "license-pricing") })" /></span>
     </div>
 </div>
 
@@ -178,6 +179,101 @@ else
         </RowTemplate>
     </MudTable>
 </MudPaper>
+
+@* License Pricing & Margin — enriched from TD SYNNEX ION Gateway (internal / home-tenant only) *@
+@if (TenantFilter.IsHomeTenantUser)
+{
+<MudPaper Class="pa-4 mt-4" Elevation="2">
+    <div class="d-flex align-center mb-1 flex-wrap gap-2">
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.PriceCheck" Class="mr-2" />
+            License Pricing &amp; Margin
+        </MudText>
+        <MudChip T="string" Size="Size.Small" Color="Color.Tertiary" Icon="@Icons.Material.Filled.Cloud">Source: TD SYNNEX ION</MudChip>
+    </div>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3 d-block">
+        License <strong>counts</strong> above come natively from Microsoft Graph. The <strong>pricing</strong> below is enriched from the
+        TD SYNNEX ION Gateway (StreamOne cost/margin fused with Partner Center list price). Rows marked
+        <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="mx-1">List price only</MudChip> had no ION cost match
+        (reseller-level, SKU-approximate — check the source column).
+    </MudText>
+    @if (_pricing.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">
+            No ION pricing available for the selected tenant(s). Pricing is collected during a tenant's data collection when the ION
+            Gateway is configured, or in bulk from the <MudLink Href="/resellers">Resellers &amp; ION</MudLink> page.
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid Class="mb-2">
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">List Price (annualized)</MudText>
+                    <MudText Typo="Typo.h5" Color="Color.Primary">@FormatMoney(_pricing.Sum(p => (p.UnitListPrice ?? 0) * p.Quantity), PricingCurrency)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">ION Cost</MudText>
+                    <MudText Typo="Typo.h5">@FormatMoney(_pricing.Sum(p => (p.IonUnitCost ?? 0) * p.Quantity), PricingCurrency)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Est. Margin</MudText>
+                    <MudText Typo="Typo.h5" Color="Color.Success">@FormatMoney(TotalIonMargin, PricingCurrency)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudPaper Class="pa-4 d-flex flex-column align-center" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Avg Margin %</MudText>
+                    <MudText Typo="Typo.h5" Color="Color.Success">@AvgMarginPct.ToString("F1")%</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        <MudTable Items="_pricing" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
+                <MudTh>Offer</MudTh>
+                <MudTh>Reseller</MudTh>
+                <MudTh Style="text-align:right">Qty</MudTh>
+                <MudTh Style="text-align:right">List / unit</MudTh>
+                <MudTh Style="text-align:right">Cost / unit</MudTh>
+                <MudTh Style="text-align:right">Margin / unit</MudTh>
+                <MudTh Style="text-align:right">Margin %</MudTh>
+                <MudTh>Source</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                @if (TenantFilter.IsMultiTenantView) { <MudTd DataLabel="Tenant">@TenantFilter.GetTenantName(context.TenantId)</MudTd> }
+                <MudTd DataLabel="Offer">@(string.IsNullOrEmpty(context.OfferName) ? context.SkuTitle : context.OfferName)</MudTd>
+                <MudTd DataLabel="Reseller">@(string.IsNullOrEmpty(context.ResellerName) ? "—" : context.ResellerName)</MudTd>
+                <MudTd DataLabel="Qty" Style="text-align:right">@context.Quantity.ToString("N0")</MudTd>
+                <MudTd DataLabel="List / unit" Style="text-align:right">@FormatMoney(context.UnitListPrice, context.ListPriceCurrency)</MudTd>
+                <MudTd DataLabel="Cost / unit" Style="text-align:right">@FormatMoney(context.IonUnitCost, context.IonCurrency)</MudTd>
+                <MudTd DataLabel="Margin / unit" Style="text-align:right">@FormatMoney(context.IonUnitMargin, context.IonCurrency)</MudTd>
+                <MudTd DataLabel="Margin %" Style="text-align:right">
+                    @if (context.IonMarginPct.HasValue)
+                    {
+                        <MudText Typo="Typo.body2" Color="@(context.IonMarginPct >= 0 ? Color.Success : Color.Error)">@context.IonMarginPct.Value.ToString("F1")%</MudText>
+                    }
+                    else { <span>—</span> }
+                </MudTd>
+                <MudTd DataLabel="Source">
+                    @if (context.PricingSource == "ion-reseller-sku")
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">ION @(string.IsNullOrEmpty(context.MatchedOn) ? "" : $"· {context.MatchedOn}")</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default">List price only</MudChip>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
+}
 
 @* Message Center *@
 <MudPaper Class="pa-4 mt-4" Elevation="2">
@@ -397,6 +493,7 @@ else
     private int _subsExpiringSoon, _subsTrials;
     private List<LicenseAssignmentIssueSnapshot> _licenseIssues = [];
     private int _issueErrorTotal, _issueDisabledTotal;
+    private List<LicensePricingSnapshot> _pricing = [];
     private string _searchString = string.Empty;
     private DateTime? _fromDate = DateTime.UtcNow.AddMonths(-6);
     private DateTime? _toDate = DateTime.UtcNow;
@@ -469,6 +566,15 @@ else
             .ToList();
         _issueErrorTotal = _licenseIssues.Sum(s => s.ErrorUsers);
         _issueDisabledTotal = _licenseIssues.Sum(s => s.DisabledLicensedUsers);
+
+        // ION Gateway fused pricing (StreamOne cost/margin + PCT list price), latest per tenant.
+        // Distributor cost/margin — only ever loaded for home-tenant (internal) users.
+        _pricing = TenantFilter.IsHomeTenantUser
+            ? (await MauDataService.GetLatestLicensePricingAsync(tenantIds))
+                .OrderByDescending(p => p.IonLineMargin ?? (p.IonUnitMargin * p.Quantity) ?? 0)
+                .ThenBy(p => p.OfferName)
+                .ToList()
+            : [];
         var (earliest, latest) = await MauDataService.GetLicenseDataRangeAsync();
         _dataRangeEarliest = earliest;
         _dataRangeLatest = latest;
@@ -483,6 +589,28 @@ else
     }
 
     private List<MauSnapshot> _mauHistory = [];
+
+    // --- ION pricing helpers ---
+    private string PricingCurrency => _pricing
+        .Select(p => string.IsNullOrEmpty(p.IonCurrency) ? p.ListPriceCurrency : p.IonCurrency)
+        .FirstOrDefault(c => !string.IsNullOrEmpty(c)) ?? "";
+
+    private decimal TotalIonMargin => _pricing.Sum(p => p.IonLineMargin ?? ((p.IonUnitMargin ?? 0) * p.Quantity));
+
+    private double AvgMarginPct
+    {
+        get
+        {
+            var vals = _pricing.Where(p => p.IonMarginPct.HasValue).Select(p => (double)p.IonMarginPct!.Value).ToList();
+            return vals.Count > 0 ? vals.Average() : 0;
+        }
+    }
+
+    private static string FormatMoney(decimal? amount, string? currency)
+        => amount.HasValue ? FormatMoney(amount.Value, currency) : "—";
+
+    private static string FormatMoney(decimal amount, string? currency)
+        => string.IsNullOrEmpty(currency) ? amount.ToString("N2") : $"{amount:N2} {currency}";
 
     private async Task LoadDataForRange()
     {

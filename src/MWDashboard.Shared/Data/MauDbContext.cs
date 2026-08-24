@@ -57,6 +57,9 @@ public class MauDbContext : DbContext
     public DbSet<StaleDeviceSnapshot> StaleDeviceSnapshots => Set<StaleDeviceSnapshot>();
     public DbSet<EmailThreatSnapshot> EmailThreatSnapshots => Set<EmailThreatSnapshot>();
     public DbSet<AttackSimSnapshot> AttackSimSnapshots => Set<AttackSimSnapshot>();
+    public DbSet<IonReseller> IonResellers => Set<IonReseller>();
+    public DbSet<LicensePricingSnapshot> LicensePricingSnapshots => Set<LicensePricingSnapshot>();
+    public DbSet<ResellerPricingSnapshot> ResellerPricingSnapshots => Set<ResellerPricingSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -74,6 +77,8 @@ public class MauDbContext : DbContext
             entity.Property(e => e.TenantId).HasMaxLength(100);
             entity.Property(e => e.TenantName).HasMaxLength(250);
             entity.Property(e => e.DisplayName).HasMaxLength(250);
+            entity.Property(e => e.Source).HasMaxLength(20);
+            entity.Property(e => e.ResellerName).HasMaxLength(250);
         });
 
         modelBuilder.Entity<LicenseSnapshot>(entity =>
@@ -494,6 +499,60 @@ public class MauDbContext : DbContext
             entity.Property(e => e.CampaignName).HasMaxLength(300);
             entity.Property(e => e.AttackType).HasMaxLength(100);
             entity.Property(e => e.Status).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<IonReseller>(entity =>
+        {
+            entity.HasIndex(e => e.AccountId).IsUnique();
+            entity.Property(e => e.Name).HasMaxLength(250);
+            entity.Property(e => e.PrimaryContactEmail).HasMaxLength(250);
+            entity.Property(e => e.MpnId).HasMaxLength(50);
+            entity.Property(e => e.PctResellerId).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<LicensePricingSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.TenantId, e.SubscriptionId, e.ReportDate }).IsUnique();
+            entity.HasIndex(e => new { e.TenantId, e.ReportDate });
+            entity.Property(e => e.TenantId).HasMaxLength(100);
+            entity.Property(e => e.TenantName).HasMaxLength(250);
+            entity.Property(e => e.SubscriptionId).HasMaxLength(100);
+            entity.Property(e => e.OfferName).HasMaxLength(300);
+            entity.Property(e => e.SkuTitle).HasMaxLength(300);
+            entity.Property(e => e.ProductId).HasMaxLength(100);
+            entity.Property(e => e.SkuId).HasMaxLength(100);
+            entity.Property(e => e.CatalogItemId).HasMaxLength(150);
+            entity.Property(e => e.SkuPartNumber).HasMaxLength(250);
+            entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.ListPriceCurrency).HasMaxLength(10);
+            entity.Property(e => e.IonCurrency).HasMaxLength(10);
+            entity.Property(e => e.ResellerName).HasMaxLength(250);
+            entity.Property(e => e.PricingSource).HasMaxLength(50);
+            entity.Property(e => e.MatchedOn).HasMaxLength(50);
+            entity.Property(e => e.UnitListPrice).HasPrecision(18, 4);
+            entity.Property(e => e.IonUnitPrice).HasPrecision(18, 4);
+            entity.Property(e => e.IonUnitCost).HasPrecision(18, 4);
+            entity.Property(e => e.IonMsrp).HasPrecision(18, 4);
+            entity.Property(e => e.IonUnitMargin).HasPrecision(18, 4);
+            entity.Property(e => e.IonMarginPct).HasPrecision(9, 4);
+            entity.Property(e => e.IonLineMargin).HasPrecision(18, 4);
+        });
+
+        modelBuilder.Entity<ResellerPricingSnapshot>(entity =>
+        {
+            entity.HasIndex(e => new { e.IonAccountId, e.IonCustomerId, e.MfgPartNumber, e.ReportDate }).IsUnique();
+            entity.Property(e => e.ResellerName).HasMaxLength(250);
+            entity.Property(e => e.MfgPartNumber).HasMaxLength(150);
+            entity.Property(e => e.ProductName).HasMaxLength(300);
+            entity.Property(e => e.SkuName).HasMaxLength(300);
+            entity.Property(e => e.Currency).HasMaxLength(10);
+            entity.Property(e => e.LastOrderId).HasMaxLength(50);
+            entity.Property(e => e.Status).HasMaxLength(50);
+            entity.Property(e => e.UnitPrice).HasPrecision(18, 4);
+            entity.Property(e => e.UnitCost).HasPrecision(18, 4);
+            entity.Property(e => e.Msrp).HasPrecision(18, 4);
+            entity.Property(e => e.LineMargin).HasPrecision(18, 4);
+            entity.Property(e => e.MarginPct).HasPrecision(9, 4);
         });
     }
 }

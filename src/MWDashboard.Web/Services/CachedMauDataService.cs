@@ -934,4 +934,47 @@ public class CachedMauDataService : IMauDataService
         await _inner.SaveDepartmentUsageAsync(snapshots);
         await InvalidateAsync(BuildKey("departments", null));
     }
+
+    // --- ION Gateway pricing enrichment (60 min — changes daily) ---
+    public async Task SaveLicensePricingAsync(string tenantId, DateTime reportDate, IEnumerable<LicensePricingSnapshot> rows)
+    {
+        await _inner.SaveLicensePricingAsync(tenantId, reportDate, rows);
+        await InvalidateAsync(BuildKey("license-pricing", new[] { tenantId }), BuildKey("license-pricing", null));
+    }
+
+    public Task<List<LicensePricingSnapshot>> GetLatestLicensePricingAsync(IEnumerable<string>? tenantIds)
+    {
+        var key = BuildKey("license-pricing", tenantIds);
+        var options = IsMultiTenantCombo(tenantIds) ? CacheOptionsShort : CacheOptions60Min;
+        return GetOrSetAsync(key, () => _inner.GetLatestLicensePricingAsync(tenantIds), options);
+    }
+
+    public async Task<int> SaveResellersAsync(IEnumerable<IonReseller> resellers)
+    {
+        var n = await _inner.SaveResellersAsync(resellers);
+        await InvalidateAsync(BuildKey("resellers", null));
+        return n;
+    }
+
+    public Task<List<IonReseller>> GetResellersAsync()
+        => GetOrSetAsync(BuildKey("resellers", null), () => _inner.GetResellersAsync(), CacheOptions60Min);
+
+    public async Task SaveResellerPricingAsync(DateTime reportDate, IEnumerable<ResellerPricingSnapshot> rows)
+    {
+        await _inner.SaveResellerPricingAsync(reportDate, rows);
+        await InvalidateAsync(BuildKey("reseller-pricing", null));
+    }
+
+    public Task<List<ResellerPricingSnapshot>> GetLatestResellerPricingAsync()
+        => GetOrSetAsync(BuildKey("reseller-pricing", null), () => _inner.GetLatestResellerPricingAsync(), CacheOptions60Min);
+
+    public async Task<(int Added, int Annotated)> UpsertIonCustomersAsync(IEnumerable<IonDirectoryCustomer> customers)
+    {
+        var result = await _inner.UpsertIonCustomersAsync(customers);
+        await InvalidateAsync(BuildKey("ion-customers", null));
+        return result;
+    }
+
+    public Task<List<TenantInfo>> GetIonCustomersAsync()
+        => _inner.GetIonCustomersAsync();
 }

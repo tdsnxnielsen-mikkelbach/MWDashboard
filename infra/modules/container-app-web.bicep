@@ -40,6 +40,12 @@ param appInsightsConnectionString string = ''
 @description('Consent redirect URI (Static Web App URL)')
 param consentRedirectUri string = ''
 
+@description('TD SYNNEX Ion Gateway base URL (pricing/margin enrichment)')
+param ionGatewayBaseUrl string = 'https://gateway.greentree-40a949e3.swedencentral.azurecontainerapps.io'
+
+@description('Partner Center Transfer API base URL (reseller/customer enrichment)')
+param partnerCenterBaseUrl string = 'https://ca-pct.yellowplant-f470b585.swedencentral.azurecontainerapps.io'
+
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -91,6 +97,16 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'read-api-key'
           keyVaultUrl: '${keyVaultUri}secrets/ReadApiKey'
+          identity: 'system'
+        }
+        {
+          name: 'ion-gateway-api-key'
+          keyVaultUrl: '${keyVaultUri}secrets/IonGatewayApiKey'
+          identity: 'system'
+        }
+        {
+          name: 'partner-center-api-key'
+          keyVaultUrl: '${keyVaultUri}secrets/PartnerCenterApiKey'
           identity: 'system'
         }
       ]
@@ -152,6 +168,22 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'ReadApi__Keys__0__Name'
               value: 'admin'
+            }
+            {
+              name: 'IonGateway__BaseUrl'
+              value: ionGatewayBaseUrl
+            }
+            {
+              name: 'IonGateway__ApiKey'
+              secretRef: 'ion-gateway-api-key'
+            }
+            {
+              name: 'PartnerCenter__BaseUrl'
+              value: partnerCenterBaseUrl
+            }
+            {
+              name: 'PartnerCenter__ApiKey'
+              secretRef: 'partner-center-api-key'
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using MWDashboard.Shared.Services;
 
 namespace MWDashboard.Web.Services;
@@ -48,7 +49,10 @@ public class HttpCollectorClient : IDataCollectionService
             var localCollector = new MWDashboard.Shared.Services.OnDemandDataCollectionService(
                 scope.ServiceProvider.GetRequiredService<IGraphReportService>(),
                 scope.ServiceProvider.GetRequiredService<IMauDataService>(),
-                scope.ServiceProvider.GetRequiredService<ILogger<MWDashboard.Shared.Services.OnDemandDataCollectionService>>());
+                scope.ServiceProvider.GetRequiredService<ILogger<MWDashboard.Shared.Services.OnDemandDataCollectionService>>(),
+                scope.ServiceProvider.GetService<IConfiguration>(),
+                scope.ServiceProvider.GetService<IIonSyncService>(),
+                scope.ServiceProvider.GetService<IPartnerCenterSyncService>());
             await localCollector.CollectForTenantAsync(tenantId, tenantName, ct);
         }
     }

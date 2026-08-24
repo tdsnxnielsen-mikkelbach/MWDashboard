@@ -287,6 +287,31 @@ public static class ExportEndpoints
             async (data, scope) => (await data.GetSignInDetailAsync(scope)).Select(r =>
                 Join(F(r.TenantId), F(r.TenantName), D(r.ReportDate), F(r.ClientApp), r.IsLegacyAuth,
                     F(r.Country), r.SuccessCount, r.FailureCount, r.RiskyCount))),
+
+        // --- ION Gateway pricing enrichment. Contains distributor cost/margin, so it is only ever
+        // returned to the unrestricted (home/admin) scope; a tenant-bound scope gets an empty set. ---
+        ["license-pricing"] = new("license-pricing-report.csv",
+            "TenantId,TenantName,SubscriptionId,OfferName,SkuPartNumber,CatalogItemId,Quantity,Status," +
+            "UnitListPrice,ListPriceCurrency,IonUnitPrice,IonUnitCost,IonUnitMargin,IonMarginPct,IonLineMargin,IonCurrency," +
+            "ResellerName,PricingSource,MatchedOn,ReportDate",
+            async (data, scope) => scope != null ? [] : (await data.GetLatestLicensePricingAsync(scope)).Select(r =>
+                Join(F(r.TenantId), F(r.TenantName), F(r.SubscriptionId), F(r.OfferName), F(r.SkuPartNumber), F(r.CatalogItemId),
+                    r.Quantity, F(r.Status), MN(r.UnitListPrice), F(r.ListPriceCurrency), MN(r.IonUnitPrice), MN(r.IonUnitCost),
+                    MN(r.IonUnitMargin), MN(r.IonMarginPct), MN(r.IonLineMargin), F(r.IonCurrency),
+                    F(r.ResellerName), F(r.PricingSource), F(r.MatchedOn), D(r.ReportDate)))),
+
+        ["resellers"] = new("resellers-report.csv",
+            "AccountId,Name,MpnId,PctResellerId,PrimaryContactEmail,DelegatedAdminEnabled,CustomerCount,UpdatedAt",
+            async (data, scope) => scope != null ? [] : (await data.GetResellersAsync()).Select(r =>
+                Join(r.AccountId, F(r.Name), F(r.MpnId), F(r.PctResellerId), F(r.PrimaryContactEmail), r.DelegatedAdminEnabled, r.CustomerCount, D(r.UpdatedAt)))),
+
+        ["reseller-pricing"] = new("reseller-pricing-report.csv",
+            "IonAccountId,ResellerName,IonCustomerId,MfgPartNumber,ProductName,SkuName,Quantity," +
+            "UnitPrice,UnitCost,Msrp,LineMargin,MarginPct,Currency,LastOrderId,LastOrderDate,ReportDate",
+            async (data, scope) => scope != null ? [] : (await data.GetLatestResellerPricingAsync()).Select(r =>
+                Join(r.IonAccountId, F(r.ResellerName), r.IonCustomerId, F(r.MfgPartNumber), F(r.ProductName), F(r.SkuName), r.Quantity,
+                    MN(r.UnitPrice), MN(r.UnitCost), MN(r.Msrp), MN(r.LineMargin), MN(r.MarginPct), F(r.Currency),
+                    F(r.LastOrderId), DN(r.LastOrderDate), D(r.ReportDate)))),
     };
 
     public static void MapExportEndpoints(this WebApplication app)
@@ -393,6 +418,9 @@ public static class ExportEndpoints
     private static string DN(DateTime? value) => value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
 
     private static string N(double value) => value.ToString("F2", CultureInfo.InvariantCulture);
+
+    // Decimal money/percent, trimmed to at most 4 dp; empty for null.
+    private static string MN(decimal? value) => value?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty;
 
     // --- JSON read-API reuse -------------------------------------------------
     // The same dataset registry backs the programmatic read API (ApiEndpoints). Rows are the

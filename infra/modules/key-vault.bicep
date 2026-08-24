@@ -34,6 +34,14 @@ param apiDocsKey string
 @secure()
 param readApiKey string
 
+@description('TD SYNNEX Ion Gateway API key (pricing/margin enrichment) to store')
+@secure()
+param ionGatewayApiKey string = ''
+
+@description('Partner Center Transfer API key (reseller/customer/subscription enrichment) to store')
+@secure()
+param partnerCenterApiKey string = ''
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: name
   location: location
@@ -95,6 +103,22 @@ resource secretReadApiKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   name: 'ReadApiKey'
   properties: {
     value: readApiKey
+  }
+}
+
+resource secretIonGatewayApiKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'IonGatewayApiKey'
+  properties: {
+    value: ionGatewayApiKey
+  }
+}
+
+resource secretPartnerCenterApiKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'PartnerCenterApiKey'
+  properties: {
+    value: partnerCenterApiKey
   }
 }
 

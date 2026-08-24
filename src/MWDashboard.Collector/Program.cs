@@ -27,6 +27,10 @@ builder.Services.AddDbContextFactory<MauDbContext>(options =>
 // Application services
 builder.Services.AddScoped<IGraphReportService, GraphReportService>();
 builder.Services.AddScoped<IMauDataService, MauDataService>();
+builder.Services.AddHttpClient<IIonGatewayClient, IonGatewayClient>();
+builder.Services.AddScoped<IIonSyncService, IonSyncService>();
+builder.Services.AddHttpClient<IPartnerCenterClient, PartnerCenterClient>();
+builder.Services.AddScoped<IPartnerCenterSyncService, PartnerCenterSyncService>();
 builder.Services.AddScoped<IDataCollectionService, OnDemandDataCollectionService>();
 
 // Scalar OpenAPI reference (key-gated)

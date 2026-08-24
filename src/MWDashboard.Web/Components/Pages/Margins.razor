@@ -1,0 +1,195 @@
+@page "/margins"
+@using ApexCharts
+@using Color = MudBlazor.Color
+@using Size = MudBlazor.Size
+@inject IMauDataService MauDataService
+@inject TenantFilterService TenantFilter
+@inject NavigationManager NavigationManager
+@implements IDisposable
+
+<BrandedPageTitle Page="Margins" />
+
+@if (!TenantFilter.IsHomeTenantUser)
+{
+    NavigationManager.NavigateTo("/", replace: true);
+    return;
+}
+
+<div class="d-flex justify-space-between align-center mb-4">
+    <MudText Typo="Typo.h4">Margins &amp; Profitability</MudText>
+    <ExportButton Feature="license-pricing" />
+</div>
+
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Commercial view of the Microsoft license estate, enriched from the <strong>TD SYNNEX ION Gateway</strong>: Partner Center
+    list price fused with StreamOne cost and margin. Rows without an ION cost match are excluded from margin totals.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+}
+else if (_pricing.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        No pricing data for the selected tenant(s). Run <MudLink Href="/resellers">Refresh Customer Pricing</MudLink> or collect a tenant with the ION Gateway configured.
+    </MudAlert>
+}
+else
+{
+<MudGrid Class="mb-4">
+    <MudItem xs="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">List Price Value</MudText>
+            <MudText Typo="Typo.h5">@Money(_pricing.Sum(p => (p.UnitListPrice ?? 0) * p.Quantity))</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">ION Cost</MudText>
+            <MudText Typo="Typo.h5">@Money(_pricing.Sum(p => (p.IonUnitCost ?? 0) * p.Quantity))</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Est. Margin</MudText>
+            <MudText Typo="Typo.h5" Color="Color.Success">@Money(TotalMargin)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Avg Margin %</MudText>
+            <MudText Typo="Typo.h5" Color="Color.Success">@AvgMarginPct.ToString("F1")%</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@if (_byTenant.Count > 0)
+{
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-3">Top Customers by Margin</MudText>
+        <ApexChart @key="_chartKey" TItem="TenantMargin" Options="_barOptions" Height="320">
+            <ApexPointSeries TItem="TenantMargin"
+                             Items="_byTenant.Take(10).ToList()"
+                             Name="Margin"
+                             SeriesType="SeriesType.Bar"
+                             XValue="@(e => e.TenantName)"
+                             YValue="@(e => Math.Round(e.Margin, 2))" />
+        </ApexChart>
+    </MudPaper>
+}
+
+<MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudText Typo="Typo.h6" Class="mb-3">Per-Customer Margin</MudText>
+    <MudTable Items="_byTenant" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<TenantMargin,object>(x => x.TenantName)">Customer</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<TenantMargin,object>(x => x.ResellerName)">Reseller</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right">List Value</MudTh>
+            <MudTh Style="text-align:right">Cost</MudTh>
+            <MudTh Style="text-align:right"><MudTableSortLabel SortBy="new Func<TenantMargin,object>(x => x.Margin)" InitialDirection="SortDirection.Descending">Margin</MudTableSortLabel></MudTh>
+            <MudTh Style="text-align:right">Margin %</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Customer">@context.TenantName</MudTd>
+            <MudTd DataLabel="Reseller">@(string.IsNullOrEmpty(context.ResellerName) ? "—" : context.ResellerName)</MudTd>
+            <MudTd DataLabel="List Value" Style="text-align:right">@Money(context.ListValue)</MudTd>
+            <MudTd DataLabel="Cost" Style="text-align:right">@Money(context.Cost)</MudTd>
+            <MudTd DataLabel="Margin" Style="text-align:right"><MudText Color="Color.Success">@Money(context.Margin)</MudText></MudTd>
+            <MudTd DataLabel="Margin %" Style="text-align:right">@context.MarginPct.ToString("F1")%</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+}
+
+@code {
+    private List<LicensePricingSnapshot> _pricing = [];
+    private List<TenantMargin> _byTenant = [];
+    private bool _loading = true;
+    private Guid _chartKey = Guid.NewGuid();
+
+    private readonly ApexChartOptions<TenantMargin> _barOptions = new()
+    {
+        Chart = new Chart { ForeColor = "var(--mud-palette-text-primary)", Toolbar = new Toolbar { Show = false } },
+        PlotOptions = new PlotOptions { Bar = new PlotOptionsBar { Horizontal = false, BorderRadius = 4 } },
+        DataLabels = new ApexCharts.DataLabels { Enabled = false },
+        Legend = new Legend { Show = false }
+    };
+
+    private decimal TotalMargin => _pricing.Sum(p => p.IonLineMargin ?? ((p.IonUnitMargin ?? 0) * p.Quantity));
+
+    private double AvgMarginPct
+    {
+        get
+        {
+            var vals = _pricing.Where(p => p.IonMarginPct.HasValue).Select(p => (double)p.IonMarginPct!.Value).ToList();
+            return vals.Count > 0 ? vals.Average() : 0;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        TenantFilter.OnChangeAsync += OnChangedAsync;
+        await LoadData();
+    }
+
+    private Task OnChangedAsync() => InvokeAsync(async () =>
+    {
+        await LoadData();
+        StateHasChanged();
+    });
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        StateHasChanged();
+        var tenantIds = TenantFilter.GetFilteredTenantIds();
+        _pricing = await MauDataService.GetLatestLicensePricingAsync(tenantIds);
+
+        _byTenant = _pricing
+            .GroupBy(p => p.TenantId)
+            .Select(g =>
+            {
+                var listValue = g.Sum(p => (p.UnitListPrice ?? 0) * p.Quantity);
+                var cost = g.Sum(p => (p.IonUnitCost ?? 0) * p.Quantity);
+                var margin = g.Sum(p => p.IonLineMargin ?? ((p.IonUnitMargin ?? 0) * p.Quantity));
+                var sell = g.Sum(p => (p.IonUnitPrice ?? 0) * p.Quantity);
+                var pct = sell > 0 ? (double)(margin / sell) * 100 : 0;
+                return new TenantMargin
+                {
+                    TenantId = g.Key,
+                    TenantName = g.Select(p => p.TenantName).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? g.Key,
+                    ResellerName = g.Select(p => p.ResellerName).FirstOrDefault(r => !string.IsNullOrEmpty(r)) ?? "",
+                    ListValue = listValue,
+                    Cost = cost,
+                    Margin = margin,
+                    MarginPct = pct
+                };
+            })
+            .OrderByDescending(t => t.Margin)
+            .ToList();
+
+        _chartKey = Guid.NewGuid();
+        _loading = false;
+    }
+
+    private string Money(decimal amount)
+    {
+        var cur = _pricing.Select(p => string.IsNullOrEmpty(p.IonCurrency) ? p.ListPriceCurrency : p.IonCurrency)
+            .FirstOrDefault(c => !string.IsNullOrEmpty(c));
+        return string.IsNullOrEmpty(cur) ? amount.ToString("N2") : $"{amount:N2} {cur}";
+    }
+
+    public void Dispose() => TenantFilter.OnChangeAsync -= OnChangedAsync;
+
+    private sealed class TenantMargin
+    {
+        public string TenantId { get; set; } = "";
+        public string TenantName { get; set; } = "";
+        public string ResellerName { get; set; } = "";
+        public decimal ListValue { get; set; }
+        public decimal Cost { get; set; }
+        public decimal Margin { get; set; }
+        public double MarginPct { get; set; }
+    }
+}

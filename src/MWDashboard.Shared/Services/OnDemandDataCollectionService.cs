@@ -10,6 +10,8 @@ public class OnDemandDataCollectionService : IDataCollectionService
     private readonly IMauDataService _dataService;
     private readonly ILogger<OnDemandDataCollectionService> _logger;
     private readonly int _maxConcurrency;
+    private readonly IIonSyncService? _ionSync;
+    private readonly IPartnerCenterSyncService? _pcSync;
 
     // AIMD adaptive-concurrency tuning. On an observed Graph throttle the effective concurrency is
     // multiplicatively decreased; after a clean window it additively recovers toward the cap.
@@ -20,11 +22,15 @@ public class OnDemandDataCollectionService : IDataCollectionService
         IGraphReportService graphService,
         IMauDataService dataService,
         ILogger<OnDemandDataCollectionService> logger,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        IIonSyncService? ionSync = null,
+        IPartnerCenterSyncService? pcSync = null)
     {
         _graphService = graphService;
         _dataService = dataService;
         _logger = logger;
+        _ionSync = ionSync;
+        _pcSync = pcSync;
         // Independent Graph metrics for a single tenant are collected concurrently with this bounded
         // degree of parallelism. It is the *ceiling*; the adaptive gate only ever moves below it in
         // response to live throttle signals. Graph throttles per-app/per-tenant, so the cap keeps the
@@ -538,6 +544,28 @@ public class OnDemandDataCollectionService : IDataCollectionService
         {
             _logger.LogInformation("Skipping Attack Simulation Training analysis for tenant {TenantName}: requires Microsoft Defender for Office 365 Plan 2 (Defender tier: {Tier}).",
                 tenantName, defenderTier.Tier);
+        }
+
+        // License pricing enrichment. Prefer the Partner Center Transfer API (authoritative CSP list price
+        // + fused Ion cost/margin); fall back to the Ion Gateway. External APIs, not Graph — isolated as
+        // their own step so an outage never affects Microsoft data collection.
+        if (_pcSync?.Enabled == true)
+        {
+            steps.Add(("PartnerCenterPricing", async () =>
+            {
+                var count = await _pcSync.SyncTenantPricingAsync(tenantId, tenantName, ct);
+                if (count > 0)
+                    _logger.LogInformation("Partner Center pricing: wrote {Count} rows for tenant {TenantName}", count, tenantName);
+            }));
+        }
+        else if (_ionSync?.Enabled == true)
+        {
+            steps.Add(("IonPricing", async () =>
+            {
+                var count = await _ionSync.SyncTenantPricingAsync(tenantId, tenantName, ct);
+                if (count > 0)
+                    _logger.LogInformation("ION pricing: wrote {Count} rows for tenant {TenantName}", count, tenantName);
+            }));
         }
 
         await RunStepsAsync(tenantName, _graphService.GetThrottleSignal(tenantId), steps, ct);
