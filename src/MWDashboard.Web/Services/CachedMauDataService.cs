@@ -976,5 +976,5 @@ public class CachedMauDataService : IMauDataService
     }
 
     public Task<List<TenantInfo>> GetIonCustomersAsync()
-        => _inner.GetIonCustomersAsync();
+        => GetOrSetAsync(BuildKey("ion-customers", null), () => _inner.GetIonCustomersAsync(), CacheOptions60Min);
 }

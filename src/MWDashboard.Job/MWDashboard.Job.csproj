@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>d37259e5-f760-4e33-8fef-1213e4e9f3eb</UserSecretsId>
     <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
-    <ContainerBaseImage>mcr.microsoft.com/dotnet/runtime:10.0</ContainerBaseImage>
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0</ContainerBaseImage>
   </PropertyGroup>
 
   <ItemGroup>

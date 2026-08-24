@@ -107,7 +107,7 @@
         }
         else
         {
-            <MudTable Items="_resellers" Dense="true" Hover="true" Striped="true" Filter="new Func<IonReseller,bool>(FilterReseller)" Breakpoint="Breakpoint.Sm">
+            <MudTable Items="_resellers" Dense="true" Hover="true" Striped="true" Filter="new Func<IonReseller,bool>(FilterReseller)" Breakpoint="Breakpoint.Sm" @bind-RowsPerPage="_pageSize">
                 <ToolBarContent>
                     <MudTextField @bind-Value="_resellerSearch" Placeholder="Search reseller..." Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
@@ -129,6 +129,7 @@
                         else { <MudChip T="string" Size="Size.Small" Color="Color.Default">No</MudChip> }
                     </MudTd>
                 </RowTemplate>
+                <PagerContent><MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" /></PagerContent>
             </MudTable>
         }
     </MudTabPanel>
@@ -141,7 +142,7 @@
         }
         else
         {
-            <MudTable Items="_ionCustomers" Dense="true" Hover="true" Striped="true" Filter="new Func<TenantInfo,bool>(FilterCustomer)" Breakpoint="Breakpoint.Sm">
+            <MudTable Items="_ionCustomers" Dense="true" Hover="true" Striped="true" Filter="new Func<TenantInfo,bool>(FilterCustomer)" Breakpoint="Breakpoint.Sm" @bind-RowsPerPage="_pageSize">
                 <ToolBarContent>
                     <MudTextField @bind-Value="_customerSearch" Placeholder="Search customer / reseller..." Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
@@ -167,6 +168,7 @@
                         else { <MudChip T="string" Size="Size.Small" Color="Color.Warning">Inactive</MudChip> }
                     </MudTd>
                 </RowTemplate>
+                <PagerContent><MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" /></PagerContent>
             </MudTable>
         }
     </MudTabPanel>
@@ -183,7 +185,7 @@
         }
         else
         {
-            <MudTable Items="_resellerPricing" Dense="true" Hover="true" Striped="true" Filter="new Func<ResellerPricingSnapshot,bool>(FilterResellerPricing)" Breakpoint="Breakpoint.Sm">
+            <MudTable Items="_resellerPricing" Dense="true" Hover="true" Striped="true" Filter="new Func<ResellerPricingSnapshot,bool>(FilterResellerPricing)" Breakpoint="Breakpoint.Sm" @bind-RowsPerPage="_pageSize">
                 <ToolBarContent>
                     <MudTextField @bind-Value="_pricingSearch" Placeholder="Search reseller / SKU..." Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
@@ -215,6 +217,7 @@
                     </MudTd>
                     <MudTd DataLabel="Last Order" Style="text-align:right">@(context.LastOrderDate?.ToString("yyyy-MM-dd") ?? "—")</MudTd>
                 </RowTemplate>
+                <PagerContent><MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" /></PagerContent>
             </MudTable>
         }
     </MudTabPanel>
@@ -226,6 +229,7 @@
     private List<ResellerPricingSnapshot> _resellerPricing = [];
     private bool _busy;
     private string _busyMessage = "";
+    private int _pageSize = 25;
     private string _resellerSearch = "", _customerSearch = "", _pricingSearch = "";
 
     protected override async Task OnInitializedAsync() => await LoadAll();

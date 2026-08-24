@@ -81,7 +81,12 @@ else
 
 <MudPaper Class="pa-4 mb-4" Elevation="2">
     <MudText Typo="Typo.h6" Class="mb-3">Per-Customer Margin</MudText>
-    <MudTable Items="_byTenant" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
+    <MudTable Items="_byTenant" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm"
+              Filter="new Func<TenantMargin,bool>(FilterTenant)" @bind-RowsPerPage="_rowsPerPage">
+        <ToolBarContent>
+            <MudTextField @bind-Value="_search" Placeholder="Search customer / reseller..." Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" />
+        </ToolBarContent>
         <HeaderContent>
             <MudTh><MudTableSortLabel SortBy="new Func<TenantMargin,object>(x => x.TenantName)">Customer</MudTableSortLabel></MudTh>
             <MudTh><MudTableSortLabel SortBy="new Func<TenantMargin,object>(x => x.ResellerName)">Reseller</MudTableSortLabel></MudTh>
@@ -98,6 +103,9 @@ else
             <MudTd DataLabel="Margin" Style="text-align:right"><MudText Color="Color.Success">@Money(context.Margin)</MudText></MudTd>
             <MudTd DataLabel="Margin %" Style="text-align:right">@context.MarginPct.ToString("F1")%</MudTd>
         </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+        </PagerContent>
     </MudTable>
 </MudPaper>
 }
@@ -107,6 +115,13 @@ else
     private List<TenantMargin> _byTenant = [];
     private bool _loading = true;
     private Guid _chartKey = Guid.NewGuid();
+    private string _search = string.Empty;
+    private int _rowsPerPage = 25;
+
+    private bool FilterTenant(TenantMargin t) =>
+        string.IsNullOrWhiteSpace(_search)
+        || t.TenantName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || t.ResellerName.Contains(_search, StringComparison.OrdinalIgnoreCase);
 
     private readonly ApexChartOptions<TenantMargin> _barOptions = new()
     {

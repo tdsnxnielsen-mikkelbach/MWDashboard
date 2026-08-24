@@ -232,7 +232,8 @@ else
                 </MudPaper>
             </MudItem>
         </MudGrid>
-        <MudTable Items="_pricing" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
+        <MudTable Items="_pricing" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm"
+                  Virtualize="false" @bind-RowsPerPage="_pricingRowsPerPage">
             <HeaderContent>
                 @if (TenantFilter.IsMultiTenantView) { <MudTh>Tenant</MudTh> }
                 <MudTh>Offer</MudTh>
@@ -270,6 +271,9 @@ else
                     }
                 </MudTd>
             </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+            </PagerContent>
         </MudTable>
     }
 </MudPaper>
@@ -494,6 +498,7 @@ else
     private List<LicenseAssignmentIssueSnapshot> _licenseIssues = [];
     private int _issueErrorTotal, _issueDisabledTotal;
     private List<LicensePricingSnapshot> _pricing = [];
+    private int _pricingRowsPerPage = 25;
     private string _searchString = string.Empty;
     private DateTime? _fromDate = DateTime.UtcNow.AddMonths(-6);
     private DateTime? _toDate = DateTime.UtcNow;
@@ -567,10 +572,12 @@ else
         _issueErrorTotal = _licenseIssues.Sum(s => s.ErrorUsers);
         _issueDisabledTotal = _licenseIssues.Sum(s => s.DisabledLicensedUsers);
 
-        // ION Gateway fused pricing (StreamOne cost/margin + PCT list price), latest per tenant.
-        // Distributor cost/margin — only ever loaded for home-tenant (internal) users.
-        _pricing = TenantFilter.IsHomeTenantUser
-            ? (await MauDataService.GetLatestLicensePricingAsync(tenantIds))
+        // ION/PCT fused pricing (StreamOne cost/margin + Partner Center list price). Scoped to the
+        // consented tenants actually shown here (not the full onboarded ION/PCT customer portfolio —
+        // that lives on the Margins/Resellers pages), so the page stays fast. Home-tenant users only.
+        var pricingScope = _latestLicenses.Select(l => l.TenantId).Distinct().ToList();
+        _pricing = TenantFilter.IsHomeTenantUser && pricingScope.Count > 0
+            ? (await MauDataService.GetLatestLicensePricingAsync(pricingScope))
                 .OrderByDescending(p => p.IonLineMargin ?? (p.IonUnitMargin * p.Quantity) ?? 0)
                 .ThenBy(p => p.OfferName)
                 .ToList()
