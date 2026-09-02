@@ -150,7 +150,7 @@
                 </MudPaper>
             }
 
-            <MudTable Items="_tenants" Dense="true" Hover="true" Loading="_loading">
+            <MudTable Items="_tenants" Dense="true" Hover="true" Loading="_loading" @bind-RowsPerPage="_tenantsPageSize">
                 <HeaderContent>
                     <MudTh>Tenant Name</MudTh>
                     <MudTh>Tenant ID</MudTh>
@@ -279,6 +279,9 @@
                         </MudTooltip>
                     </MudTd>
                 </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+                </PagerContent>
             </MudTable>
         </MudPaper>
     </MudItem>
@@ -286,6 +289,7 @@
 
 @code {
     private List<TenantInfo> _tenants = [];
+    private int _tenantsPageSize = 25;
     private TenantInfo _newTenant = new();
     private Dictionary<string, string> _tiers = new();
     private Dictionary<string, string> _defenderTiers = new();
@@ -311,8 +315,7 @@
     {
         _loading = true;
         await using var db = await DbFactory.CreateDbContextAsync();
-        // Pricing-only customers imported from the ION Gateway are managed on the Resellers page, not here.
-        _tenants = await db.Tenants.Where(t => !t.PricingOnly).OrderBy(t => t.TenantName).ToListAsync();
+        _tenants = await db.Tenants.OrderBy(t => t.TenantName).ToListAsync();
         var tiers = await DataService.GetTenantEntraIdTiersAsync();
         _tiers = tiers.ToDictionary(t => t.TenantId, t => t.Tier);
         var defenderTiers = await DataService.GetTenantDefenderTiersAsync();

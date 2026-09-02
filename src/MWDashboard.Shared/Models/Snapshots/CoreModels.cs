@@ -27,29 +27,6 @@ public class TenantInfo
     public DateTime? PermissionsCheckedAt { get; set; }
 
     /// <summary>
-    /// Where this customer record originated: <c>"Native"</c> (onboarded via admin consent, has Graph
-    /// data collection) or <c>"Ion"</c> (imported from the TD SYNNEX Ion Gateway directory for pricing
-    /// enrichment only — see <see cref="PricingOnly"/>).
-    /// </summary>
-    public string Source { get; set; } = "Native";
-
-    /// <summary>
-    /// Owning TD SYNNEX Ion reseller account id (the join key to <c>IonReseller</c> and the reseller's
-    /// order pricing), when this customer is known to the Ion Gateway. Null for purely native tenants.
-    /// </summary>
-    public long? IonAccountId { get; set; }
-
-    /// <summary>Reseller (indirect partner) name from the Ion Gateway directory. Empty when unknown.</summary>
-    public string ResellerName { get; set; } = string.Empty;
-
-    /// <summary>
-    /// True for customers imported from the Ion Gateway that MWDashboard has NOT onboarded via admin
-    /// consent: they exist only to carry pricing/margin data and are never included in Graph collection
-    /// or portal sign-in (kept <see cref="IsActive"/> = false). False for native, consented tenants.
-    /// </summary>
-    public bool PricingOnly { get; set; }
-
-    /// <summary>
     /// Cursor for the Office 365 Management Activity API Copilot-Chat collection: the
     /// <c>contentCreated</c> timestamp (UTC) of the most recent content blob already processed.
     /// Only blobs newer than this are pulled, so the 7-day retention window is never re-scanned.

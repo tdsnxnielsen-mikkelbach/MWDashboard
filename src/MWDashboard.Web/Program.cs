@@ -175,14 +175,6 @@ else
     builder.Services.AddScoped<ICopilotAuditClient, LocalCopilotAuditClient>();
 }
 
-// ION Gateway pricing enrichment (StreamOne cost/margin + PCT list price)
-builder.Services.AddHttpClient<IIonGatewayClient, IonGatewayClient>();
-builder.Services.AddScoped<IIonSyncService, IonSyncService>();
-
-// Partner Center Transfer API (reseller -> customer tenant + fused list price/cost/margin)
-builder.Services.AddHttpClient<IPartnerCenterClient, PartnerCenterClient>();
-builder.Services.AddScoped<IPartnerCenterSyncService, PartnerCenterSyncService>();
-
 // Cache warm-up on startup
 builder.Services.AddHostedService<CacheWarmupService>();
 

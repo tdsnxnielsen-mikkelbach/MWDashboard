@@ -224,16 +224,6 @@ public interface IMauDataService
     // Attack Simulation Training — Microsoft Graph /security/attackSimulation/simulations
     Task<List<AttackSimSnapshot>> GetAttackSimulationsAsync(IEnumerable<string>? tenantIds);
     Task SaveAttackSimulationsAsync(string tenantId, DateTime reportDate, IEnumerable<AttackSimSnapshot> snapshots);
-
-    // ION Gateway pricing enrichment (StreamOne cost/margin + PCT list price)
-    Task SaveLicensePricingAsync(string tenantId, DateTime reportDate, IEnumerable<LicensePricingSnapshot> rows);
-    Task<List<LicensePricingSnapshot>> GetLatestLicensePricingAsync(IEnumerable<string>? tenantIds);
-    Task<int> SaveResellersAsync(IEnumerable<IonReseller> resellers);
-    Task<List<IonReseller>> GetResellersAsync();
-    Task SaveResellerPricingAsync(DateTime reportDate, IEnumerable<ResellerPricingSnapshot> rows);
-    Task<List<ResellerPricingSnapshot>> GetLatestResellerPricingAsync();
-    Task<(int Added, int Annotated)> UpsertIonCustomersAsync(IEnumerable<IonDirectoryCustomer> customers);
-    Task<List<TenantInfo>> GetIonCustomersAsync();
 }
 
 /// <summary>

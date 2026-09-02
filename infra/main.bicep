@@ -32,14 +32,6 @@ param apiDocsKey string = ''
 @secure()
 param readApiKey string = ''
 
-@description('TD SYNNEX Ion Gateway API key (pricing/margin enrichment). Empty leaves ION features disabled.')
-@secure()
-param ionGatewayApiKey string = ''
-
-@description('Partner Center Transfer API key (reseller/customer enrichment). Empty leaves PCT features disabled.')
-@secure()
-param partnerCenterApiKey string = ''
-
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = {
@@ -156,8 +148,6 @@ module keyVault './modules/key-vault.bicep' = {
     consentSharedSecret: consentSharedSecret
     apiDocsKey: apiDocsKeyResolved
     readApiKey: readApiKeyResolved
-    ionGatewayApiKey: ionGatewayApiKey
-    partnerCenterApiKey: partnerCenterApiKey
   }
 }
 

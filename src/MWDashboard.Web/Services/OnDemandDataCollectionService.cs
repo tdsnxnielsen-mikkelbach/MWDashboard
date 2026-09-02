@@ -50,9 +50,7 @@ public class HttpCollectorClient : IDataCollectionService
                 scope.ServiceProvider.GetRequiredService<IGraphReportService>(),
                 scope.ServiceProvider.GetRequiredService<IMauDataService>(),
                 scope.ServiceProvider.GetRequiredService<ILogger<MWDashboard.Shared.Services.OnDemandDataCollectionService>>(),
-                scope.ServiceProvider.GetService<IConfiguration>(),
-                scope.ServiceProvider.GetService<IIonSyncService>(),
-                scope.ServiceProvider.GetService<IPartnerCenterSyncService>());
+                scope.ServiceProvider.GetService<IConfiguration>());
             await localCollector.CollectForTenantAsync(tenantId, tenantName, ct);
         }
     }

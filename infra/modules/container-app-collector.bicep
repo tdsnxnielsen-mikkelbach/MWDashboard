@@ -31,12 +31,6 @@ param managedIdentityId string
 @description('Application Insights connection string')
 param appInsightsConnectionString string = ''
 
-@description('TD SYNNEX Ion Gateway base URL (pricing/margin enrichment)')
-param ionGatewayBaseUrl string = 'https://gateway.greentree-40a949e3.swedencentral.azurecontainerapps.io'
-
-@description('Partner Center Transfer API base URL (reseller/customer enrichment)')
-param partnerCenterBaseUrl string = 'https://ca-pct.yellowplant-f470b585.swedencentral.azurecontainerapps.io'
-
 var fullImageName = imageName != '' ? '${containerRegistryLoginServer}/${imageName}' : 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
 resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
@@ -78,16 +72,6 @@ resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'api-docs-key'
           keyVaultUrl: '${keyVaultUri}secrets/ApiDocsKey'
-          identity: managedIdentityId
-        }
-        {
-          name: 'ion-gateway-api-key'
-          keyVaultUrl: '${keyVaultUri}secrets/IonGatewayApiKey'
-          identity: managedIdentityId
-        }
-        {
-          name: 'partner-center-api-key'
-          keyVaultUrl: '${keyVaultUri}secrets/PartnerCenterApiKey'
           identity: managedIdentityId
         }
       ]
@@ -133,22 +117,6 @@ resource containerAppCollector 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'ApiDocs__ApiKey'
               secretRef: 'api-docs-key'
-            }
-            {
-              name: 'IonGateway__BaseUrl'
-              value: ionGatewayBaseUrl
-            }
-            {
-              name: 'IonGateway__ApiKey'
-              secretRef: 'ion-gateway-api-key'
-            }
-            {
-              name: 'PartnerCenter__BaseUrl'
-              value: partnerCenterBaseUrl
-            }
-            {
-              name: 'PartnerCenter__ApiKey'
-              secretRef: 'partner-center-api-key'
             }
           ]
         }
